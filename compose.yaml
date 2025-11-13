@@ -1,0 +1,72 @@
+services:
+  socket-proxy-dev:
+    container_name: socket-proxy-dev
+    image: tecnativa/docker-socket-proxy:latest
+    environment:
+      CONTAINERS: 1
+      EXEC: 1
+      IMAGES: 1
+      INFO: 1
+      NETWORKS: 1
+      POST: 1
+      VOLUMES: 1
+    networks: [vulnforge-dev]
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  trivy-dev:
+    container_name: trivy-dev
+    image: aquasec/trivy:latest
+    command: ["server", "--listen", "0.0.0.0:8080"]
+    networks: [vulnforge-dev]
+    restart: unless-stopped
+    volumes:
+      - ./trivy-cache:/root/.cache
+
+  vulnforge-dev:
+    container_name: vulnforge-dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - socket-proxy-dev
+      - trivy-dev
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          pids: 200
+    environment:
+      TZ: ${TZ}
+      DATABASE_URL: sqlite+aiosqlite:///data/vulnforge.db
+      DOCKER_SOCKET_PROXY: tcp://socket-proxy-dev:2375
+      TRIVY_CONTAINER_NAME: trivy-dev
+      TRIVY_SERVER: http://trivy-dev:8080
+      PORT: 8787
+      LOG_LEVEL: INFO
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      interval: 20s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    image: vulnforge:dev
+    labels:
+      dev.environment: "test"
+      dev.project: "vulnforge"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks: [vulnforge-dev]
+    ports: ["12348:8787"]
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./data:/data
+
+networks:
+  vulnforge-dev:
+    name: vulnforge-dev

@@ -1,0 +1,51 @@
+# Ignore files not needed in Docker builds
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation (not needed in runtime)
+*.md
+!README.md
+
+# Data and logs
+*.db
+*.log
+data/
+tmp/
+
+# Test files
+tests/
+.coverage
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Keep wheels directory for offline builds
+!wheels/
