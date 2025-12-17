@@ -21,7 +21,7 @@ const featureGroups = [
     icon: FileCheck,
     points: [
       "Docker Bench scheduling with weekly reports, CSV export, and historical trend charts.",
-      "Dockle image compliance dashboard with on-demand scans, pass/fail breakdowns, and remediation tips.",
+      "Trivy misconfiguration scanning with on-demand scans, severity breakdowns, and remediation tips.",
       "Dive integration for layer efficiency analysis and wasted-byte insights per image.",
     ],
   },
@@ -31,7 +31,7 @@ const featureGroups = [
     icon: Clock,
     points: [
       "Cron-style scheduling, automatic container discovery, and image batch scanning.",
-      "ntfy-based notifications with rule builder, cooldowns, and templated alerts.",
+      "Multi-service notifications (ntfy, Gotify, Pushover, Slack, Discord, Telegram, Email) with priority-based routing.",
       "Offline resilience with cached scanner databases, connectivity checks, and intelligent fallbacks.",
     ],
   },
@@ -48,26 +48,26 @@ const featureGroups = [
 ];
 
 const backendStack = [
-  "Python 3.14 + FastAPI async backend",
-  "SQLAlchemy 2.x ORM with SQLite (WAL mode)",
-  "Docker SDK, APScheduler, and background task orchestration",
-  "Trivy, Dockle, Dive CLI integrations",
-  "ntfy / webhook notifications and CISA KEV enrichment",
+  "Python 3.14 + FastAPI 0.121+ async backend",
+  "SQLAlchemy 2.0+ ORM with SQLite (WAL mode)",
+  "Docker SDK 7.1+, APScheduler 3.11+, and background task orchestration",
+  "Trivy (vulnerabilities + misconfig), Docker Bench, Dive CLI integrations",
+  "httpx 0.27+, ntfy/webhook notifications, and CISA KEV enrichment",
 ];
 
 const frontendStack = [
-  "React 19 + TypeScript with Vite",
-  "TanStack Query for server state and caching",
-  "React Router v6 single-page navigation",
-  "Tailwind CSS + tailwind-merge styling system",
-  "Recharts, Lucide icons, and Sonner toasts",
+  "React 19.2 + TypeScript 5.9 with Vite 7.2",
+  "TanStack Query 5.90+ for server state and caching",
+  "React Router 7.9+ single-page navigation",
+  "Tailwind CSS 4.1+ with clsx and tailwind-merge",
+  "Recharts 3.4+, Lucide icons 0.553+, and Sonner 2.0+ toasts",
 ];
 
 const projectStats = [
-  { label: "Lines of Code", value: "24k" },
-  { label: "Python Backend", value: "16k" },
-  { label: "TypeScript Frontend", value: "8k" },
-  { label: "Containers Monitored", value: "55" },
+  { label: "Lines of Code", value: "30.0k" },
+  { label: "Python Backend", value: "18.8k" },
+  { label: "TypeScript Frontend", value: "11.1k" },
+  { label: "Notification Services", value: "7" },
 ];
 
 export function About() {
@@ -78,22 +78,23 @@ export function About() {
         <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-600/10 rounded-2xl mb-6">
           <Shield className="w-12 h-12 text-blue-500" />
         </div>
-        <h1 className="text-4xl font-bold text-white mb-3">VulnForge</h1>
-        <p className="text-xl text-gray-400">Container security insights for your homelab</p>
-        <div className="mt-4 inline-block px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-full">
-          <span className="text-green-500 font-semibold">Version 2.7</span>
+        <h1 className="text-4xl font-bold text-vuln-text mb-3">VulnForge</h1>
+        <p className="text-xl text-vuln-text-muted">Container security insights for your homelab</p>
+        <div className="mt-4 inline-block px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full">
+          <span className="text-blue-500 font-semibold">Version 3.3.0</span>
         </div>
       </div>
 
       {/* What is VulnForge */}
-      <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-8 mb-6">
-        <h2 className="text-2xl font-bold text-white mb-4">What is VulnForge?</h2>
-        <p className="text-gray-300 leading-relaxed mb-4">
+      <div className="bg-vuln-surface border border-vuln-border rounded-lg p-8 mb-6">
+        <h2 className="text-2xl font-bold text-vuln-text mb-4">What is VulnForge?</h2>
+        <p className="text-vuln-text leading-relaxed mb-4">
           VulnForge is a self-hosted dashboard that keeps homelab operators on top of container security.
-          It combines Trivy, Docker Bench, Dockle, and Dive to surface vulnerabilities, configuration
-          drift, and image hygiene issues in one place—all without relying on external SaaS services.
+          It combines Trivy (for vulnerabilities and misconfigurations), Docker Bench (for host compliance),
+          and Dive (for image efficiency) to surface security issues and configuration drift in one
+          place—all without relying on external SaaS services.
         </p>
-        <p className="text-gray-300 leading-relaxed">
+        <p className="text-vuln-text leading-relaxed">
           The project focuses on reliability and clarity for home environments: simple deployment, a lightweight
           SQLite datastore, ntfy notifications, offline-friendly scanners, and tooling that explains what to fix next.
           Whether you are running a single-node lab or a rack of services, VulnForge turns nightly scans into actionable
@@ -102,23 +103,23 @@ export function About() {
       </div>
 
       {/* Key Features */}
-      <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-8 mb-6">
-        <h2 className="text-2xl font-bold text-white mb-6">Key Features</h2>
+      <div className="bg-vuln-surface border border-vuln-border rounded-lg p-8 mb-6">
+        <h2 className="text-2xl font-bold text-vuln-text mb-6">Key Features</h2>
         <div className="space-y-4">
           {featureGroups.map(({ title, description, icon: Icon, points }, idx) => (
             <details
               key={title}
-              className="group border border-gray-800/80 rounded-lg bg-[#111827]"
+              className="group border border-vuln-border/80 rounded-lg bg-vuln-surface"
               {...(idx === 0 ? { open: true } : {})}
             >
               <summary className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between px-4 py-4 cursor-pointer select-none">
-                <span className="flex items-center gap-3 text-white font-semibold">
+                <span className="flex items-center gap-3 text-vuln-text font-semibold">
                   <Icon className="w-5 h-5 text-blue-400" />
                   {title}
                 </span>
-                <span className="text-sm text-gray-400 md:text-right">{description}</span>
+                <span className="text-sm text-vuln-text-muted md:text-right">{description}</span>
               </summary>
-              <ul className="px-6 pb-5 space-y-3 text-sm text-gray-300">
+              <ul className="px-6 pb-5 space-y-3 text-sm text-vuln-text">
                 {points.map((point) => (
                   <li key={point} className="flex items-start gap-2">
                     <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
@@ -132,15 +133,15 @@ export function About() {
       </div>
 
       {/* Technology Stack */}
-      <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-8 mb-6">
-        <h2 className="text-2xl font-bold text-white mb-6">Technology Stack</h2>
+      <div className="bg-vuln-surface border border-vuln-border rounded-lg p-8 mb-6">
+        <h2 className="text-2xl font-bold text-vuln-text mb-6">Technology Stack</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+            <h3 className="text-vuln-text font-semibold mb-3 flex items-center gap-2">
               <Code className="w-5 h-5 text-blue-500" />
               Backend
             </h3>
-            <ul className="space-y-2 text-gray-400 text-sm">
+            <ul className="space-y-2 text-vuln-text-muted text-sm">
               {backendStack.map((item) => (
                 <li key={item} className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
@@ -150,11 +151,11 @@ export function About() {
             </ul>
           </div>
           <div>
-            <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+            <h3 className="text-vuln-text font-semibold mb-3 flex items-center gap-2">
               <Layers className="w-5 h-5 text-purple-500" />
               Frontend
             </h3>
-            <ul className="space-y-2 text-gray-400 text-sm">
+            <ul className="space-y-2 text-vuln-text-muted text-sm">
               {frontendStack.map((item) => (
                 <li key={item} className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
@@ -167,31 +168,31 @@ export function About() {
       </div>
 
       {/* Statistics */}
-      <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-8 mb-6">
-        <h2 className="text-2xl font-bold text-white mb-6">Project Statistics</h2>
+      <div className="bg-vuln-surface border border-vuln-border rounded-lg p-8 mb-6">
+        <h2 className="text-2xl font-bold text-vuln-text mb-6">Project Statistics</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {projectStats.map(({ label, value }) => (
             <div key={label} className="text-center">
               <div className="text-3xl font-bold text-blue-400 mb-1">{value}</div>
-              <div className="text-sm text-gray-400">{label}</div>
+              <div className="text-sm text-vuln-text-muted">{label}</div>
             </div>
           ))}
         </div>
       </div>
 
       {/* Built with AI */}
-      <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-8">
-        <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+      <div className="bg-vuln-surface border border-vuln-border rounded-lg p-8">
+        <h2 className="text-2xl font-bold text-vuln-text mb-4 flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-yellow-400" />
           Built with AI
         </h2>
-        <p className="text-gray-300 leading-relaxed mb-4">
+        <p className="text-vuln-text leading-relaxed mb-4">
           VulnForge has been shaped by a friendly trio: Claude kick-started the architecture and UI concepts,
           Codex (OpenAI GPT-5) continues to ship features, harden the stack, and tidy the codebase, and Jamey
           (oaniach) steers requirements, tests every homelab workflow, and brings the whole platform to life in
           production. It is very much an AI-assisted homelab project—with a human on-call.
         </p>
-        <ul className="space-y-2 text-gray-300 text-sm">
+        <ul className="space-y-2 text-vuln-text text-sm">
           <li className="flex items-start gap-2">
             <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
             <span>Claude 4.5 Sonnet – original blueprint, navigation structure, and first-pass styling.</span>
@@ -209,8 +210,8 @@ export function About() {
 
       {/* Footer */}
       <div className="text-center mt-12 pb-8">
-        <p className="text-gray-500 text-sm">VulnForge v2.7 • Built with AI collaborators • November 2025</p>
-        <p className="text-gray-600 text-xs mt-2">Deployed at vulnforge.starett.net</p>
+        <p className="text-vuln-text-disabled text-sm">VulnForge v3.3.0 • Built with AI collaborators • November 2025</p>
+        <p className="text-vuln-text-disabled text-xs mt-2">Deployed at vulnforge.starett.net</p>
       </div>
     </div>
   );

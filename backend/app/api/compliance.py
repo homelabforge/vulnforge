@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import logging
+import subprocess
 from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -29,6 +30,8 @@ from app.schemas.compliance import (
 from app.services.activity_logger import ActivityLogger
 from app.services.docker_bench_service import DockerBenchService
 from app.services.docker_client import DockerService
+from app.services.trivy_scanner import TrivyScanner
+from app.services.trivy_compliance_service import TrivyComplianceService
 from app.services.enhanced_notifier import get_enhanced_notifier
 from app.services.settings_manager import SettingsManager
 from app.services.compliance_state import compliance_state
@@ -40,17 +43,19 @@ logger = logging.getLogger(__name__)
 # Track current scan state
 _current_scan_task: asyncio.Task | None = None
 _current_scan_id: int | None = None
+_last_scan_id: int | None = None  # Track most recent completed scan
+_completion_poll_count: int = 0  # Count polls since completion
 
 
 async def perform_compliance_scan(docker_service: DockerService, trigger_type: str = "manual"):
     """
-    Perform a Docker Bench compliance scan.
+    Perform a compliance scan using Trivy (primary) with Docker Bench in legacy validation mode.
 
     Args:
         docker_service: Docker service instance
         trigger_type: Scan trigger type (manual or scheduled)
     """
-    global _current_scan_id
+    global _current_scan_id, _last_scan_id
 
     # Create new database session for background task
     async with db_session() as db:
@@ -67,32 +72,50 @@ async def perform_compliance_scan(docker_service: DockerService, trigger_type: s
         _current_scan_id = scan.id
 
         try:
-            # Execute Docker Bench scan
+            # Track scan start time for duration calculation
+            import time
+            scan_start_time = time.time()
+
+            # Run Docker Bench Security scan for Docker host compliance.
+            # Note: Trivy's --compliance flag is for scanning container images against
+            # compliance benchmarks, not for scanning the Docker daemon/host itself.
+            # For Docker daemon compliance (CIS Docker Benchmark), we use Docker Bench.
             bench_service = DockerBenchService(docker_service)
+
             scan_data = await bench_service.run_compliance_scan()
 
             if scan_data is None:
-                # Scan failed
+                # Scanner failed
                 scan.scan_status = "failed"
                 scan.error_message = "Docker Bench scan returned no data"
                 await db.commit()
                 return
 
-            # Calculate scores
+            # Use Docker Bench results
             findings = scan_data["findings"]
             compliance_score = bench_service.calculate_compliance_score(findings)
             category_scores = bench_service.calculate_category_scores(findings)
 
-            # Count statuses
+            # Count statuses from Docker Bench findings
             passed = sum(1 for f in findings if f["status"] == "PASS")
             warned = sum(1 for f in findings if f["status"] == "WARN")
             failed = sum(1 for f in findings if f["status"] == "FAIL")
             info = sum(1 for f in findings if f["status"] == "INFO")
             note = sum(1 for f in findings if f["status"] == "NOTE")
 
+            # TODO: Future enhancement - add Trivy image compliance scanning
+            # (scanning individual container images for compliance, not the Docker host)
+
+            # Calculate scan duration
+            scan_duration_seconds = int(time.time() - scan_start_time)
+
+            # Use Docker Bench duration if available, otherwise use calculated duration
+            if scan_data is not None and "scan_duration_seconds" in scan_data:
+                scan_duration_seconds = scan_data["scan_duration_seconds"]
+
             # Update scan record
             scan.scan_status = "completed"
-            scan.scan_duration_seconds = scan_data["scan_duration_seconds"]
+            scan.scan_duration_seconds = scan_duration_seconds
             scan.total_checks = len(findings)
             scan.passed_checks = passed
             scan.warned_checks = warned
@@ -183,14 +206,41 @@ async def perform_compliance_scan(docker_service: DockerService, trigger_type: s
                     )
 
             except Exception as notif_error:
+                # INTENTIONAL: Notification failures should not affect scan success.
                 logger.error(f"Failed to send compliance notifications: {notif_error}")
 
+        except subprocess.TimeoutExpired as e:
+            logger.error(f"Compliance scan timed out: {e}")
+            scan.scan_status = "failed"
+            scan.error_message = "Compliance scan timed out - Docker Bench may need longer"
+            await db.commit()
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Docker Bench process failed with exit code {e.returncode}")
+            scan.scan_status = "failed"
+            scan.error_message = f"Docker Bench scan failed with exit code {e.returncode}"
+            await db.commit()
+        except PermissionError as e:
+            logger.error(f"Permission denied running compliance scan: {e}")
+            scan.scan_status = "failed"
+            scan.error_message = "Permission denied - Docker socket access required"
+            await db.commit()
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse Docker Bench output: {e}")
+            scan.scan_status = "failed"
+            scan.error_message = "Invalid compliance scan output format"
+            await db.commit()
         except Exception as e:
-            logger.error(f"Compliance scan failed: {e}", exc_info=True)
+            # INTENTIONAL: Catch-all for unexpected compliance scan errors.
+            # We must update the scan record to prevent orphaned in_progress scans.
+            logger.error(f"Unexpected compliance scan error: {e}", exc_info=True)
             scan.scan_status = "failed"
             scan.error_message = str(e)
             await db.commit()
         finally:
+            # Store last scan ID before clearing current
+            if _current_scan_id is not None:
+                _last_scan_id = _current_scan_id
+
             # Finish progress tracking AFTER all DB operations complete
             compliance_state.finish_scan()
             _current_scan_id = None
@@ -204,7 +254,7 @@ async def trigger_compliance_scan(
     user: User = Depends(require_admin),
 ):
     """
-    Trigger a Docker Bench compliance scan. Admin only.
+    Trigger a compliance scan. Admin only.
 
     Args:
         request: Trigger request with scan type
@@ -214,11 +264,14 @@ async def trigger_compliance_scan(
     Returns:
         Message confirming scan trigger
     """
-    global _current_scan_task
+    global _current_scan_task, _completion_poll_count
 
     # Check if scan already running
     if _current_scan_task and not _current_scan_task.done():
         raise HTTPException(status_code=409, detail="Compliance scan already in progress")
+
+    # Reset completion poll count for new scan
+    _completion_poll_count = 0
 
     # Create docker service
     docker_service = DockerService()
@@ -228,9 +281,12 @@ async def trigger_compliance_scan(
         perform_compliance_scan(docker_service, request.trigger_type)
     )
 
-    logger.info(f"DEBUG trigger_scan: Created task {_current_scan_task}, done={_current_scan_task.done()}")
+    logger.debug(f"trigger_scan: Created task {_current_scan_task}, done={_current_scan_task.done()}")
 
-    return {"message": "Compliance scan started", "trigger_type": request.trigger_type}
+    return {
+        "message": "Compliance scan started (Trivy compliance with Docker Bench legacy validation)",
+        "trigger_type": request.trigger_type,
+    }
 
 
 @router.get("/current", response_model=ComplianceCurrentScan)
@@ -244,19 +300,19 @@ async def get_current_scan():
     Returns:
         Current scan status with detailed progress
     """
-    global _current_scan_task, _current_scan_id
+    global _current_scan_task, _current_scan_id, _last_scan_id, _completion_poll_count
 
-    # DEBUG: Log task state
+    # Log task state for debugging
     task_exists = _current_scan_task is not None
     task_done = _current_scan_task.done() if _current_scan_task else None
-    logger.info(f"DEBUG get_current_scan: task_exists={task_exists}, task_done={task_done}, scan_id={_current_scan_id}")
+    logger.debug(f"get_current_scan: task_exists={task_exists}, task_done={task_done}, scan_id={_current_scan_id}, last_scan_id={_last_scan_id}, poll_count={_completion_poll_count}")
 
     if _current_scan_task and not _current_scan_task.done():
         # Scan in progress - get real-time progress from compliance_state
         state_status = compliance_state.get_status()
 
-        # DEBUG: Log what get_status() returned
-        logger.info(f"DEBUG get_current_scan: compliance_state.get_status() = {state_status}")
+        # Log compliance state for debugging
+        logger.debug(f"get_current_scan: compliance_state.get_status() = {state_status}")
 
         if state_status["status"] == "scanning":
             # Get scan record if available
@@ -286,13 +342,39 @@ async def get_current_scan():
             scan_id=_current_scan_id,
             started_at=None,
             progress="Initializing compliance scan...",
-            current_check="Starting Docker Bench...",
+            current_check="Starting Trivy compliance scan...",
             current_check_id="",
             progress_current=0,
             progress_total=150,
         )
 
-    # No scan running
+    # No scan running - check if we just finished one
+    if _current_scan_task and _current_scan_task.done() and _last_scan_id:
+        # Scan just completed - return completed status with scan_id for result retrieval
+        # Allow frontend to poll for "completed" status a few times (3 seconds at 1s intervals)
+        # then transition back to idle
+        _completion_poll_count += 1
+
+        if _completion_poll_count <= 3:
+            logger.debug(f"get_current_scan: Scan completed, returning last_scan_id={_last_scan_id} (poll {_completion_poll_count}/3)")
+            return ComplianceCurrentScan(
+                status="completed",
+                scan_id=_last_scan_id,
+                started_at=None,
+                progress="Scan completed",
+                current_check=None,
+                current_check_id=None,
+                progress_current=None,
+                progress_total=None,
+            )
+        else:
+            # Clear the task reference after frontend has had time to process
+            logger.debug(f"get_current_scan: Clearing task after {_completion_poll_count} polls")
+            _current_scan_task = None
+            _last_scan_id = None
+            _completion_poll_count = 0
+
+    # No scan running and no recent completion
     return ComplianceCurrentScan(
         status="idle",
         scan_id=None,

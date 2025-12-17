@@ -159,6 +159,7 @@ export function useVulnerabilities(params?: {
   fixable_only?: boolean;
   kev_only?: boolean;
   status?: string;
+  container_id?: number;
   limit?: number;
   offset?: number;
 }) {
@@ -207,14 +208,6 @@ export function useRemediationGroups(containerId?: number) {
   });
 }
 
-export function useScannerComparison() {
-  return useQuery({
-    queryKey: ["scannerComparison"],
-    queryFn: () => vulnerabilitiesApi.getScannerComparison(),
-    refetchInterval: 60000, // Refetch every 60s
-  });
-}
-
 // Widget hooks
 export function useWidgetSummary() {
   return useQuery({
@@ -250,6 +243,12 @@ export function useBulkUpdateSettings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["settings"] });
     },
+  });
+}
+
+export function useTestDockerConnection() {
+  return useMutation({
+    mutationFn: () => settingsApi.testDocker(),
   });
 }
 

@@ -7,13 +7,12 @@ import pytest
 from app.utils.timezone import get_now
 
 
-@pytest.mark.asyncio
 class TestScanStreaming:
     """Validate Server-Sent Events for scan status updates."""
 
-    def test_stream_provides_initial_snapshot(self, client):
+    async def test_stream_provides_initial_snapshot(self, client):
         """The scan status snapshot endpoint should return queue information immediately."""
-        response = client.get("/api/v1/scans/current")
+        response = await client.get("/api/v1/scans/current")
         assert response.status_code == 200
 
         payload = response.json()
@@ -22,7 +21,6 @@ class TestScanStreaming:
         assert "queue_size" in payload["queue"]
 
 
-@pytest.mark.asyncio
 class TestScanTrendsEndpoint:
     """Tests for aggregated scan trends data."""
 
@@ -90,7 +88,7 @@ class TestScanTrendsEndpoint:
             db_with_settings.add(entry)
         await db_with_settings.commit()
 
-        response = client.get("/api/v1/scans/trends?window_days=7")
+        response = await client.get("/api/v1/scans/trends?window_days=7")
 
         assert response.status_code == 200
         data = response.json()
@@ -105,7 +103,7 @@ class TestScanTrendsEndpoint:
 
     async def test_trends_empty_response_defaults(self, client, db_with_settings):
         """Window with no scans should return zeroed summary and no crash."""
-        response = client.get("/api/v1/scans/trends?window_days=3")
+        response = await client.get("/api/v1/scans/trends?window_days=3")
 
         assert response.status_code == 200
         data = response.json()

@@ -29,6 +29,7 @@ class Container(Base):
 
     # Status
     is_running: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_my_project: Mapped[bool] = mapped_column(Boolean, default=False)
     last_seen: Mapped[datetime] = mapped_column(DateTime, default=get_now)
 
     # Scan summary (updated after each scan)

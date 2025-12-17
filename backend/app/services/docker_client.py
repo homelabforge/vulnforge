@@ -36,19 +36,21 @@ class DockerService:
             if url and url not in candidates:
                 candidates.append(url)
 
-        # Configured host
-        _add_candidate(settings.docker_socket_proxy)
-
-        # Environment override (matches docker CLI behavior)
+        # 1. Environment variable takes highest priority (matches docker CLI behavior)
+        #    Set via compose DOCKER_HOST environment variable
         _add_candidate(os.getenv("DOCKER_HOST"))
 
-        # Docker Desktop / WSL fallback
-        parsed = urlparse(settings.docker_socket_proxy or "")
+        # 2. Config fallback for local development without compose
+        _add_candidate(settings.docker_socket_proxy)
+
+        # 3. Docker Desktop / WSL fallback
+        docker_host = os.getenv("DOCKER_HOST") or settings.docker_socket_proxy or ""
+        parsed = urlparse(docker_host)
         if parsed.scheme == "tcp":
             default_port = parsed.port or 2375
             _add_candidate(f"tcp://host.docker.internal:{default_port}")
 
-        # Native Linux fallback
+        # 4. Native Linux fallback
         _add_candidate("unix:///var/run/docker.sock")
 
         errors: list[str] = []
@@ -56,7 +58,7 @@ class DockerService:
             if not base_url:
                 continue
             try:
-                client = docker.DockerClient(base_url=base_url, timeout=30)
+                client = docker.DockerClient(base_url=base_url, timeout=60)
                 client.ping()
                 logger.info(f"Connected to Docker at {base_url}")
                 return client
@@ -178,22 +180,6 @@ class DockerService:
             return None
         except DockerException as e:
             logger.error(f"Error getting Trivy container: {e}")
-            return None
-
-    def get_grype_container(self) -> Any | None:
-        """
-        Get the Grype container.
-
-        Returns:
-            Grype container object or None
-        """
-        try:
-            return self.client.containers.get(settings.grype_container_name)
-        except docker.errors.NotFound:
-            logger.error(f"Grype container '{settings.grype_container_name}' not found")
-            return None
-        except DockerException as e:
-            logger.error(f"Error getting Grype container: {e}")
             return None
 
     @staticmethod

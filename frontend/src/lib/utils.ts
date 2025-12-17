@@ -9,16 +9,57 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(dateString: string | null | undefined): string {
+/**
+ * Format a date string for display using the specified timezone.
+ * If no timezone is provided, uses the browser's local timezone.
+ */
+export function formatDate(
+  dateString: string | null | undefined,
+  timezone?: string
+): string {
   if (!dateString) return "Never";
   const date = new Date(dateString);
-  return date.toLocaleString();
+
+  try {
+    return date.toLocaleString('en-US', {
+      timeZone: timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    // Fallback if timezone is invalid
+    return date.toLocaleString();
+  }
 }
 
-export function formatRelativeDate(dateString: string | null | undefined): string {
+/**
+ * Format a date as relative time (e.g., "5m ago", "2h ago").
+ * Uses the specified timezone for accurate comparison.
+ */
+export function formatRelativeDate(
+  dateString: string | null | undefined,
+  timezone?: string
+): string {
   if (!dateString) return "Never";
   const date = new Date(dateString);
-  const now = new Date();
+
+  // Get current time in the specified timezone for accurate comparison
+  let now: Date;
+  if (timezone) {
+    try {
+      // Create a date string in the target timezone, then parse it
+      const nowStr = new Date().toLocaleString('en-US', { timeZone: timezone });
+      now = new Date(nowStr);
+    } catch {
+      now = new Date();
+    }
+  } else {
+    now = new Date();
+  }
+
   const diff = now.getTime() - date.getTime();
 
   const seconds = Math.floor(diff / 1000);
@@ -41,7 +82,7 @@ export function getSeverityColor(severity: string): string {
     case "MEDIUM":
       return "text-yellow-500 bg-yellow-500/10 border-yellow-500/20";
     case "LOW":
-      return "text-blue-500 bg-blue-500/10 border-blue-500/20";
+      return "text-green-500 bg-green-500/10 border-green-500/20";
     default:
       return "text-gray-500 bg-gray-500/10 border-gray-500/20";
   }

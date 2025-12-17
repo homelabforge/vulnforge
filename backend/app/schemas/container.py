@@ -26,6 +26,7 @@ class ContainerUpdate(BaseModel):
     """Schema for updating a container."""
 
     is_running: bool | None = None
+    is_my_project: bool | None = None
     last_seen: datetime | None = None
 
 
@@ -36,6 +37,7 @@ class Container(ContainerBase):
 
     id: int
     is_running: bool
+    is_my_project: bool
     last_seen: datetime
     last_scan_date: datetime | None
     last_scan_status: str | None
@@ -67,6 +69,7 @@ class ContainerSummary(BaseModel):
     image: str
     image_tag: str
     is_running: bool
+    is_my_project: bool
     last_scan_date: datetime | None
     last_scan_status: str | None
     total_vulns: int

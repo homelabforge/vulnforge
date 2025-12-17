@@ -1,5 +1,5 @@
 /**
- * Image Compliance Component - Dockle image security scanning
+ * Image Compliance Component - Trivy image misconfiguration scanning
  */
 
 import {
@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { handleApiError } from "@/lib/errorHandler";
+import { validateIgnoreReason, validateImageName } from "@/schemas/modals";
 
 interface ImageSummary {
   image_name: string;
@@ -46,7 +48,7 @@ interface ImageFinding {
   severity: string; // CRITICAL, HIGH, MEDIUM, LOW, INFO
   category: string;
   remediation: string | null;
-  alerts: string[];
+  alerts: Array<{ code: string; line: number }>;
   is_ignored: boolean;
   ignored_reason: string | null;
   ignored_by: string | null;
@@ -155,9 +157,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
       setIgnoreReason("");
       setSelectedFinding(null);
     },
-    onError: (error: Error) => {
-      toast.error(`Failed to ignore finding: ${error.message}`);
-    },
+    onError: (error) => handleApiError(error, "Failed to ignore finding"),
   });
 
   // Mutation to unignore a finding
@@ -174,9 +174,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
       queryClient.invalidateQueries({ queryKey: ["image-compliance-findings"] });
       queryClient.invalidateQueries({ queryKey: ["image-compliance-images"] });
     },
-    onError: (error: Error) => {
-      toast.error(`Failed to unignore finding: ${error.message}`);
-    },
+    onError: (error) => handleApiError(error, "Failed to unignore finding"),
   });
 
   const handleIgnoreFinding = (finding: ImageFinding) => {
@@ -185,14 +183,17 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
   };
 
   const handleConfirmIgnore = () => {
-    if (!selectedFinding || !ignoreReason.trim()) {
-      toast.error("Please provide a reason for ignoring this finding");
+    if (!selectedFinding) return;
+
+    const validation = validateIgnoreReason(ignoreReason);
+    if (!validation.success) {
+      toast.error(validation.error);
       return;
     }
 
     ignoreMutation.mutate({
       findingId: selectedFinding.id,
-      reason: ignoreReason,
+      reason: validation.data,
     });
   };
 
@@ -207,7 +208,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
       case "LOW":
         return "bg-blue-500/20 text-blue-400";
       default:
-        return "bg-gray-500/20 text-gray-400";
+        return "bg-vuln-text-disabled/20 text-vuln-text-muted";
     }
   };
 
@@ -220,9 +221,9 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
       case "INFO":
         return <Info className="h-5 w-5 text-blue-500" />;
       case "SKIP":
-        return <AlertTriangle className="h-5 w-5 text-gray-400" />;
+        return <AlertTriangle className="h-5 w-5 text-vuln-text-muted" />;
       default:
-        return <Info className="h-5 w-5 text-gray-400" />;
+        return <Info className="h-5 w-5 text-vuln-text-muted" />;
     }
   };
 
@@ -264,9 +265,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
         queryClient.invalidateQueries({ queryKey: ["image-compliance-findings"] });
       }
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
+    onError: (error) => handleApiError(error, "Failed to start image scan"),
   });
 
   const scanAllMutation = useMutation({
@@ -286,9 +285,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
       queryClient.invalidateQueries({ queryKey: ["image-compliance-summary"] });
       queryClient.invalidateQueries({ queryKey: ["image-compliance-images"] });
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
+    onError: (error) => handleApiError(error, "Failed to start batch scan"),
   });
 
   const isScanning = currentScan?.status === "scanning";
@@ -324,7 +321,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
         <button
           onClick={() => setScanModalOpen(true)}
           disabled={scanImageDisabled}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-vuln-surface disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
         >
           {isScanImagePending ? (
             <>
@@ -346,7 +343,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
         <button
           onClick={() => runScanAll()}
           disabled={scanAllDisabled}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
+          className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-vuln-surface disabled:cursor-not-allowed text-white rounded-lg flex items-center gap-2 transition-colors"
         >
           {isScanAllPending ? (
             <>
@@ -399,7 +396,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                 Image security scan in progress…
               </p>
               {currentScan.current_image && (
-                <p className="text-sm text-gray-300 mt-1">
+                <p className="text-sm text-vuln-text mt-1">
                   Processing <span className="font-mono text-blue-300">{currentScan.current_image}</span>
                 </p>
               )}
@@ -407,7 +404,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
             {typeof currentScan.progress_current === "number" &&
               typeof currentScan.progress_total === "number" &&
               currentScan.progress_total > 0 && (
-                <span className="text-sm text-gray-300">
+                <span className="text-sm text-vuln-text">
                   {currentScan.progress_current}/{currentScan.progress_total} images
                 </span>
               )}
@@ -434,21 +431,21 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-[#1a1f2e] border border-gray-800 p-6 rounded-lg">
+        <div className="bg-vuln-surface border border-vuln-border p-6 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">Images Scanned</p>
-              <p className="text-3xl font-bold text-white">{summary?.total_images_scanned || 0}</p>
+              <p className="text-vuln-text-muted text-sm">Images Scanned</p>
+              <p className="text-3xl font-bold text-vuln-text">{summary?.total_images_scanned || 0}</p>
             </div>
             <Package className="h-10 w-10 text-blue-500" />
           </div>
         </div>
 
-        <div className="bg-[#1a1f2e] border border-gray-800 p-6 rounded-lg">
+        <div className="bg-vuln-surface border border-vuln-border p-6 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">Avg Compliance</p>
-              <p className="text-3xl font-bold text-white">
+              <p className="text-vuln-text-muted text-sm">Avg Compliance</p>
+              <p className="text-3xl font-bold text-vuln-text">
                 {images.length > 0
                   ? Math.round(
                       images.reduce((sum, img) => sum + img.compliance_score, 0) /
@@ -462,10 +459,10 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
           </div>
         </div>
 
-        <div className="bg-[#1a1f2e] border border-gray-800 p-6 rounded-lg">
+        <div className="bg-vuln-surface border border-vuln-border p-6 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">Critical Findings</p>
+              <p className="text-vuln-text-muted text-sm">Critical Findings</p>
               <p className="text-3xl font-bold text-red-400">
                 {images.reduce((sum, img) => sum + img.fatal_count, 0)}
               </p>
@@ -474,10 +471,10 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
           </div>
         </div>
 
-        <div className="bg-[#1a1f2e] border border-gray-800 p-6 rounded-lg">
+        <div className="bg-vuln-surface border border-vuln-border p-6 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">Active Failures</p>
+              <p className="text-vuln-text-muted text-sm">Active Failures</p>
               <p className="text-3xl font-bold text-orange-400">
                 {images.reduce((sum, img) => sum + img.active_failures, 0)}
               </p>
@@ -488,37 +485,40 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
       </div>
 
       {/* Images Table */}
-      <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg">
+      <div className="bg-vuln-surface border border-vuln-border rounded-lg">
         <div className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-white">Scanned Images</h2>
+            <h2 className="text-xl font-bold text-vuln-text">Scanned Images</h2>
           </div>
 
           {images.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              <Package className="h-16 w-16 mx-auto mb-4 text-gray-600" />
-              <p className="text-lg font-semibold mb-2 text-white">No images scanned yet</p>
+            <div className="text-center py-12 text-vuln-text-muted">
+              <Package className="h-16 w-16 mx-auto mb-4 text-vuln-text-disabled" />
+              <p className="text-lg font-semibold mb-2 text-vuln-text">No images scanned yet</p>
               <p className="text-sm">Click "Scan Image" to analyze a Docker image for security compliance</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-900/50">
-                  <tr className="border-b border-gray-700">
-                    <th className="text-left py-3 px-2 text-xs font-medium text-gray-400 uppercase tracking-wider">Image</th>
-                    <th className="text-center py-3 px-2 text-xs font-medium text-gray-400 uppercase tracking-wider">Score</th>
-                    <th className="text-center py-3 px-2 text-xs font-medium text-gray-400 uppercase tracking-wider">Checks</th>
-                    <th className="text-center py-3 px-2 text-xs font-medium text-gray-400 uppercase tracking-wider">Failures</th>
-                    <th className="text-center py-3 px-2 text-xs font-medium text-gray-400 uppercase tracking-wider">Critical</th>
-                    <th className="text-left py-3 px-2 text-xs font-medium text-gray-400 uppercase tracking-wider">Containers</th>
-                    <th className="text-right py-3 px-2 text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                <thead className="bg-vuln-surface-light">
+                  <tr className="border-b border-vuln-border">
+                    <th className="text-left py-3 px-2 text-xs font-medium text-vuln-text-muted uppercase tracking-wider">Image</th>
+                    <th className="text-center py-3 px-2 text-xs font-medium text-vuln-text-muted uppercase tracking-wider">Score</th>
+                    <th className="text-center py-3 px-2 text-xs font-medium text-vuln-text-muted uppercase tracking-wider">Findings</th>
+                    <th className="text-center py-3 px-2 text-xs font-medium text-vuln-text-muted uppercase tracking-wider">Critical</th>
+                    <th className="text-center py-3 px-2 text-xs font-medium text-vuln-text-muted uppercase tracking-wider">High</th>
+                    <th className="text-left py-3 px-2 text-xs font-medium text-vuln-text-muted uppercase tracking-wider">Containers</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-700">
                   {images.map((image) => (
-                    <tr key={image.image_name} className="hover:bg-gray-700/50 transition-colors">
+                    <tr
+                      key={image.image_name}
+                      onClick={() => setSelectedImage(image.image_name)}
+                      className="hover:bg-vuln-surface-light transition-colors cursor-pointer"
+                    >
                       <td className="py-3 px-2">
-                        <div className="font-mono text-sm text-gray-300 truncate max-w-md" title={image.image_name}>
+                        <div className="font-mono text-sm text-vuln-text truncate max-w-md" title={image.image_name}>
                           {image.image_name}
                         </div>
                       </td>
@@ -536,15 +536,10 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                         </span>
                       </td>
                       <td className="text-center px-2">
-                        <span className="text-green-400 font-semibold">{image.passed_checks}</span>
-                        <span className="text-gray-500 mx-1">/</span>
-                        <span className="text-gray-400">{image.total_checks}</span>
-                      </td>
-                      <td className="text-center px-2">
-                        {image.active_failures > 0 ? (
-                          <span className="text-red-400 font-semibold">{image.active_failures}</span>
+                        {image.total_checks > 0 ? (
+                          <span className="text-yellow-400 font-semibold">{image.total_checks}</span>
                         ) : (
-                          <span className="text-gray-500">0</span>
+                          <span className="text-green-400">0</span>
                         )}
                       </td>
                       <td className="text-center px-2">
@@ -554,7 +549,14 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                             {image.fatal_count}
                           </span>
                         ) : (
-                          <span className="text-gray-500">0</span>
+                          <span className="text-vuln-text-disabled">0</span>
+                        )}
+                      </td>
+                      <td className="text-center px-2">
+                        {image.warn_count > 0 ? (
+                          <span className="text-orange-400 font-semibold">{image.warn_count}</span>
+                        ) : (
+                          <span className="text-vuln-text-disabled">0</span>
                         )}
                       </td>
                       <td className="py-3 px-2">
@@ -570,21 +572,13 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                           ))}
                           {image.affected_containers.length > 2 && (
                             <span
-                              className="px-2 py-1 bg-gray-700 rounded text-xs text-gray-300"
+                              className="px-2 py-1 bg-vuln-surface-light rounded text-xs text-vuln-text"
                               title={image.affected_containers.slice(2).join(", ")}
                             >
                               +{image.affected_containers.length - 2}
                             </span>
                           )}
                         </div>
-                      </td>
-                      <td className="text-right px-2">
-                        <button
-                          onClick={() => setSelectedImage(image.image_name)}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors text-sm"
-                        >
-                          View Findings
-                        </button>
                       </td>
                     </tr>
                   ))}
@@ -598,20 +592,20 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
       {/* Findings Panel */}
       {selectedImage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8">
-          <div className="bg-[#161b25] border border-gray-700 rounded-xl shadow-xl w-full max-w-5xl max-h-[85vh] flex flex-col">
-            <div className="flex items-start justify-between gap-4 border-b border-gray-700 p-6">
+          <div className="bg-vuln-surface border border-vuln-border rounded-xl shadow-xl w-full max-w-5xl max-h-[85vh] flex flex-col">
+            <div className="flex items-start justify-between gap-4 border-b border-vuln-border p-6">
               <div>
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <h2 className="text-2xl font-bold text-vuln-text flex items-center gap-2">
                   <Package className="h-6 w-6 text-blue-400" />
                   Image Findings
                 </h2>
-                <p className="text-sm text-gray-400 mt-1">
+                <p className="text-sm text-vuln-text-muted mt-1">
                   {selectedImage} • {visibleFindings.length} finding{visibleFindings.length === 1 ? "" : "s"}
                 </p>
               </div>
               <button
                 onClick={() => setSelectedImage(null)}
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-vuln-text-muted hover:text-vuln-text transition-colors"
                 aria-label="Close findings"
               >
                 ✕
@@ -623,21 +617,21 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="px-4 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-4 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">All Statuses</option>
                   <option value="FAIL">Failures Only</option>
                   <option value="PASS">Passed Only</option>
                   <option value="INFO">Info Only</option>
                 </select>
-                <label className="flex items-center gap-2 px-4 py-2 border border-gray-700 rounded-lg cursor-pointer hover:bg-gray-700/50 transition-colors">
+                <label className="flex items-center gap-2 px-4 py-2 border border-vuln-border rounded-lg cursor-pointer hover:bg-vuln-surface-light transition-colors">
                   <input
                     type="checkbox"
                     checked={showIgnored}
                     onChange={(e) => setShowIgnored(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-blue-500"
+                    className="w-4 h-4 rounded border-vuln-border bg-vuln-surface text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="text-sm text-gray-300">Show Ignored</span>
+                  <span className="text-sm text-vuln-text">Show Ignored</span>
                 </label>
                 <button
                   onClick={() => {
@@ -651,52 +645,57 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto rounded-lg border border-gray-800">
+              <div className="flex-1 overflow-y-auto rounded-lg border border-vuln-border">
                 {isFindingFetching && visibleFindings.length === 0 ? (
-                  <div className="flex items-center justify-center py-12 text-gray-400 gap-3">
+                  <div className="flex items-center justify-center py-12 text-vuln-text-muted gap-3">
                     <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
                     Loading findings…
                   </div>
                 ) : visibleFindings.length === 0 ? (
-                  <div className="py-12 text-center text-gray-400">
-                    <XCircle className="mx-auto h-10 w-10 text-gray-600 mb-3" />
-                    <p className="text-lg font-semibold text-white">No findings to display</p>
-                    <p className="text-sm text-gray-400">Dockle did not report any checks matching the selected filters.</p>
+                  <div className="py-12 text-center text-vuln-text-muted">
+                    <XCircle className="mx-auto h-10 w-10 text-vuln-text-disabled mb-3" />
+                    <p className="text-lg font-semibold text-vuln-text">No findings to display</p>
+                    <p className="text-sm text-vuln-text-muted">Trivy did not report any misconfigurations matching the selected filters.</p>
                   </div>
                 ) : (
                   <table className="w-full">
-                    <thead className="bg-gray-900/50">
-                      <tr className="border-b border-gray-700">
-                        <th className="text-left py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
-                        <th className="text-left py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Check ID</th>
-                        <th className="text-left py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Title</th>
-                        <th className="text-center py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Severity</th>
-                        <th className="text-left py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Category</th>
-                        <th className="text-right py-3 px-3 text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                    <thead className="bg-vuln-surface-light">
+                      <tr className="border-b border-vuln-border">
+                        <th className="text-left py-3 px-3 text-xs font-medium text-vuln-text-muted uppercase tracking-wider">Status</th>
+                        <th className="text-left py-3 px-3 text-xs font-medium text-vuln-text-muted uppercase tracking-wider">Check ID</th>
+                        <th className="text-left py-3 px-3 text-xs font-medium text-vuln-text-muted uppercase tracking-wider">Title</th>
+                        <th className="text-center py-3 px-3 text-xs font-medium text-vuln-text-muted uppercase tracking-wider">Severity</th>
+                        <th className="text-left py-3 px-3 text-xs font-medium text-vuln-text-muted uppercase tracking-wider">Category</th>
+                        <th className="text-right py-3 px-3 text-xs font-medium text-vuln-text-muted uppercase tracking-wider">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-800">
                       {visibleFindings.map((finding) => (
                         <tr
                           key={finding.id}
-                          className={`hover:bg-gray-800/60 transition-colors ${finding.is_ignored ? "opacity-50" : ""}`}
+                          className={`hover:bg-vuln-surface-light transition-colors ${finding.is_ignored ? "opacity-50" : ""}`}
                         >
                           <td className="py-3 px-3 align-top">{getStatusIcon(finding.status)}</td>
                           <td className="py-3 px-3 align-top">
-                            <span className="font-mono text-sm text-gray-300">{finding.check_id}</span>
+                            <span className="font-mono text-sm text-vuln-text">{finding.check_id}</span>
                           </td>
                           <td className="py-3 px-3">
-                            <div className={`font-semibold ${finding.is_ignored ? "line-through text-gray-400" : "text-gray-200"}`}>
+                            <div className={`font-semibold ${finding.is_ignored ? "line-through text-vuln-text-muted" : "text-vuln-text"}`}>
                               {finding.title}
                             </div>
                             {finding.description && (
-                              <div className="text-sm text-gray-400 mt-1 whitespace-pre-wrap">{finding.description}</div>
+                              <div className="text-sm text-vuln-text-muted mt-1 whitespace-pre-wrap">{finding.description}</div>
                             )}
                             {finding.alerts.length > 0 && (
-                              <div className="mt-2 space-y-1">
+                              <div className="mt-2 space-y-2">
                                 {finding.alerts.map((alert, idx) => (
-                                  <div key={idx} className="text-xs bg-yellow-500/10 border border-yellow-500/30 rounded px-2 py-1 text-yellow-400">
-                                    • {alert}
+                                  <div key={idx} className="text-xs bg-yellow-500/10 border border-yellow-500/30 rounded p-2">
+                                    <div className="text-yellow-400 font-semibold mb-1">
+                                      Line {alert.line}:
+                                    </div>
+                                    <pre className="text-vuln-text overflow-x-auto whitespace-pre-wrap font-mono text-xs">
+                                      {alert.code}
+                                    </pre>
                                   </div>
                                 ))}
                               </div>
@@ -706,13 +705,13 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                                 <summary className="text-xs text-blue-400 cursor-pointer hover:underline">
                                   Show remediation guidance
                                 </summary>
-                                <div className="text-xs bg-blue-500/10 border border-blue-500/30 rounded px-3 py-2 mt-2 text-gray-300 whitespace-pre-wrap">
+                                <div className="text-xs bg-blue-500/10 border border-blue-500/30 rounded px-3 py-2 mt-2 text-vuln-text whitespace-pre-wrap">
                                   {finding.remediation}
                                 </div>
                               </details>
                             )}
                             {finding.is_ignored && finding.ignored_reason && (
-                              <div className="mt-2 text-xs text-gray-500">
+                              <div className="mt-2 text-xs text-vuln-text-disabled">
                                 Ignored: {finding.ignored_reason}
                               </div>
                             )}
@@ -723,7 +722,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                             </span>
                           </td>
                           <td className="py-3 px-3 align-top">
-                            <span className="text-sm text-gray-400">{finding.category}</span>
+                            <span className="text-sm text-vuln-text-muted">{finding.category}</span>
                           </td>
                           <td className="text-right px-3 align-top">
                             {finding.is_ignored ? (
@@ -736,7 +735,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                             ) : finding.status === "FAIL" ? (
                               <button
                                 onClick={() => handleIgnoreFinding(finding)}
-                                className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors text-sm"
+                                className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-vuln-text rounded transition-colors text-sm"
                               >
                                 Ignore
                               </button>
@@ -756,27 +755,28 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
       {/* Scan Modal */}
       {scanModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 border border-gray-700">
-            <h3 className="text-xl font-semibold text-white mb-4">Scan Image</h3>
-            <p className="text-sm text-gray-300 mb-4">
+          <div className="bg-vuln-surface rounded-lg p-6 max-w-lg w-full mx-4 border border-vuln-border">
+            <h3 className="text-xl font-semibold text-vuln-text mb-4">Scan Image</h3>
+            <p className="text-sm text-vuln-text mb-4">
               Enter the image reference (e.g. <span className="font-mono text-blue-300">alpine:3.19</span>).
             </p>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 const trimmed = imageInput.trim();
-                if (!trimmed) {
-                  toast.error("Please provide an image reference");
+                const validation = validateImageName(trimmed);
+                if (!validation.success) {
+                  toast.error(validation.error);
                   return;
                 }
-                scanImageMutation.mutate(trimmed);
+                scanImageMutation.mutate(validation.data);
               }}
             >
               <input
                 value={imageInput}
                 onChange={(e) => setImageInput(e.target.value)}
                 placeholder="repository:tag"
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 bg-vuln-bg border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:border-blue-500"
                 autoFocus
               />
               <div className="flex justify-end gap-3 mt-6">
@@ -786,14 +786,14 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                     setScanModalOpen(false);
                     setImageInput("");
                   }}
-                  className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                  className="px-4 py-2 text-vuln-text-muted hover:text-vuln-text transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={scanImageMutation.isPending || !imageInput.trim()}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-vuln-surface disabled:cursor-not-allowed text-white rounded-lg transition-colors"
                 >
                   {scanImageMutation.isPending ? (
                     <span className="flex items-center gap-2">
@@ -813,20 +813,20 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
       {/* Ignore Modal */}
       {ignoreModalOpen && selectedFinding && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 border border-gray-700">
-            <h3 className="text-xl font-semibold text-white mb-4">Mark as False Positive</h3>
-            <p className="text-sm text-gray-300 mb-4">
+          <div className="bg-vuln-surface rounded-lg p-6 max-w-lg w-full mx-4 border border-vuln-border">
+            <h3 className="text-xl font-semibold text-vuln-text mb-4">Mark as False Positive</h3>
+            <p className="text-sm text-vuln-text mb-4">
               Check: <span className="font-mono text-blue-400">{selectedFinding.check_id}</span> - {selectedFinding.title}
             </p>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-vuln-text mb-2">
                 Reason (required)
               </label>
               <textarea
                 value={ignoreReason}
                 onChange={(e) => setIgnoreReason(e.target.value)}
                 placeholder="Explain why this finding is not applicable..."
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500 h-24"
+                className="w-full px-3 py-2 bg-vuln-bg border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:border-blue-500 h-24"
               />
             </div>
             <div className="flex gap-3 justify-end">
@@ -836,14 +836,14 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                   setIgnoreReason("");
                   setSelectedFinding(null);
                 }}
-                className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                className="px-4 py-2 text-vuln-text-muted hover:text-vuln-text transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmIgnore}
                 disabled={!ignoreReason.trim() || ignoreMutation.isPending}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-vuln-surface disabled:cursor-not-allowed text-white rounded-lg transition-colors"
               >
                 {ignoreMutation.isPending ? "Saving..." : "Mark as False Positive"}
               </button>

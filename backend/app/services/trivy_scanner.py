@@ -16,14 +16,15 @@ logger = logging.getLogger(__name__)
 
 
 class TrivyScanner:
-    """Service for executing Trivy vulnerability scans."""
+    """Service for executing Trivy vulnerability and compliance scans."""
 
-    def __init__(self, docker_service: DockerService):
+    def __init__(self, docker_service: DockerService | None = None):
         """
         Initialize Trivy scanner.
 
         Args:
-            docker_service: Docker service instance
+            docker_service: Optional Docker service instance. If not provided, a new
+                DockerService will be created for each scan using current settings.
         """
         self.docker_service = docker_service
         self._exec_lock = asyncio.Lock()
@@ -92,9 +93,10 @@ class TrivyScanner:
         local_skip = skip_db_update
         retried_on_db_corruption = False
         lock_retry_count = 0
-        max_lock_retries = 3
+        max_lock_retries = settings.trivy_max_lock_retries
+        max_corruption_retries = settings.trivy_max_corruption_retries
 
-        for attempt in range(max_lock_retries + 2):  # Allow multiple lock retries + corruption retry
+        for attempt in range(max_lock_retries + max_corruption_retries + 1):  # Allow multiple lock retries + corruption retry
             cmd = list(base_cmd)
 
             if local_skip:
@@ -134,7 +136,7 @@ class TrivyScanner:
                 and "vulnerability database may be in use by another process" in output_text
             ):
                 lock_retry_count += 1
-                wait_time = 2 + (lock_retry_count * 2)  # Exponential backoff: 4s, 6s, 8s
+                wait_time = settings.trivy_lock_retry_base_wait + (lock_retry_count * settings.trivy_lock_retry_backoff_multiplier)
                 logger.warning(
                     f"Trivy database locked by another process; "
                     f"waiting {wait_time}s and retrying (attempt {lock_retry_count}/{max_lock_retries})"
@@ -179,8 +181,18 @@ class TrivyScanner:
         if timeout is None:
             timeout = settings.scan_timeout
 
+        # Prefer an injected DockerService (tests / custom wiring), otherwise
+        # create a fresh instance so we respect the latest docker_socket_proxy.
+        docker_service: DockerService | None = self.docker_service
+        if docker_service is None:
+            try:
+                docker_service = DockerService()
+            except DockerException as exc:
+                logger.error(f"Failed to initialize DockerService for Trivy exec scan: {exc}")
+                return None
+
         try:
-            trivy_container = self.docker_service.get_trivy_container()
+            trivy_container = docker_service.get_trivy_container()
             if not trivy_container:
                 logger.error("Trivy container not available")
                 return None
@@ -233,11 +245,16 @@ class TrivyScanner:
         except Exception as e:
             logger.error(f"Unexpected error during scan: {e}")
             return None
+        finally:
+            # Only close DockerService instances we created ourselves
+            if self.docker_service is None and docker_service is not None:
+                docker_service.close()
 
     async def _scan_via_client_mode(
         self, image: str, scan_secrets: bool = True, timeout: int | None = None,
-        skip_db_update: bool = False
-    ) -> dict[str, Any] | None:
+        skip_db_update: bool = False,
+        extra_args: list[str] | None = None,
+    ) -> tuple[int, bytes | str | None, float]:
         """
         Scan an image with Trivy using client mode pointing to server.
 
@@ -253,29 +270,41 @@ class TrivyScanner:
         if timeout is None:
             timeout = settings.scan_timeout
 
+        # Prefer an injected DockerService (tests / custom wiring), otherwise
+        # create a fresh instance so we respect the latest docker_socket_proxy.
+        docker_service: DockerService | None = self.docker_service
+        if docker_service is None:
+            try:
+                docker_service = DockerService()
+            except DockerException as exc:
+                logger.error(f"Failed to initialize DockerService for Trivy client scan: {exc}")
+                return None, None, 0.0
+
         try:
-            trivy_container = self.docker_service.get_trivy_container()
+            trivy_container = docker_service.get_trivy_container()
             if not trivy_container:
                 logger.error("Trivy container not available for client mode")
-                return None
+                if self.docker_service is None and docker_service is not None:
+                    docker_service.close()
+                return None, None, 0.0
 
             logger.info(f"Scanning image: {image} (mode: client, secrets: {scan_secrets}, skip_db_update: {skip_db_update})")
             start_time = get_now()
 
-            # Build scanner list
-            scanners = ["vuln"]
-            if scan_secrets:
-                scanners.append("secret")
-
-            # Execute Trivy scan in client mode pointing to server
-            # Command: trivy image --server <url> --scanners vuln,secret --format json --quiet [--skip-db-update] <image>
-            base_cmd = [
-                "trivy", "image",
-                "--server", self.server_url,  # Client mode: point to server
-                "--scanners", ",".join(scanners),
-                "--format", "json",
-                "--quiet",
-            ]
+            # Execute Trivy in client mode pointing to server.
+            # For vulnerability scans, callers pass scanners via extra_args.
+            base_cmd = ["trivy"]
+            if extra_args:
+                base_cmd.extend(extra_args)
+            else:
+                base_cmd.extend([
+                    "image",
+                    "--server",
+                    self.server_url,
+                    "--format",
+                    "json",
+                    "--quiet",
+                ])
 
             exit_code, output = await self._run_trivy_scan(
                 trivy_container,
@@ -286,28 +315,18 @@ class TrivyScanner:
 
             scan_duration = (get_now() - start_time).total_seconds()
 
-            if exit_code != 0:
-                logger.error(f"Trivy client mode scan failed with exit code {exit_code}")
-                logger.error(f"Output: {output[:500]}")  # First 500 chars
-                return None
-
-            # Parse JSON output
-            try:
-                scan_data = json.loads(output)
-                logger.info(f"Scan completed in {scan_duration:.2f}s (client mode)")
-                return self._parse_trivy_output(scan_data, scan_duration)
-
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse Trivy JSON output: {e}")
-                logger.error(f"Output: {output[:500]}")
-                return None
+            return exit_code, output, scan_duration
 
         except DockerException as e:
             logger.error(f"Docker error during client mode scan: {e}")
-            return None
+            return 1, None, 0.0
         except Exception as e:
             logger.error(f"Unexpected error during client mode scan: {e}")
-            return None
+            return 1, None, 0.0
+        finally:
+            # Only close DockerService instances we created ourselves
+            if self.docker_service is None and docker_service is not None:
+                docker_service.close()
 
     async def scan_image(
         self, image: str, scan_secrets: bool = True, timeout: int | None = None,
@@ -328,19 +347,138 @@ class TrivyScanner:
         Returns:
             Parsed scan results or None on error
         """
+        # Build scanner list
+        scanners = ["vuln"]
+        if scan_secrets:
+            scanners.append("secret")
+
         # Try client mode first if server configured
         if self.use_server_mode:
-            try:
-                result = await self._scan_via_client_mode(image, scan_secrets, timeout, skip_db_update)
-                if result is not None:
-                    return result
-                # Client mode returned None, try fallback
+            extra_args = [
+                "image",
+                "--server",
+                self.server_url,
+                "--scanners",
+                ",".join(scanners),
+                "--format",
+                "json",
+                "--quiet",
+            ]
+            exit_code, output, scan_duration = await self._scan_via_client_mode(
+                image,
+                scan_secrets,
+                timeout,
+                skip_db_update,
+                extra_args=extra_args,
+            )
+            if exit_code == 0 and output:
+                try:
+                    scan_data = json.loads(output)
+                    logger.info(f"Scan completed in {scan_duration:.2f}s (client mode)")
+                    return self._parse_trivy_output(scan_data, scan_duration)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse Trivy JSON output: {e}")
+                    logger.error(f"Output: {output[:500]}")
+            else:
                 logger.warning("Client mode returned no results, falling back to exec mode")
-            except Exception as e:
-                logger.warning(f"Client mode failed ({e}), falling back to exec mode")
 
         # Use exec mode (either as fallback or as primary when server not configured)
         return await self._scan_via_exec(image, scan_secrets, timeout, skip_db_update)
+
+    async def scan_compliance(
+        self,
+        target: str,
+        compliance_id: str = "docker-cis-1.6.0",
+        timeout: int | None = None,
+    ) -> dict[str, Any] | None:
+        """
+        Run a Trivy compliance scan (e.g., CIS Docker Benchmark).
+
+        Args:
+            target: Image name or target identifier.
+            compliance_id: Compliance spec ID (e.g., docker-cis).
+            timeout: Optional timeout (seconds).
+
+        Returns:
+            Parsed compliance results or None on error.
+        """
+        if timeout is None:
+            timeout = settings.scan_timeout
+
+        # For now, we treat all compliance scans as image-focused.
+        base_args = [
+            "image",
+            "--server",
+            self.server_url,
+            "--compliance",
+            compliance_id,
+            "--format",
+            "json",
+            "--quiet",
+        ] if self.use_server_mode else [
+            "image",
+            "--compliance",
+            compliance_id,
+            "--format",
+            "json",
+            "--quiet",
+        ]
+
+        if self.use_server_mode:
+            exit_code, output, scan_duration = await self._scan_via_client_mode(
+                target,
+                scan_secrets=False,
+                timeout=timeout,
+                skip_db_update=False,
+                extra_args=base_args,
+            )
+        else:
+            # Exec mode compliance scan
+            if timeout is None:
+                timeout = settings.scan_timeout
+
+            try:
+                trivy_container = self.docker_service.get_trivy_container()
+                if not trivy_container:
+                    logger.error("Trivy container not available for compliance scan")
+                    return None
+
+                logger.info(f"Running Trivy compliance scan: target={target}, profile={compliance_id}")
+                start_time = get_now()
+
+                base_cmd = ["trivy"] + base_args
+
+                exit_code, output = await self._run_trivy_scan(
+                    trivy_container,
+                    base_cmd,
+                    target,
+                    skip_db_update=False,
+                )
+
+                scan_duration = (get_now() - start_time).total_seconds()
+
+            except DockerException as e:
+                logger.error(f"Docker error during compliance scan: {e}")
+                return None
+            except Exception as e:
+                logger.error(f"Unexpected error during compliance scan: {e}")
+                return None
+
+        if exit_code != 0 or not output:
+            logger.error(f"Trivy compliance scan failed with exit code {exit_code}")
+            if output:
+                logger.error(f"Output: {output[:500]}")
+            return None
+
+        try:
+            data = json.loads(output)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse Trivy compliance JSON output: {e}")
+            logger.error(f"Output: {output[:500]}")
+            return None
+
+        logger.info(f"Compliance scan completed in {scan_duration:.2f}s")
+        return data
 
     def _parse_trivy_output(
         self, trivy_data: dict[str, Any], scan_duration: float
@@ -426,7 +564,11 @@ class TrivyScanner:
         # Parse secrets
         secrets = self._parse_trivy_secrets(trivy_data)
 
+        # Extract image name from Trivy output
+        image_name = trivy_data.get("ArtifactName", "unknown")
+
         return {
+            "image": image_name,
             "vulnerabilities": vulnerabilities,
             "secrets": secrets,
             "total_count": len(vulnerabilities),
@@ -515,8 +657,18 @@ class TrivyScanner:
         Returns:
             Database info dict or None on error
         """
+        # Prefer an injected DockerService (tests / custom wiring), otherwise
+        # create a fresh instance so we respect the latest docker_socket_proxy.
+        docker_service: DockerService | None = self.docker_service
+        if docker_service is None:
+            try:
+                docker_service = DockerService()
+            except DockerException as exc:
+                logger.error(f"Failed to initialize DockerService for Trivy DB info: {exc}")
+                return None
+
         try:
-            trivy_container = self.docker_service.get_trivy_container()
+            trivy_container = docker_service.get_trivy_container()
             if not trivy_container:
                 logger.error("Trivy container not available")
                 return None
@@ -574,6 +726,10 @@ class TrivyScanner:
         except Exception as e:
             logger.error(f"Error getting Trivy database info: {e}")
             return None
+        finally:
+            # Only close DockerService instances we created ourselves
+            if self.docker_service is None and docker_service is not None:
+                docker_service.close()
 
     async def check_db_freshness(self, max_age_hours: int = 24) -> tuple[bool, int | None]:
         """

@@ -47,6 +47,25 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+
+# Filter to exclude health check endpoints from access logs
+class EndpointFilter(logging.Filter):
+    """Filter to exclude specific endpoints from Granian access logs."""
+
+    def __init__(self, excluded_paths: list[str]) -> None:
+        super().__init__()
+        self.excluded_paths = excluded_paths
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Return False if the log record is for an excluded endpoint."""
+        # Granian access logs have the path in the message
+        message = record.getMessage()
+        return not any(path in message for path in self.excluded_paths)
+
+
+# Apply filter to granian access logger to exclude health checks
+logging.getLogger("granian.access").addFilter(EndpointFilter(["/health"]))
+
 # Global instances
 scheduler = None
 scan_queue = None
@@ -120,9 +139,8 @@ async def lifespan(app: FastAPI):
     await enhanced_notifier.create_default_rules()
     logger.info("Notification rules initialized")
 
-    # Create shared TrivyScanner instance for all workers
-    docker_service = DockerService()
-    trivy_scanner = TrivyScanner(docker_service)
+    # Create shared TrivyScanner instance for all workers.
+    trivy_scanner = TrivyScanner()
     logger.info("Shared TrivyScanner instance created")
 
     # Start scan queue with shared scanner
@@ -248,9 +266,23 @@ if static_dir.exists():
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         """Serve index.html for all non-API routes (SPA fallback)."""
-        # If requesting a file that exists, serve it
-        file_path = static_dir / full_path
-        if file_path.is_file():
-            return FileResponse(file_path)
+        # Normalize and validate path to prevent directory traversal
+        try:
+            # Resolve to absolute path and check it's within static_dir
+            requested_path = (static_dir / full_path).resolve()
+            static_dir_resolved = static_dir.resolve()
+
+            # Security check: Ensure the resolved path is within static_dir
+            if not str(requested_path).startswith(str(static_dir_resolved)):
+                logger.warning(f"Path traversal attempt blocked: {full_path}")
+                return FileResponse(static_dir / "index.html")
+
+            # If requesting a file that exists, serve it
+            if requested_path.is_file():
+                return FileResponse(requested_path)
+
+        except (ValueError, OSError) as e:
+            logger.warning(f"Invalid path request: {full_path} - {e}")
+
         # Otherwise, serve index.html for client-side routing
         return FileResponse(static_dir / "index.html")

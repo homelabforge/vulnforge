@@ -1,10 +1,13 @@
 """Maintenance API endpoints."""
 
+import json
 import os
 import shutil
 from datetime import datetime
 from pathlib import Path
 
+import httpx
+import sqlalchemy.exc
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
@@ -25,9 +28,12 @@ router = APIRouter()
 
 
 @router.post("/cleanup")
-async def trigger_cleanup(user: User = Depends(require_admin)):
+async def trigger_cleanup(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin)
+):
     """Manually trigger cleanup of old scan history."""
-    result = await CleanupService.cleanup_old_scans()
+    result = await CleanupService.cleanup_old_scans(db)
     return {
         "status": "completed",
         **result,
@@ -35,9 +41,12 @@ async def trigger_cleanup(user: User = Depends(require_admin)):
 
 
 @router.get("/cleanup/stats")
-async def get_cleanup_stats(user: User = Depends(require_admin)):
+async def get_cleanup_stats(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin)
+):
     """Get statistics about cleanable data."""
-    stats = await CleanupService.get_cleanup_stats()
+    stats = await CleanupService.get_cleanup_stats(db)
     return stats
 
 
@@ -103,8 +112,10 @@ async def create_backup(user: User = Depends(require_admin)):
             "size_mb": round(file_size / 1024 / 1024, 2),
             "created_at": get_now().isoformat(),
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Backup failed: {str(e)}")
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=f"Permission denied creating backup: {e}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"File system error during backup: {e}")
 
 
 @router.get("/backup/list")
@@ -139,8 +150,10 @@ async def list_backups(user: User = Depends(require_admin)):
             })
 
         return {"backups": backups, "total": len(backups)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list backups: {str(e)}")
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=f"Permission denied accessing backups: {e}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"File system error listing backups: {e}")
 
 
 @router.get("/backup/download/{filename}")
@@ -176,8 +189,10 @@ async def download_backup(filename: str, user: User = Depends(require_admin)):
         )
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}")
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=f"Permission denied reading backup: {e}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"File system error during download: {e}")
 
 
 @router.delete("/backup/{filename}")
@@ -215,8 +230,10 @@ async def delete_backup(filename: str, user: User = Depends(require_admin)):
         }
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Deletion failed: {str(e)}")
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=f"Permission denied deleting backup: {e}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"File system error during deletion: {e}")
 
 
 @router.post("/backup/restore/{filename}")
@@ -254,10 +271,15 @@ async def restore_backup(filename: str, user: User = Depends(require_admin)):
 
         try:
             shutil.copy2(db_file, safety_backup)
-        except Exception as e:
+        except PermissionError as e:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Permission denied creating safety backup: {e}"
+            )
+        except OSError as e:
             raise HTTPException(
                 status_code=500,
-                detail=f"Failed to create safety backup: {str(e)}"
+                detail=f"File system error creating safety backup: {e}"
             )
 
         # Perform the restore
@@ -272,23 +294,38 @@ async def restore_backup(filename: str, user: User = Depends(require_admin)):
                 "safety_backup": safety_backup.name,
                 "note": "Application may need to restart to fully apply changes. Refresh the page.",
             }
-        except Exception as e:
+        except PermissionError as e:
+            # If restore fails, try to restore the safety backup
+            try:
+                shutil.copy2(safety_backup, db_file)
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Permission denied during restore (rolled back): {e}"
+                )
+            except OSError as rollback_error:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Restore failed and rollback also failed. Safety backup at: {safety_backup.name}"
+                )
+        except OSError as e:
             # If restore fails, try to restore the safety backup
             try:
                 shutil.copy2(safety_backup, db_file)
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Restore failed and rolled back: {str(e)}"
+                    detail=f"File system error during restore (rolled back): {e}"
                 )
-            except Exception as rollback_error:
+            except OSError as rollback_error:
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Restore failed and rollback also failed: {str(e)}. Safety backup at: {safety_backup.name}"
+                    detail=f"Restore failed and rollback also failed. Safety backup at: {safety_backup.name}"
                 )
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Restore failed: {str(e)}")
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=f"Permission denied during restore: {e}")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"File system error during restore: {e}")
 
 
 @router.post("/backup/upload")
@@ -383,11 +420,14 @@ async def refresh_kev_catalog(
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"KEV refresh failed: {str(e)}"
-        )
+    except httpx.TimeoutException as e:
+        raise HTTPException(status_code=504, detail="KEV catalog fetch timed out - CISA may be slow")
+    except httpx.ConnectError as e:
+        raise HTTPException(status_code=503, detail="Cannot connect to CISA - check network connectivity")
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=f"CISA returned error: {e}")
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail="Invalid KEV catalog format received from CISA")
 
 
 @router.get("/kev/status")
@@ -422,8 +462,7 @@ async def get_kev_status(
             "cache_hours": await settings_manager.get_int("kev_cache_hours", default=12),
         }
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get KEV status: {str(e)}"
-        )
+    except sqlalchemy.exc.OperationalError as e:
+        raise HTTPException(status_code=503, detail="Database temporarily unavailable")
+    except sqlalchemy.exc.SQLAlchemyError as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {e}")

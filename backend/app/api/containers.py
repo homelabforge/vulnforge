@@ -1,5 +1,6 @@
 """Container API endpoints."""
 
+import asyncio
 import logging
 from datetime import timedelta
 
@@ -16,6 +17,7 @@ from app.schemas import (
     ContainerList,
     ContainerScanVulnerability,
     ContainerSummary,
+    ContainerUpdate,
     ContainerVulnerabilitySummary,
 )
 from app.services.activity_logger import ActivityLogger
@@ -202,6 +204,32 @@ async def get_container(
     return container_schema
 
 
+@router.patch("/{container_id}", response_model=ContainerSchema)
+async def update_container(
+    container_id: int,
+    container_update: ContainerUpdate,
+    container_repo: ContainerRepository = Depends(get_container_repository),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update container fields (e.g., toggle is_my_project)."""
+    container = await container_repo.get_by_id(container_id)
+
+    if not container:
+        raise HTTPException(status_code=404, detail="Container not found")
+
+    # Update fields
+    update_data = container_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(container, field, value)
+
+    await container_repo.update(container)
+    await db.commit()
+    await db.refresh(container)
+
+    # Return updated container
+    return await get_container(container_id, container_repo)
+
+
 @router.post("/discover")
 async def discover_containers(
     container_repo: ContainerRepository = Depends(get_container_repository),
@@ -219,7 +247,6 @@ async def discover_containers(
         # Ignore one-off compliance/scanner helpers
         transient_prefixes = (
             "docker/docker-bench-security",
-            "goodwithtech/dockle",
         )
         if any(image_name.startswith(prefix) or image_full.startswith(prefix) for prefix in transient_prefixes):
             return True
@@ -281,6 +308,8 @@ async def discover_containers(
                         is_running=dc["is_running"],
                     )
             except Exception as e:
+                # INTENTIONAL: Activity logging must never crash container discovery.
+                # We catch all exceptions to ensure the main operation succeeds.
                 logger.error(f"Failed to log container discovery activity: {e}", exc_info=True)
 
         removed = await container_repo.remove_missing(active_container_names, active_container_ids)
@@ -299,5 +328,20 @@ async def discover_containers(
             "message": ", ".join(message_parts),
         }
 
+    except asyncio.TimeoutError as e:
+        logger.error(f"Docker connection timeout: {e}")
+        raise HTTPException(status_code=504, detail="Docker daemon connection timeout")
+    except PermissionError as e:
+        logger.error(f"Docker permission denied: {e}")
+        raise HTTPException(status_code=403, detail="Docker daemon permission denied - check socket permissions")
+    except ConnectionError as e:
+        logger.error(f"Docker connection error: {e}")
+        raise HTTPException(status_code=503, detail="Docker daemon unavailable - check if Docker is running")
+    except OSError as e:
+        logger.error(f"Docker socket error: {e}")
+        raise HTTPException(status_code=503, detail=f"Docker socket error: {e}")
+    except Exception as e:
+        logger.error(f"Docker service error: {e}")
+        raise HTTPException(status_code=503, detail=f"Docker service unavailable: {str(e)}")
     finally:
         docker_service.close()

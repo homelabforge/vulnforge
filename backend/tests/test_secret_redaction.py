@@ -6,7 +6,7 @@ import pytest
 class TestTrivyScannerSecretRedaction:
     """Tests for secret redaction in Trivy scanner service."""
 
-    def test_secret_code_lines_are_redacted(self):
+    async def test_secret_code_lines_are_redacted(self):
         """Test that secret code lines are redacted before database storage."""
         from app.services.trivy_scanner import TrivyScanner
 
@@ -46,7 +46,7 @@ class TestTrivyScannerSecretRedaction:
         assert "***REDACTED***" in code_snippet
         assert all(line["Content"] == "***REDACTED***" for line in redacted_lines)
 
-    def test_secret_match_field_preserved(self):
+    async def test_secret_match_field_preserved(self):
         """Test that Match field is preserved for secret type identification."""
         from app.services.trivy_scanner import TrivyScanner
 
@@ -61,7 +61,7 @@ class TestTrivyScannerSecretRedaction:
         assert "Match" in mock_secret
         assert mock_secret["Match"] != "***REDACTED***"
 
-    def test_empty_code_lines_handled(self):
+    async def test_empty_code_lines_handled(self):
         """Test handling of secrets without code lines."""
         mock_secret = {
             "RuleID": "generic-secret",
@@ -87,7 +87,7 @@ class TestTrivyScannerSecretRedaction:
 class TestLogRedaction:
     """Tests for log redaction utility."""
 
-    def test_redact_common_secrets(self):
+    async def test_redact_common_secrets(self):
         """Test redaction of common secret patterns in logs."""
         from app.utils.log_redaction import redact_sensitive_data
 
@@ -101,7 +101,7 @@ class TestLogRedaction:
         for original, expected in test_cases:
             assert redact_sensitive_data(original) == expected
 
-    def test_redact_preserves_context(self):
+    async def test_redact_preserves_context(self):
         """Test that redaction preserves surrounding context."""
         from app.utils.log_redaction import redact_sensitive_data
 
@@ -115,7 +115,7 @@ class TestLogRedaction:
         assert "secret-token" not in redacted
         assert "***REDACTED***" in redacted
 
-    def test_redact_handles_multiline(self):
+    async def test_redact_handles_multiline(self):
         """Test redaction works across multiple lines."""
         from app.utils.log_redaction import redact_sensitive_data
 
@@ -138,7 +138,6 @@ class TestLogRedaction:
 class TestSecretScanningIntegration:
     """Integration tests for secret scanning workflow."""
 
-    @pytest.mark.asyncio
     async def test_secrets_not_exposed_in_api_response(self, client, db_with_settings):
         """Test that secrets are not exposed in API responses."""
         from app.dependencies.auth import get_current_user
@@ -155,7 +154,7 @@ class TestSecretScanningIntegration:
         # For now, we test the principle that secret code is redacted
 
         # If we had a secrets endpoint, we'd test:
-        # response = client.get("/api/v1/secrets")
+        # response = await client.get("/api/v1/secrets")
         # assert response.status_code == 200
         # for secret in response.json():
         #     assert "***REDACTED***" in secret.get("code_snippet", "")
@@ -163,7 +162,7 @@ class TestSecretScanningIntegration:
 
         app.dependency_overrides.clear()
 
-    def test_secret_stored_redacted_in_database(self):
+    async def test_secret_stored_redacted_in_database(self):
         """Test that secrets are stored redacted in the database."""
         # This verifies the data model ensures secrets can't be leaked
         from app.models import Secret
@@ -191,7 +190,6 @@ class TestSecretScanningIntegration:
 class TestSettingsSecretMasking:
     """Tests for secret masking in settings."""
 
-    @pytest.mark.asyncio
     async def test_sensitive_settings_masked_in_list(self, client, db_with_settings):
         """Test that sensitive settings are masked when listed."""
         from app.dependencies.auth import get_current_user
@@ -220,7 +218,7 @@ class TestSettingsSecretMasking:
 
         await db_with_settings.commit()
 
-        response = client.get("/api/v1/settings")
+        response = await client.get("/api/v1/settings")
 
         # Check if sensitive values are masked
         settings_dict = {s["key"]: s["value"] for s in response.json()}

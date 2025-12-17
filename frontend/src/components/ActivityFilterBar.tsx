@@ -57,7 +57,7 @@ export function ActivityFilterBar({
             className={`px-4 py-2 rounded-lg font-medium transition-all ${
               isActive
                 ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30"
-                : "bg-[#1a1f2e] text-gray-400 border border-gray-800 hover:border-gray-700 hover:text-white"
+                : "bg-vuln-surface text-vuln-text-muted border border-vuln-border hover:border-vuln-border hover:text-vuln-text"
             }`}
           >
             <span className="flex items-center gap-2">
@@ -67,7 +67,7 @@ export function ActivityFilterBar({
                   className={`text-xs px-2 py-0.5 rounded-full ${
                     isActive
                       ? "bg-blue-700 text-white"
-                      : "bg-gray-800 text-gray-400"
+                      : "bg-vuln-surface text-vuln-text-muted"
                   }`}
                 >
                   {filter.count}

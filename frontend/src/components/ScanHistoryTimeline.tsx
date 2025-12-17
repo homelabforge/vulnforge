@@ -3,7 +3,8 @@
  */
 
 import { Clock, CheckCircle, XCircle, Bug, Key, TrendingDown, TrendingUp } from "lucide-react";
-import { formatRelativeDate } from "@/lib/utils";
+import { formatRelativeDate, formatDate } from "@/lib/utils";
+import { useTimezone } from "@/contexts/SettingsContext";
 
 interface ScanHistoryItem {
   id: number;
@@ -24,13 +25,15 @@ interface ScanHistoryTimelineProps {
 }
 
 export function ScanHistoryTimeline({ history, isLoading }: ScanHistoryTimelineProps) {
+  const timezone = useTimezone();
+
   if (isLoading) {
     return (
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-6 animate-pulse">
-            <div className="h-4 bg-gray-700 rounded w-1/4 mb-2"></div>
-            <div className="h-3 bg-gray-700 rounded w-1/2"></div>
+          <div key={i} className="bg-vuln-surface border border-vuln-border rounded-lg p-6 animate-pulse">
+            <div className="h-4 bg-vuln-surface-light rounded w-1/4 mb-2"></div>
+            <div className="h-3 bg-vuln-surface-light rounded w-1/2"></div>
           </div>
         ))}
       </div>
@@ -39,10 +42,10 @@ export function ScanHistoryTimeline({ history, isLoading }: ScanHistoryTimelineP
 
   if (!history || history.length === 0) {
     return (
-      <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-8 text-center">
-        <Clock className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-        <p className="text-gray-400">No scan history available</p>
-        <p className="text-sm text-gray-500 mt-1">Run a scan to see history</p>
+      <div className="bg-vuln-surface border border-vuln-border rounded-lg p-8 text-center">
+        <Clock className="w-12 h-12 text-vuln-text-disabled mx-auto mb-3" />
+        <p className="text-vuln-text-muted">No scan history available</p>
+        <p className="text-sm text-vuln-text-disabled mt-1">Run a scan to see history</p>
       </div>
     );
   }
@@ -64,11 +67,11 @@ export function ScanHistoryTimeline({ history, isLoading }: ScanHistoryTimelineP
         return (
           <div
             key={scan.id}
-            className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-6 hover:border-gray-700 transition-colors relative"
+            className="bg-vuln-surface border border-vuln-border rounded-lg p-6 hover:border-vuln-border transition-colors relative"
           >
             {/* Timeline Line */}
             {index < history.length - 1 && (
-              <div className="absolute left-8 top-full h-4 w-0.5 bg-gray-800" />
+              <div className="absolute left-8 top-full h-4 w-0.5 bg-vuln-surface" />
             )}
 
             {/* Header */}
@@ -82,11 +85,11 @@ export function ScanHistoryTimeline({ history, isLoading }: ScanHistoryTimelineP
                   <Clock className="w-6 h-6 text-yellow-500" />
                 )}
                 <div>
-                  <p className="text-white font-medium">
-                    {formatRelativeDate(scan.scan_date)}
+                  <p className="text-vuln-text font-medium">
+                    {formatRelativeDate(scan.scan_date, timezone)}
                   </p>
-                  <p className="text-sm text-gray-400">
-                    {new Date(scan.scan_date).toLocaleString()} · Duration:{" "}
+                  <p className="text-sm text-vuln-text-muted">
+                    {formatDate(scan.scan_date, timezone)} · Duration:{" "}
                     {scan.scan_duration_seconds != null ? `${scan.scan_duration_seconds}s` : "N/A"}
                   </p>
                 </div>
@@ -119,50 +122,50 @@ export function ScanHistoryTimeline({ history, isLoading }: ScanHistoryTimelineP
             {/* Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
               {/* Total Vulns */}
-              <div className="bg-[#0f1419] rounded-lg p-3">
+              <div className="bg-vuln-surface-light rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <Bug className="w-3 h-3 text-gray-400" />
-                  <p className="text-xs text-gray-400">Total</p>
+                  <Bug className="w-3 h-3 text-vuln-text-muted" />
+                  <p className="text-xs text-vuln-text-muted">Total</p>
                 </div>
-                <p className="text-lg font-bold text-white">{scan.total_vulns}</p>
+                <p className="text-lg font-bold text-vuln-text">{scan.total_vulns}</p>
               </div>
 
               {/* Fixable */}
-              <div className="bg-[#0f1419] rounded-lg p-3">
+              <div className="bg-vuln-surface-light rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <Key className="w-3 h-3 text-gray-400" />
-                  <p className="text-xs text-gray-400">Fixable</p>
+                  <Key className="w-3 h-3 text-vuln-text-muted" />
+                  <p className="text-xs text-vuln-text-muted">Fixable</p>
                 </div>
                 <p className="text-lg font-bold text-green-500">{scan.fixable_vulns}</p>
               </div>
 
               {/* Critical */}
-              <div className="bg-[#0f1419] rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-1">Critical</p>
+              <div className="bg-vuln-surface-light rounded-lg p-3">
+                <p className="text-xs text-vuln-text-muted mb-1">Critical</p>
                 <p className="text-lg font-bold text-red-500">{scan.critical_count}</p>
               </div>
 
               {/* High */}
-              <div className="bg-[#0f1419] rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-1">High</p>
+              <div className="bg-vuln-surface-light rounded-lg p-3">
+                <p className="text-xs text-vuln-text-muted mb-1">High</p>
                 <p className="text-lg font-bold text-orange-500">{scan.high_count}</p>
               </div>
 
               {/* Medium */}
-              <div className="bg-[#0f1419] rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-1">Medium</p>
+              <div className="bg-vuln-surface-light rounded-lg p-3">
+                <p className="text-xs text-vuln-text-muted mb-1">Medium</p>
                 <p className="text-lg font-bold text-yellow-500">{scan.medium_count}</p>
               </div>
 
               {/* Low */}
-              <div className="bg-[#0f1419] rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-1">Low</p>
+              <div className="bg-vuln-surface-light rounded-lg p-3">
+                <p className="text-xs text-vuln-text-muted mb-1">Low</p>
                 <p className="text-lg font-bold text-blue-400">{scan.low_count}</p>
               </div>
             </div>
 
             {/* Status Badge */}
-            <div className="mt-3 pt-3 border-t border-gray-800">
+            <div className="mt-3 pt-3 border-t border-vuln-border">
               <span
                 className={`text-xs px-2 py-1 rounded ${
                   scan.scan_status === "completed"

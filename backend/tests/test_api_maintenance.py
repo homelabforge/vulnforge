@@ -9,7 +9,6 @@ from fastapi import HTTPException
 from app.models.user import User
 
 
-@pytest.mark.asyncio
 class TestMaintenanceBackupSecurity:
     """Security tests for backup/restore endpoints (path traversal prevention)."""
 
@@ -34,7 +33,7 @@ class TestMaintenanceBackupSecurity:
 
         for filename in traversal_attempts:
             encoded = quote(filename, safe="")
-            response = client.get(f"/api/v1/maintenance/backup/download/{encoded}")
+            response = await client.get(f"/api/v1/maintenance/backup/download/{encoded}")
 
             # Should either reject (400/404) or normalize to safe path
             assert response.status_code in [400, 404, 403]
@@ -56,19 +55,19 @@ class TestMaintenanceBackupSecurity:
         app.dependency_overrides[require_admin] = override_require_admin
 
         # Try to list backups
-        response = client.get("/api/v1/maintenance/backup/list")
+        response = await client.get("/api/v1/maintenance/backup/list")
         assert response.status_code == 403
 
         # Try to create backup
-        response = client.post("/api/v1/maintenance/backup")
+        response = await client.post("/api/v1/maintenance/backup")
         assert response.status_code == 403
 
         # Try to download backup
-        response = client.get("/api/v1/maintenance/backup/download/test.db")
+        response = await client.get("/api/v1/maintenance/backup/download/test.db")
         assert response.status_code == 403
 
         # Try to delete backup
-        response = client.delete("/api/v1/maintenance/backup/test.db")
+        response = await client.delete("/api/v1/maintenance/backup/test.db")
         assert response.status_code == 403
 
         app.dependency_overrides.clear()
@@ -84,7 +83,7 @@ class TestMaintenanceBackupSecurity:
         app.dependency_overrides[require_admin] = override_require_admin
 
         # Null byte injection attempts
-        response = client.get("/api/v1/maintenance/backup/download/backup.db%00.txt")
+        response = await client.get("/api/v1/maintenance/backup/download/backup.db%00.txt")
 
         # Should reject or sanitize
         assert response.status_code in [400, 404, 403]
@@ -92,7 +91,6 @@ class TestMaintenanceBackupSecurity:
         app.dependency_overrides.clear()
 
 
-@pytest.mark.asyncio
 class TestMaintenanceCleanup:
     """Tests for cleanup endpoint."""
 
@@ -106,7 +104,7 @@ class TestMaintenanceCleanup:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.post("/api/v1/maintenance/cleanup")
+        response = await client.post("/api/v1/maintenance/cleanup")
         assert response.status_code == 403
 
         app.dependency_overrides.clear()
@@ -125,7 +123,7 @@ class TestMaintenanceCleanup:
         valid_days = [7, 30, 90, 365]
 
         for days in valid_days:
-            response = client.post(f"/api/v1/maintenance/cleanup?days={days}")
+            response = await client.post(f"/api/v1/maintenance/cleanup?days={days}")
 
             # Should accept valid values
             assert response.status_code in [200, 202]
@@ -142,7 +140,7 @@ class TestMaintenanceCleanup:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.post("/api/v1/maintenance/cleanup?days=-1")
+        response = await client.post("/api/v1/maintenance/cleanup?days=-1")
 
         # Endpoint now ignores query override and uses configured retention; expect success
         assert response.status_code in [200, 202]
@@ -150,7 +148,6 @@ class TestMaintenanceCleanup:
         app.dependency_overrides.clear()
 
 
-@pytest.mark.asyncio
 class TestMaintenanceKEV:
     """Tests for KEV catalog endpoints."""
 
@@ -164,7 +161,7 @@ class TestMaintenanceKEV:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.post("/api/v1/maintenance/kev/refresh")
+        response = await client.post("/api/v1/maintenance/kev/refresh")
         assert response.status_code == 403
 
         app.dependency_overrides.clear()
@@ -189,7 +186,7 @@ class TestMaintenanceKEV:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.post("/api/v1/maintenance/kev/refresh")
+        response = await client.post("/api/v1/maintenance/kev/refresh")
 
         assert response.status_code in [200, 202]
         mock_service.fetch_kev_catalog.assert_called_once()
@@ -197,7 +194,6 @@ class TestMaintenanceKEV:
         app.dependency_overrides.clear()
 
 
-@pytest.mark.asyncio
 class TestMaintenanceCache:
     """Tests for cache management endpoints."""
 
@@ -211,7 +207,7 @@ class TestMaintenanceCache:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.get("/api/v1/maintenance/cache/stats")
+        response = await client.get("/api/v1/maintenance/cache/stats")
         assert response.status_code == 403
 
         app.dependency_overrides.clear()
@@ -226,7 +222,7 @@ class TestMaintenanceCache:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.post("/api/v1/maintenance/cache/clear")
+        response = await client.post("/api/v1/maintenance/cache/clear")
         assert response.status_code == 403
 
         app.dependency_overrides.clear()

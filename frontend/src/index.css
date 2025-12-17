@@ -1,17 +1,84 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  @apply bg-background text-gray-100;
+@theme {
+  /* VulnForge semantic colors - Dark theme values (CSS default) */
+  --color-vuln-bg: #0f1419;
+  --color-vuln-surface: #1a1f2e;
+  --color-vuln-surface-light: #2a3040;
+  --color-vuln-border: #3a4050;
+  --color-vuln-border-light: #4a5060;
+  --color-vuln-text: #e4e6eb;
+  --color-vuln-text-muted: #9ca3af;
+  --color-vuln-text-disabled: #6b7280;
+
+  /* Brand/accent colors (same in both themes) */
+  --color-primary: #3b82f6;
+  --color-secondary: #8b5cf6;
+  --color-accent: #f59e0b;
+
+  /* Severity colors (same in both themes) */
+  --color-critical: #dc2626;
+  --color-high: #f97316;
+  --color-medium: #f59e0b;
+  --color-low: #10b981;
+  --color-fixable: #22c55e;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+@layer base {
+  /* Light theme overrides - blue-gray tones */
+  html.light {
+    --color-vuln-bg: #f8fafc;
+    --color-vuln-surface: #ffffff;
+    --color-vuln-surface-light: #f1f5f9;
+    --color-vuln-border: #e2e8f0;
+    --color-vuln-border-light: #cbd5e1;
+    --color-vuln-text: #1e293b;
+    --color-vuln-text-muted: #64748b;
+    --color-vuln-text-disabled: #94a3b8;
+  }
+
+  body {
+    margin: 0;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    @apply bg-vuln-bg text-vuln-text;
+  }
+
+  code {
+    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  }
+}
+
+/* Custom scrollbar - Dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* Custom scrollbar - Light theme */
+html.light ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

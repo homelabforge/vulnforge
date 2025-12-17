@@ -1,19 +1,42 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Settings as SettingsIcon, Save, RefreshCw, Bell, Clock, Shield, Database, Eye, EyeOff, Info, FileCheck, Lock, AlertCircle, Key, Users } from "lucide-react";
+import { Settings as SettingsIcon, RefreshCw, Bell, Clock, Shield, Database, Info, Lock, AlertCircle, Key, Users, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
+import { handleApiError } from "@/lib/errorHandler";
 import { useSettings, useBulkUpdateSettings, useScanStatus } from "@/hooks/useVulnForge";
 import { DatabaseBackupSection } from "@/components/DatabaseBackupSection";
 import { ScannerManagementCard } from "@/components/ScannerManagementCard";
+import { HelpTooltip } from "@/components/HelpTooltip";
+import { parseSettingInt } from "@/schemas/settings";
+import { settingsApi } from "@/lib/api";
+import {
+  NotificationSubTabs,
+  type NotificationSubTab,
+  EventNotificationsCard,
+  NtfyConfig,
+  GotifyConfig,
+  PushoverConfig,
+  SlackConfig,
+  DiscordConfig,
+  TelegramConfig,
+  EmailConfig,
+} from "@/components/notifications";
 
 export function Settings() {
   const navigate = useNavigate();
   const { data: settings, isLoading: settingsLoading } = useSettings();
   const { data: scanStatus } = useScanStatus();
   const bulkUpdateMutation = useBulkUpdateSettings();
+  const { theme, setTheme } = useTheme();
 
   // Active tab state
-  const [activeTab, setActiveTab] = useState<"scanning" | "notifications" | "security" | "data">("scanning");
+  const [activeTab, setActiveTab] = useState<"system" | "scanning" | "notifications" | "security" | "data">("system");
+
+  // System Settings
+  const [timezonePreset, setTimezonePreset] = useState("UTC");
+  const [timezoneCustom, setTimezoneCustom] = useState("");
+  const [timezoneMode, setTimezoneMode] = useState<"preset" | "custom">("preset");
 
   // Scan Settings
   const [scanSchedule, setScanSchedule] = useState("0 2 * * *");
@@ -22,16 +45,74 @@ export function Settings() {
   const [enableSecretScanning, setEnableSecretScanning] = useState(true);
   const [logLevel, setLogLevel] = useState("INFO");
 
-  // Notification Settings
+  // Multi-Service Notification Settings
+  const [notificationSubTab, setNotificationSubTab] = useState<NotificationSubTab>('ntfy');
+
+  // ntfy settings (existing, keep for backward compatibility)
   const [ntfyEnabled, setNtfyEnabled] = useState(true);
   const [ntfyUrl, setNtfyUrl] = useState("http://ntfy:80");
   const [ntfyTopic, setNtfyTopic] = useState("vulnforge");
   const [ntfyToken, setNtfyToken] = useState("");
-  const [showNtfyToken, setShowNtfyToken] = useState(false);
   const [notifyOnScanComplete, setNotifyOnScanComplete] = useState(true);
   const [notifyOnCritical, setNotifyOnCritical] = useState(true);
   const [notifyThresholdCritical, setNotifyThresholdCritical] = useState(1);
   const [notifyThresholdHigh, setNotifyThresholdHigh] = useState(10);
+
+  // Gotify settings
+  const [gotifyEnabled, setGotifyEnabled] = useState(false);
+  const [gotifyServer, setGotifyServer] = useState("");
+  const [gotifyToken, setGotifyToken] = useState("");
+
+  // Pushover settings
+  const [pushoverEnabled, setPushoverEnabled] = useState(false);
+  const [pushoverUserKey, setPushoverUserKey] = useState("");
+  const [pushoverApiToken, setPushoverApiToken] = useState("");
+
+  // Slack settings
+  const [slackEnabled, setSlackEnabled] = useState(false);
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState("");
+
+  // Discord settings
+  const [discordEnabled, setDiscordEnabled] = useState(false);
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState("");
+
+  // Telegram settings
+  const [telegramEnabled, setTelegramEnabled] = useState(false);
+  const [telegramBotToken, setTelegramBotToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
+
+  // Email settings
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [emailSmtpHost, setEmailSmtpHost] = useState("");
+  const [emailSmtpPort, setEmailSmtpPort] = useState("587");
+  const [emailSmtpUser, setEmailSmtpUser] = useState("");
+  const [emailSmtpPassword, setEmailSmtpPassword] = useState("");
+  const [emailSmtpTls, setEmailSmtpTls] = useState(true);
+  const [emailFrom, setEmailFrom] = useState("");
+  const [emailTo, setEmailTo] = useState("");
+
+  // Event notification settings
+  const [notifySecurityEnabled, setNotifySecurityEnabled] = useState(true);
+  const [notifySecurityKev, setNotifySecurityKev] = useState(true);
+  const [notifySecurityCritical, setNotifySecurityCritical] = useState(true);
+  const [notifySecuritySecrets, setNotifySecuritySecrets] = useState(true);
+  const [notifyScansEnabled, setNotifyScansEnabled] = useState(true);
+  const [notifyScansComplete, setNotifyScansComplete] = useState(true);
+  const [notifyScansFailed, setNotifyScansFailed] = useState(true);
+  const [notifyScansComplianceComplete, setNotifyScansComplianceComplete] = useState(true);
+  const [notifyScansComplianceFailures, setNotifyScansComplianceFailures] = useState(true);
+  const [notifySystemEnabled, setNotifySystemEnabled] = useState(false);
+  const [notifySystemKevRefresh, setNotifySystemKevRefresh] = useState(false);
+  const [notifySystemBackup, setNotifySystemBackup] = useState(false);
+
+  // Notification test states
+  const [testingNtfy, setTestingNtfy] = useState(false);
+  const [testingGotify, setTestingGotify] = useState(false);
+  const [testingPushover, setTestingPushover] = useState(false);
+  const [testingSlack, setTestingSlack] = useState(false);
+  const [testingDiscord, setTestingDiscord] = useState(false);
+  const [testingTelegram, setTestingTelegram] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
 
   // Data Retention Settings
   const [keepScanHistoryDays, setKeepScanHistoryDays] = useState(90);
@@ -76,6 +157,106 @@ export function Settings() {
   const [authAdminGroup, setAuthAdminGroup] = useState("vulnforge-admins");
   const [authAdminUsernames, setAuthAdminUsernames] = useState("[]");
 
+  // Auto-save state (status tracked for potential UI indicator, currently unused)
+  const [_autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const hasInitializedRef = useRef(false);
+  const lastPayloadRef = useRef<string | null>(null);
+
+  const timezonePresets = ["UTC", "America/New_York", "Europe/London", "Asia/Tokyo"];
+
+  const buildSettingsPayload = (): Record<string, string> => {
+    const timezoneValue =
+      timezoneMode === "preset"
+        ? timezonePreset
+        : timezoneCustom.trim() || "UTC";
+
+    return {
+      // System settings
+      timezone: timezoneValue,
+      // Scan settings
+      scan_schedule: scanSchedule,
+      scan_timeout: scanTimeout.toString(),
+      parallel_scans: parallelScans.toString(),
+      enable_secret_scanning: enableSecretScanning.toString(),
+      log_level: logLevel,
+      // Notification settings
+      ntfy_enabled: ntfyEnabled.toString(),
+      ntfy_url: ntfyUrl,
+      ntfy_topic: ntfyTopic,
+      ntfy_token: ntfyToken,
+      notify_on_scan_complete: notifyOnScanComplete.toString(),
+      notify_on_critical: notifyOnCritical.toString(),
+      notify_threshold_critical: notifyThresholdCritical.toString(),
+      notify_threshold_high: notifyThresholdHigh.toString(),
+      // Multi-service notification settings
+      gotify_enabled: gotifyEnabled.toString(),
+      gotify_server: gotifyServer,
+      gotify_token: gotifyToken,
+      pushover_enabled: pushoverEnabled.toString(),
+      pushover_user_key: pushoverUserKey,
+      pushover_api_token: pushoverApiToken,
+      slack_enabled: slackEnabled.toString(),
+      slack_webhook_url: slackWebhookUrl,
+      discord_enabled: discordEnabled.toString(),
+      discord_webhook_url: discordWebhookUrl,
+      telegram_enabled: telegramEnabled.toString(),
+      telegram_bot_token: telegramBotToken,
+      telegram_chat_id: telegramChatId,
+      email_enabled: emailEnabled.toString(),
+      email_smtp_host: emailSmtpHost,
+      email_smtp_port: emailSmtpPort,
+      email_smtp_user: emailSmtpUser,
+      email_smtp_password: emailSmtpPassword,
+      email_smtp_tls: emailSmtpTls.toString(),
+      email_from: emailFrom,
+      email_to: emailTo,
+      // Event notification settings
+      notify_security_enabled: notifySecurityEnabled.toString(),
+      notify_security_kev: notifySecurityKev.toString(),
+      notify_security_critical: notifySecurityCritical.toString(),
+      notify_security_secrets: notifySecuritySecrets.toString(),
+      notify_scans_enabled: notifyScansEnabled.toString(),
+      notify_scans_complete: notifyScansComplete.toString(),
+      notify_scans_failed: notifyScansFailed.toString(),
+      notify_scans_compliance_complete: notifyScansComplianceComplete.toString(),
+      notify_scans_compliance_failures: notifyScansComplianceFailures.toString(),
+      notify_system_enabled: notifySystemEnabled.toString(),
+      notify_system_kev_refresh: notifySystemKevRefresh.toString(),
+      notify_system_backup: notifySystemBackup.toString(),
+      // Data retention
+      keep_scan_history_days: keepScanHistoryDays.toString(),
+      // UI preferences
+      default_severity_filter: defaultSeverityFilter,
+      default_show_fixable_only: defaultShowFixableOnly.toString(),
+      // Compliance settings
+      compliance_scan_enabled: complianceScanEnabled.toString(),
+      compliance_scan_schedule: complianceScanSchedule,
+      compliance_notify_on_scan: complianceNotifyOnScan.toString(),
+      compliance_notify_on_failures: complianceNotifyOnFailures.toString(),
+      // KEV settings
+      kev_checking_enabled: kevCheckingEnabled.toString(),
+      kev_cache_hours: kevCacheHours.toString(),
+      // Scanner offline resilience settings
+      scanner_db_max_age_hours: scannerDbMaxAgeHours.toString(),
+      scanner_skip_db_update_when_fresh: scannerSkipDbUpdateWhenFresh.toString(),
+      scanner_allow_stale_db: scannerAllowStaleDb.toString(),
+      scanner_stale_db_warning_hours: scannerStaleDbWarningHours.toString(),
+      // Authentication settings
+      auth_enabled: authEnabled.toString(),
+      auth_provider: authProvider,
+      auth_authentik_header_username: authAuthentikHeaderUsername,
+      auth_authentik_header_email: authAuthentikHeaderEmail,
+      auth_authentik_header_groups: authAuthentikHeaderGroups,
+      auth_custom_header_username: authCustomHeaderUsername,
+      auth_custom_header_email: authCustomHeaderEmail,
+      auth_custom_header_groups: authCustomHeaderGroups,
+      auth_api_keys: authApiKeys,
+      auth_basic_users: authBasicUsers,
+      auth_admin_group: authAdminGroup,
+      auth_admin_usernames: authAdminUsernames,
+    };
+  };
+
   // Load settings from backend when available
   useEffect(() => {
     if (settings) {
@@ -85,10 +266,21 @@ export function Settings() {
         settingsMap[s.key] = s.value;
       });
 
+      // System settings
+      const tz = settingsMap.timezone || "UTC";
+      if (timezonePresets.includes(tz)) {
+        setTimezoneMode("preset");
+        setTimezonePreset(tz);
+        setTimezoneCustom("");
+      } else {
+        setTimezoneMode("custom");
+        setTimezoneCustom(tz);
+      }
+
       // Scan settings
       if (settingsMap.scan_schedule) setScanSchedule(settingsMap.scan_schedule);
-      if (settingsMap.scan_timeout) setScanTimeout(parseInt(settingsMap.scan_timeout));
-      if (settingsMap.parallel_scans) setParallelScans(parseInt(settingsMap.parallel_scans));
+      if (settingsMap.scan_timeout) setScanTimeout(parseSettingInt(settingsMap.scan_timeout, 300));
+      if (settingsMap.parallel_scans) setParallelScans(parseSettingInt(settingsMap.parallel_scans, 3));
       if (settingsMap.enable_secret_scanning !== undefined)
         setEnableSecretScanning(settingsMap.enable_secret_scanning === "true");
       if (settingsMap.log_level) setLogLevel(settingsMap.log_level);
@@ -104,13 +296,74 @@ export function Settings() {
       if (settingsMap.notify_on_critical !== undefined)
         setNotifyOnCritical(settingsMap.notify_on_critical === "true");
       if (settingsMap.notify_threshold_critical)
-        setNotifyThresholdCritical(parseInt(settingsMap.notify_threshold_critical));
+        setNotifyThresholdCritical(parseSettingInt(settingsMap.notify_threshold_critical, 1));
       if (settingsMap.notify_threshold_high)
-        setNotifyThresholdHigh(parseInt(settingsMap.notify_threshold_high));
+        setNotifyThresholdHigh(parseSettingInt(settingsMap.notify_threshold_high, 10));
+
+      // Multi-service notification settings
+      if (settingsMap.gotify_enabled !== undefined)
+        setGotifyEnabled(settingsMap.gotify_enabled === "true");
+      if (settingsMap.gotify_server) setGotifyServer(settingsMap.gotify_server);
+      if (settingsMap.gotify_token) setGotifyToken(settingsMap.gotify_token);
+
+      if (settingsMap.pushover_enabled !== undefined)
+        setPushoverEnabled(settingsMap.pushover_enabled === "true");
+      if (settingsMap.pushover_user_key) setPushoverUserKey(settingsMap.pushover_user_key);
+      if (settingsMap.pushover_api_token) setPushoverApiToken(settingsMap.pushover_api_token);
+
+      if (settingsMap.slack_enabled !== undefined)
+        setSlackEnabled(settingsMap.slack_enabled === "true");
+      if (settingsMap.slack_webhook_url) setSlackWebhookUrl(settingsMap.slack_webhook_url);
+
+      if (settingsMap.discord_enabled !== undefined)
+        setDiscordEnabled(settingsMap.discord_enabled === "true");
+      if (settingsMap.discord_webhook_url) setDiscordWebhookUrl(settingsMap.discord_webhook_url);
+
+      if (settingsMap.telegram_enabled !== undefined)
+        setTelegramEnabled(settingsMap.telegram_enabled === "true");
+      if (settingsMap.telegram_bot_token) setTelegramBotToken(settingsMap.telegram_bot_token);
+      if (settingsMap.telegram_chat_id) setTelegramChatId(settingsMap.telegram_chat_id);
+
+      if (settingsMap.email_enabled !== undefined)
+        setEmailEnabled(settingsMap.email_enabled === "true");
+      if (settingsMap.email_smtp_host) setEmailSmtpHost(settingsMap.email_smtp_host);
+      if (settingsMap.email_smtp_port) setEmailSmtpPort(settingsMap.email_smtp_port);
+      if (settingsMap.email_smtp_user) setEmailSmtpUser(settingsMap.email_smtp_user);
+      if (settingsMap.email_smtp_password) setEmailSmtpPassword(settingsMap.email_smtp_password);
+      if (settingsMap.email_smtp_tls !== undefined)
+        setEmailSmtpTls(settingsMap.email_smtp_tls === "true");
+      if (settingsMap.email_from) setEmailFrom(settingsMap.email_from);
+      if (settingsMap.email_to) setEmailTo(settingsMap.email_to);
+
+      // Event notification settings
+      if (settingsMap.notify_security_enabled !== undefined)
+        setNotifySecurityEnabled(settingsMap.notify_security_enabled === "true");
+      if (settingsMap.notify_security_kev !== undefined)
+        setNotifySecurityKev(settingsMap.notify_security_kev === "true");
+      if (settingsMap.notify_security_critical !== undefined)
+        setNotifySecurityCritical(settingsMap.notify_security_critical === "true");
+      if (settingsMap.notify_security_secrets !== undefined)
+        setNotifySecuritySecrets(settingsMap.notify_security_secrets === "true");
+      if (settingsMap.notify_scans_enabled !== undefined)
+        setNotifyScansEnabled(settingsMap.notify_scans_enabled === "true");
+      if (settingsMap.notify_scans_complete !== undefined)
+        setNotifyScansComplete(settingsMap.notify_scans_complete === "true");
+      if (settingsMap.notify_scans_failed !== undefined)
+        setNotifyScansFailed(settingsMap.notify_scans_failed === "true");
+      if (settingsMap.notify_scans_compliance_complete !== undefined)
+        setNotifyScansComplianceComplete(settingsMap.notify_scans_compliance_complete === "true");
+      if (settingsMap.notify_scans_compliance_failures !== undefined)
+        setNotifyScansComplianceFailures(settingsMap.notify_scans_compliance_failures === "true");
+      if (settingsMap.notify_system_enabled !== undefined)
+        setNotifySystemEnabled(settingsMap.notify_system_enabled === "true");
+      if (settingsMap.notify_system_kev_refresh !== undefined)
+        setNotifySystemKevRefresh(settingsMap.notify_system_kev_refresh === "true");
+      if (settingsMap.notify_system_backup !== undefined)
+        setNotifySystemBackup(settingsMap.notify_system_backup === "true");
 
       // Data retention
       if (settingsMap.keep_scan_history_days)
-        setKeepScanHistoryDays(parseInt(settingsMap.keep_scan_history_days));
+        setKeepScanHistoryDays(parseSettingInt(settingsMap.keep_scan_history_days, 90));
 
       // UI preferences
       if (settingsMap.default_severity_filter)
@@ -132,19 +385,19 @@ export function Settings() {
       if (settingsMap.kev_checking_enabled !== undefined)
         setKevCheckingEnabled(settingsMap.kev_checking_enabled === "true");
       if (settingsMap.kev_cache_hours)
-        setKevCacheHours(parseInt(settingsMap.kev_cache_hours));
+        setKevCacheHours(parseSettingInt(settingsMap.kev_cache_hours, 12));
       if (settingsMap.kev_last_refresh)
         setKevLastRefresh(settingsMap.kev_last_refresh);
 
       // Scanner offline resilience settings
       if (settingsMap.scanner_db_max_age_hours)
-        setScannerDbMaxAgeHours(parseInt(settingsMap.scanner_db_max_age_hours));
+        setScannerDbMaxAgeHours(parseSettingInt(settingsMap.scanner_db_max_age_hours, 24));
       if (settingsMap.scanner_skip_db_update_when_fresh !== undefined)
         setScannerSkipDbUpdateWhenFresh(settingsMap.scanner_skip_db_update_when_fresh === "true");
       if (settingsMap.scanner_allow_stale_db !== undefined)
         setScannerAllowStaleDb(settingsMap.scanner_allow_stale_db === "true");
       if (settingsMap.scanner_stale_db_warning_hours)
-        setScannerStaleDbWarningHours(parseInt(settingsMap.scanner_stale_db_warning_hours));
+        setScannerStaleDbWarningHours(parseSettingInt(settingsMap.scanner_stale_db_warning_hours, 72));
 
       // Authentication settings
       if (settingsMap.auth_enabled !== undefined)
@@ -166,87 +419,356 @@ export function Settings() {
       if (settingsMap.auth_basic_users) setAuthBasicUsers(settingsMap.auth_basic_users);
       if (settingsMap.auth_admin_group) setAuthAdminGroup(settingsMap.auth_admin_group);
       if (settingsMap.auth_admin_usernames) setAuthAdminUsernames(settingsMap.auth_admin_usernames);
+
+      hasInitializedRef.current = true;
+
+      // Set initial payload to prevent auto-save on first load
+      setTimeout(() => {
+        const initialPayload = buildSettingsPayload();
+        lastPayloadRef.current = JSON.stringify(initialPayload);
+      }, 0);
     }
-  }, [settings]);
+  }, [settings]); // eslint-disable-line react-hooks/exhaustive-deps -- Only run when settings load
 
-  const handleSave = async () => {
-    try {
-      // Build settings object for bulk update
-      const updatedSettings: Record<string, string> = {
-        // Scan settings
-        scan_schedule: scanSchedule,
-        scan_timeout: scanTimeout.toString(),
-        parallel_scans: parallelScans.toString(),
-        enable_secret_scanning: enableSecretScanning.toString(),
-        log_level: logLevel,
-        // Notification settings
-        ntfy_enabled: ntfyEnabled.toString(),
-        ntfy_url: ntfyUrl,
-        ntfy_topic: ntfyTopic,
-        ntfy_token: ntfyToken,
-        notify_on_scan_complete: notifyOnScanComplete.toString(),
-        notify_on_critical: notifyOnCritical.toString(),
-        notify_threshold_critical: notifyThresholdCritical.toString(),
-        notify_threshold_high: notifyThresholdHigh.toString(),
-        // Data retention
-        keep_scan_history_days: keepScanHistoryDays.toString(),
-        // UI preferences
-        default_severity_filter: defaultSeverityFilter,
-        default_show_fixable_only: defaultShowFixableOnly.toString(),
-        // Compliance settings
-        compliance_scan_enabled: complianceScanEnabled.toString(),
-        compliance_scan_schedule: complianceScanSchedule,
-        compliance_notify_on_scan: complianceNotifyOnScan.toString(),
-        compliance_notify_on_failures: complianceNotifyOnFailures.toString(),
-        // KEV settings
-        kev_checking_enabled: kevCheckingEnabled.toString(),
-        kev_cache_hours: kevCacheHours.toString(),
-        // Scanner offline resilience settings
-        scanner_db_max_age_hours: scannerDbMaxAgeHours.toString(),
-        scanner_skip_db_update_when_fresh: scannerSkipDbUpdateWhenFresh.toString(),
-        scanner_allow_stale_db: scannerAllowStaleDb.toString(),
-        scanner_stale_db_warning_hours: scannerStaleDbWarningHours.toString(),
-        // Authentication settings
-        auth_enabled: authEnabled.toString(),
-        auth_provider: authProvider,
-        auth_authentik_header_username: authAuthentikHeaderUsername,
-        auth_authentik_header_email: authAuthentikHeaderEmail,
-        auth_authentik_header_groups: authAuthentikHeaderGroups,
-        auth_custom_header_username: authCustomHeaderUsername,
-        auth_custom_header_email: authCustomHeaderEmail,
-        auth_custom_header_groups: authCustomHeaderGroups,
-        auth_api_keys: authApiKeys,
-        auth_basic_users: authBasicUsers,
-        auth_admin_group: authAdminGroup,
-        auth_admin_usernames: authAdminUsernames,
-      };
-
-      await bulkUpdateMutation.mutateAsync(updatedSettings);
-      toast.success("Settings saved successfully");
-    } catch (error) {
-      toast.error("Failed to save settings");
-      console.error("Settings save error:", error);
+  // Auto-save settings whenever they change (debounced)
+  useEffect(() => {
+    if (!settings || !hasInitializedRef.current) {
+      return;
     }
-  };
 
-  const handleTestNotification = async () => {
-    try {
-      // Send a test notification via the backend API
-      const response = await fetch("/api/v1/notifications/test", {
-        method: "POST",
+    const timer = window.setTimeout(() => {
+      const updatedSettings = buildSettingsPayload();
+      const serialized = JSON.stringify(updatedSettings);
+
+      if (lastPayloadRef.current === serialized) {
+        return;
+      }
+
+      lastPayloadRef.current = serialized;
+      setAutoSaveStatus("saving");
+
+      bulkUpdateMutation.mutate(updatedSettings, {
+        onSuccess: () => {
+          setAutoSaveStatus("saved");
+          toast.success("Settings saved");
+        },
+        onError: (error) => {
+          console.error("Settings auto-save error:", error);
+          setAutoSaveStatus("error");
+          handleApiError(error, "Failed to save settings");
+        },
       });
+    }, 800);
 
-      if (response.ok) {
-        toast.success("Test notification sent successfully!");
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    settings,
+    timezonePreset,
+    timezoneCustom,
+    timezoneMode,
+    scanSchedule,
+    scanTimeout,
+    parallelScans,
+    enableSecretScanning,
+    logLevel,
+    ntfyEnabled,
+    ntfyUrl,
+    ntfyTopic,
+    ntfyToken,
+    notifyOnScanComplete,
+    notifyOnCritical,
+    notifyThresholdCritical,
+    notifyThresholdHigh,
+    keepScanHistoryDays,
+    defaultSeverityFilter,
+    defaultShowFixableOnly,
+    complianceScanEnabled,
+    complianceScanSchedule,
+    complianceNotifyOnScan,
+    complianceNotifyOnFailures,
+    kevCheckingEnabled,
+    kevCacheHours,
+    scannerDbMaxAgeHours,
+    scannerSkipDbUpdateWhenFresh,
+    scannerAllowStaleDb,
+    scannerStaleDbWarningHours,
+    authEnabled,
+    authProvider,
+    authAuthentikHeaderUsername,
+    authAuthentikHeaderEmail,
+    authAuthentikHeaderGroups,
+    authCustomHeaderUsername,
+    authCustomHeaderEmail,
+    authCustomHeaderGroups,
+    authApiKeys,
+    authBasicUsers,
+    authAdminGroup,
+    authAdminUsernames,
+    // Multi-service notification settings
+    gotifyEnabled,
+    gotifyServer,
+    gotifyToken,
+    pushoverEnabled,
+    pushoverUserKey,
+    pushoverApiToken,
+    slackEnabled,
+    slackWebhookUrl,
+    discordEnabled,
+    discordWebhookUrl,
+    telegramEnabled,
+    telegramBotToken,
+    telegramChatId,
+    emailEnabled,
+    emailSmtpHost,
+    emailSmtpPort,
+    emailSmtpUser,
+    emailSmtpPassword,
+    emailSmtpTls,
+    emailFrom,
+    emailTo,
+    // Event notification settings
+    notifySecurityEnabled,
+    notifySecurityKev,
+    notifySecurityCritical,
+    notifySecuritySecrets,
+    notifyScansEnabled,
+    notifyScansComplete,
+    notifyScansFailed,
+    notifyScansComplianceComplete,
+    notifyScansComplianceFailures,
+    notifySystemEnabled,
+    notifySystemKevRefresh,
+    notifySystemBackup,
+  ]);
+
+
+  // Multi-service notification test handlers
+  const handleTestNtfy = async () => {
+    setTestingNtfy(true);
+    try {
+      const result = await settingsApi.testNtfy();
+      if (result.success) {
+        toast.success(result.message);
       } else {
-        const error = await response.json();
-        toast.error(`Failed to send test notification: ${error.detail || "Unknown error"}`);
+        toast.error(result.message);
       }
     } catch (error) {
-      toast.error("Failed to send test notification");
-      console.error("Test notification error:", error);
+      handleApiError(error, "Failed to test ntfy connection");
+    } finally {
+      setTestingNtfy(false);
     }
   };
+
+  const handleTestGotify = async () => {
+    setTestingGotify(true);
+    try {
+      const result = await settingsApi.testGotify();
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      handleApiError(error, "Failed to test Gotify connection");
+    } finally {
+      setTestingGotify(false);
+    }
+  };
+
+  const handleTestPushover = async () => {
+    setTestingPushover(true);
+    try {
+      const result = await settingsApi.testPushover();
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      handleApiError(error, "Failed to test Pushover connection");
+    } finally {
+      setTestingPushover(false);
+    }
+  };
+
+  const handleTestSlack = async () => {
+    setTestingSlack(true);
+    try {
+      const result = await settingsApi.testSlack();
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      handleApiError(error, "Failed to test Slack connection");
+    } finally {
+      setTestingSlack(false);
+    }
+  };
+
+  const handleTestDiscord = async () => {
+    setTestingDiscord(true);
+    try {
+      const result = await settingsApi.testDiscord();
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      handleApiError(error, "Failed to test Discord connection");
+    } finally {
+      setTestingDiscord(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    setTestingTelegram(true);
+    try {
+      const result = await settingsApi.testTelegram();
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      handleApiError(error, "Failed to test Telegram connection");
+    } finally {
+      setTestingTelegram(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    setTestingEmail(true);
+    try {
+      const result = await settingsApi.testEmail();
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      handleApiError(error, "Failed to test email connection");
+    } finally {
+      setTestingEmail(false);
+    }
+  };
+
+  // Settings map for notification components
+  const notificationSettings: Record<string, unknown> = {
+    // ntfy
+    ntfy_enabled: ntfyEnabled,
+    ntfy_server: ntfyUrl,
+    ntfy_topic: ntfyTopic,
+    ntfy_token: ntfyToken,
+    // gotify
+    gotify_enabled: gotifyEnabled,
+    gotify_server: gotifyServer,
+    gotify_token: gotifyToken,
+    // pushover
+    pushover_enabled: pushoverEnabled,
+    pushover_user_key: pushoverUserKey,
+    pushover_api_token: pushoverApiToken,
+    // slack
+    slack_enabled: slackEnabled,
+    slack_webhook_url: slackWebhookUrl,
+    // discord
+    discord_enabled: discordEnabled,
+    discord_webhook_url: discordWebhookUrl,
+    // telegram
+    telegram_enabled: telegramEnabled,
+    telegram_bot_token: telegramBotToken,
+    telegram_chat_id: telegramChatId,
+    // email
+    email_enabled: emailEnabled,
+    email_smtp_host: emailSmtpHost,
+    email_smtp_port: emailSmtpPort,
+    email_smtp_user: emailSmtpUser,
+    email_smtp_password: emailSmtpPassword,
+    email_smtp_tls: emailSmtpTls,
+    email_from: emailFrom,
+    email_to: emailTo,
+    // event settings
+    notify_security_enabled: notifySecurityEnabled,
+    notify_security_kev: notifySecurityKev,
+    notify_security_critical: notifySecurityCritical,
+    notify_security_secrets: notifySecuritySecrets,
+    notify_scans_enabled: notifyScansEnabled,
+    notify_scans_complete: notifyScansComplete,
+    notify_scans_failed: notifyScansFailed,
+    notify_scans_compliance_complete: notifyScansComplianceComplete,
+    notify_scans_compliance_failures: notifyScansComplianceFailures,
+    notify_system_enabled: notifySystemEnabled,
+    notify_system_kev_refresh: notifySystemKevRefresh,
+    notify_system_backup: notifySystemBackup,
+  };
+
+  const handleNotificationSettingChange = (key: string, value: boolean) => {
+    switch (key) {
+      // ntfy
+      case 'ntfy_enabled': setNtfyEnabled(value); break;
+      // gotify
+      case 'gotify_enabled': setGotifyEnabled(value); break;
+      // pushover
+      case 'pushover_enabled': setPushoverEnabled(value); break;
+      // slack
+      case 'slack_enabled': setSlackEnabled(value); break;
+      // discord
+      case 'discord_enabled': setDiscordEnabled(value); break;
+      // telegram
+      case 'telegram_enabled': setTelegramEnabled(value); break;
+      // email
+      case 'email_enabled': setEmailEnabled(value); break;
+      case 'email_smtp_tls': setEmailSmtpTls(value); break;
+      // event settings
+      case 'notify_security_enabled': setNotifySecurityEnabled(value); break;
+      case 'notify_security_kev': setNotifySecurityKev(value); break;
+      case 'notify_security_critical': setNotifySecurityCritical(value); break;
+      case 'notify_security_secrets': setNotifySecuritySecrets(value); break;
+      case 'notify_scans_enabled': setNotifyScansEnabled(value); break;
+      case 'notify_scans_complete': setNotifyScansComplete(value); break;
+      case 'notify_scans_failed': setNotifyScansFailed(value); break;
+      case 'notify_scans_compliance_complete': setNotifyScansComplianceComplete(value); break;
+      case 'notify_scans_compliance_failures': setNotifyScansComplianceFailures(value); break;
+      case 'notify_system_enabled': setNotifySystemEnabled(value); break;
+      case 'notify_system_kev_refresh': setNotifySystemKevRefresh(value); break;
+      case 'notify_system_backup': setNotifySystemBackup(value); break;
+    }
+  };
+
+  const handleNotificationTextChange = (key: string, value: string) => {
+    switch (key) {
+      // ntfy
+      case 'ntfy_server': setNtfyUrl(value); break;
+      case 'ntfy_topic': setNtfyTopic(value); break;
+      case 'ntfy_token': setNtfyToken(value); break;
+      // gotify
+      case 'gotify_server': setGotifyServer(value); break;
+      case 'gotify_token': setGotifyToken(value); break;
+      // pushover
+      case 'pushover_user_key': setPushoverUserKey(value); break;
+      case 'pushover_api_token': setPushoverApiToken(value); break;
+      // slack
+      case 'slack_webhook_url': setSlackWebhookUrl(value); break;
+      // discord
+      case 'discord_webhook_url': setDiscordWebhookUrl(value); break;
+      // telegram
+      case 'telegram_bot_token': setTelegramBotToken(value); break;
+      case 'telegram_chat_id': setTelegramChatId(value); break;
+      // email
+      case 'email_smtp_host': setEmailSmtpHost(value); break;
+      case 'email_smtp_port': setEmailSmtpPort(value); break;
+      case 'email_smtp_user': setEmailSmtpUser(value); break;
+      case 'email_smtp_password': setEmailSmtpPassword(value); break;
+      case 'email_from': setEmailFrom(value); break;
+      case 'email_to': setEmailTo(value); break;
+    }
+  };
+
+  const hasAnyServiceEnabled = ntfyEnabled || gotifyEnabled || pushoverEnabled ||
+    slackEnabled || discordEnabled || telegramEnabled || emailEnabled;
 
   if (settingsLoading) {
     return (
@@ -259,43 +781,40 @@ export function Settings() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-3xl font-bold text-white">Settings</h1>
-          <p className="text-gray-400 mt-1">Configure VulnForge scanning and notifications</p>
+          <h1 className="text-2xl font-bold text-vuln-text">Settings</h1>
+          <p className="text-sm text-vuln-text-muted mt-0.5">Configure VulnForge scanning and notifications</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => navigate("/about")}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg flex items-center gap-2 transition-colors"
-          >
-            <Info className="w-4 h-4" />
-            About
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={bulkUpdateMutation.isPending}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
-          >
-            {bulkUpdateMutation.isPending ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : (
-              <Save className="w-4 h-4" />
-            )}
-            Save Settings
-          </button>
-        </div>
+        <button
+          onClick={() => navigate("/about")}
+          className="px-3 py-2 bg-vuln-surface-light hover:bg-vuln-border text-vuln-text rounded-lg flex items-center gap-2 text-sm transition-colors"
+        >
+          <Info className="w-4 h-4" />
+          About
+        </button>
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 border-b border-gray-700">
+      <div className="mb-4 border-b border-vuln-border">
         <div className="flex gap-4">
+          <button
+            onClick={() => setActiveTab("system")}
+            className={`px-4 py-2 font-medium transition-colors relative ${
+              activeTab === "system"
+                ? "text-blue-400 border-b-2 border-blue-400"
+                : "text-vuln-text-muted hover:text-vuln-text"
+            }`}
+          >
+            <SettingsIcon className="w-4 h-4 inline-block mr-2" />
+            System
+          </button>
           <button
             onClick={() => setActiveTab("scanning")}
             className={`px-4 py-2 font-medium transition-colors relative ${
               activeTab === "scanning"
                 ? "text-blue-400 border-b-2 border-blue-400"
-                : "text-gray-400 hover:text-gray-300"
+                : "text-vuln-text-muted hover:text-vuln-text"
             }`}
           >
             <Shield className="w-4 h-4 inline-block mr-2" />
@@ -306,7 +825,7 @@ export function Settings() {
             className={`px-4 py-2 font-medium transition-colors relative ${
               activeTab === "notifications"
                 ? "text-blue-400 border-b-2 border-blue-400"
-                : "text-gray-400 hover:text-gray-300"
+                : "text-vuln-text-muted hover:text-vuln-text"
             }`}
           >
             <Bell className="w-4 h-4 inline-block mr-2" />
@@ -317,7 +836,7 @@ export function Settings() {
             className={`px-4 py-2 font-medium transition-colors relative ${
               activeTab === "security"
                 ? "text-blue-400 border-b-2 border-blue-400"
-                : "text-gray-400 hover:text-gray-300"
+                : "text-vuln-text-muted hover:text-vuln-text"
             }`}
           >
             <Lock className="w-4 h-4 inline-block mr-2" />
@@ -328,7 +847,7 @@ export function Settings() {
             className={`px-4 py-2 font-medium transition-colors relative ${
               activeTab === "data"
                 ? "text-blue-400 border-b-2 border-blue-400"
-                : "text-gray-400 hover:text-gray-300"
+                : "text-vuln-text-muted hover:text-vuln-text"
             }`}
           >
             <Database className="w-4 h-4 inline-block mr-2" />
@@ -338,74 +857,510 @@ export function Settings() {
       </div>
 
       {/* Tab Content */}
+      {activeTab === "system" && (
+        <>
+          <div className="columns-1 md:columns-2 gap-4 space-y-4">
+            {/* Theme Toggle */}
+            <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 break-inside-avoid">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  {theme === "light" ? (
+                    <Sun className="w-6 h-6 text-yellow-500" />
+                  ) : (
+                    <Moon className="w-6 h-6 text-blue-400" />
+                  )}
+                  <div>
+                    <h2 className="text-xl font-semibold text-vuln-text">Appearance</h2>
+                    <p className="text-sm text-vuln-text-muted mt-0.5">
+                      Choose your preferred color theme.
+                    </p>
+                  </div>
+                </div>
+                <HelpTooltip content="Switch between light and dark color themes. Your preference is saved locally and synced across devices." />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setTheme("light")}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-colors ${
+                    theme === "light"
+                      ? "bg-blue-600 border-blue-600 text-white"
+                      : "bg-vuln-surface-light border-vuln-border text-vuln-text hover:border-blue-500"
+                  }`}
+                >
+                  <Sun className="w-5 h-5" />
+                  Light
+                </button>
+                <button
+                  onClick={() => setTheme("dark")}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border transition-colors ${
+                    theme === "dark"
+                      ? "bg-blue-600 border-blue-600 text-white"
+                      : "bg-vuln-surface-light border-vuln-border text-vuln-text hover:border-blue-500"
+                  }`}
+                >
+                  <Moon className="w-5 h-5" />
+                  Dark
+                </button>
+              </div>
+            </div>
+
+            {/* Timezone */}
+            <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 break-inside-avoid">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Clock className="w-6 h-6 text-blue-500" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-vuln-text">System Timezone</h2>
+                    <p className="text-sm text-vuln-text-muted mt-0.5">
+                      Controls how schedules and timestamps are interpreted.
+                    </p>
+                  </div>
+                </div>
+                <HelpTooltip content="Set the timezone for all timestamps and scheduled scans. Uses IANA timezone format (e.g., America/Chicago). All dates in the UI will display in this timezone." />
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-vuln-text mb-2">
+                    Timezone
+                  </label>
+                  <select
+                    value={timezoneMode === "preset" ? timezonePreset : "custom"}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === "custom") {
+                        setTimezoneMode("custom");
+                      } else {
+                        setTimezoneMode("preset");
+                        setTimezonePreset(value);
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="UTC">UTC (default)</option>
+                    <option value="America/New_York">America/New_York</option>
+                    <option value="America/Chicago">America/Chicago</option>
+                    <option value="America/Denver">America/Denver</option>
+                    <option value="America/Los_Angeles">America/Los_Angeles</option>
+                    <option value="Europe/London">Europe/London</option>
+                    <option value="Europe/Paris">Europe/Paris</option>
+                    <option value="Asia/Tokyo">Asia/Tokyo</option>
+                    <option value="Asia/Shanghai">Asia/Shanghai</option>
+                    <option value="Australia/Sydney">Australia/Sydney</option>
+                    <option value="custom">Custom…</option>
+                  </select>
+                  <p className="text-xs text-vuln-text-disabled mt-1">
+                    Uses IANA timezone names (e.g., UTC, America/Los_Angeles).
+                  </p>
+                </div>
+
+                {timezoneMode === "custom" && (
+                  <div>
+                    <label className="block text-sm font-medium text-vuln-text mb-2">
+                      Custom IANA Timezone
+                    </label>
+                    <input
+                      type="text"
+                      value={timezoneCustom}
+                      onChange={(e) => setTimezoneCustom(e.target.value)}
+                      placeholder="e.g., America/Phoenix"
+                      className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Log Level */}
+            <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 break-inside-avoid">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <SettingsIcon className="w-6 h-6 text-orange-500" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-vuln-text">Log Level</h2>
+                    <p className="text-sm text-vuln-text-muted mt-0.5">
+                      Configure application logging verbosity.
+                    </p>
+                  </div>
+                </div>
+                <HelpTooltip content="Control how much detail is written to logs. DEBUG shows everything, ERROR shows only critical issues. Use DEBUG for troubleshooting, INFO for normal operation." />
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-vuln-text mb-2">
+                    Log Level
+                  </label>
+                  <select
+                    value={logLevel}
+                    onChange={(e) => setLogLevel(e.target.value)}
+                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="DEBUG">DEBUG</option>
+                    <option value="INFO">INFO</option>
+                    <option value="WARNING">WARNING</option>
+                    <option value="ERROR">ERROR</option>
+                  </select>
+                  <p className="text-xs text-vuln-text-disabled mt-1">Application logging verbosity</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Info Box - System tab only */}
+          <div className="mt-4 bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <Clock className="w-5 h-5 text-blue-500 mt-0.5" />
+              <div>
+                <h3 className="text-sm font-medium text-blue-500 mb-1">Persistent Settings</h3>
+                <p className="text-sm text-vuln-text-muted">
+                  All settings are stored in the database and persist across container restarts. Changes are saved
+                  automatically as you edit them.
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
       {activeTab === "scanning" && (
         <>
           {/* Scanner Management */}
           <div className="mb-6">
             <ScannerManagementCard />
           </div>
+
+          {/* Scan Settings + Offline Resilience + UI Preferences - masonry layout */}
+          <div className="columns-1 md:columns-2 gap-4 space-y-4">
+            {/* Scan Settings */}
+            <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 break-inside-avoid">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Shield className="w-6 h-6 text-blue-500" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-vuln-text">Scan Settings</h2>
+                    <p className="text-sm text-vuln-text-muted mt-0.5">
+                      Configure scan schedule and performance.
+                    </p>
+                  </div>
+                </div>
+                <HelpTooltip content="Configure vulnerability scan behavior: schedule, timeout limits, parallel workers, and secret detection. Performance Note: Values above 35 parallel workers may cause timeout errors and database lock issues. Recommended: 30-35 workers for optimal performance. Restart Required: Changes to parallel workers require a container restart to take effect." />
+              </div>
+
+              {scanStatus?.status === "scanning" && (
+                <div className="flex items-center gap-2 text-sm mb-4 px-2 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />
+                  <span className="text-blue-400">
+                    Scanning {scanStatus.current_container} ({scanStatus.progress_current}/{scanStatus.progress_total})
+                  </span>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {/* Scan Schedule */}
+                <div>
+                  <label className="block text-sm font-medium text-vuln-text mb-2">
+                    Scan Schedule (Cron)
+                  </label>
+                  <input
+                    type="text"
+                    value={scanSchedule}
+                    onChange={(e) => setScanSchedule(e.target.value)}
+                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0 2 * * *"
+                  />
+                  <p className="text-xs text-vuln-text-disabled mt-1">Current: Daily at 2:00 AM</p>
+                </div>
+
+                {/* Scan Timeout */}
+                <div>
+                  <label className="block text-sm font-medium text-vuln-text mb-2">
+                    Scan Timeout (seconds)
+                  </label>
+                  <input
+                    type="number"
+                    value={scanTimeout}
+                    onChange={(e) => setScanTimeout(Number(e.target.value))}
+                    min={60}
+                    max={600}
+                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-vuln-text-disabled mt-1">Maximum time per container scan</p>
+                </div>
+
+                {/* Parallel Scans */}
+                <div>
+                  <label className="block text-sm font-medium text-vuln-text mb-2">
+                    Parallel Scans
+                  </label>
+                  <input
+                    type="number"
+                    value={parallelScans}
+                    onChange={(e) => setParallelScans(Number(e.target.value))}
+                    min={1}
+                    max={50}
+                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-vuln-text-disabled mt-1">Number of containers to scan simultaneously</p>
+                </div>
+
+                {/* Secret Scanning Toggle */}
+                <div>
+                  <label className="flex items-center justify-between cursor-pointer group">
+                    <div>
+                      <span className="text-sm font-medium text-vuln-text group-hover:text-vuln-text transition-colors">
+                        Enable Secret Detection
+                      </span>
+                      <p className="text-xs text-vuln-text-disabled mt-1">
+                        Scan for exposed credentials (API keys, tokens, passwords). Disabling speeds up scans but skips security checks.
+                      </p>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={enableSecretScanning}
+                        onChange={(e) => setEnableSecretScanning(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Scanner Offline Resilience */}
+            <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 break-inside-avoid">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Database className="w-6 h-6 text-blue-500" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-vuln-text">Scanner Offline Resilience</h2>
+                    <p className="text-sm text-vuln-text-muted mt-0.5">
+                      Configure database update behavior.
+                    </p>
+                  </div>
+                </div>
+                <HelpTooltip content="Configure how VulnForge handles vulnerability database updates. These settings help VulnForge work better in environments with limited or unreliable internet connectivity. Enable 'Skip Database Updates When Fresh' to reduce network dependency by ~80%." />
+              </div>
+
+              <div className="space-y-4">
+                {/* Skip DB Update When Fresh */}
+                <div>
+                  <label className="flex items-center justify-between cursor-pointer group">
+                    <div>
+                      <span className="text-sm font-medium text-vuln-text group-hover:text-vuln-text transition-colors">
+                        Skip Database Updates When Fresh
+                      </span>
+                      <p className="text-xs text-vuln-text-disabled mt-1">
+                        Skip updating scanner databases if they're fresh (saves network bandwidth and scan time)
+                      </p>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={scannerSkipDbUpdateWhenFresh}
+                        onChange={(e) => setScannerSkipDbUpdateWhenFresh(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Max DB Age Hours */}
+                <div>
+                  <label className="block text-sm font-medium text-vuln-text mb-2">
+                    Maximum Database Age (Hours)
+                  </label>
+                  <input
+                    type="number"
+                    value={scannerDbMaxAgeHours}
+                    onChange={(e) => setScannerDbMaxAgeHours(parseSettingInt(e.target.value, 24))}
+                    min="1"
+                    max="168"
+                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-vuln-text-disabled mt-1">
+                    Maximum age for scanner databases to be considered "fresh" (default: 24 hours)
+                  </p>
+                </div>
+
+                {/* Stale DB Warning Hours */}
+                <div>
+                  <label className="block text-sm font-medium text-vuln-text mb-2">
+                    Stale Database Warning (Hours)
+                  </label>
+                  <input
+                    type="number"
+                    value={scannerStaleDbWarningHours}
+                    onChange={(e) => setScannerStaleDbWarningHours(parseSettingInt(e.target.value, 72))}
+                    min="1"
+                    max="720"
+                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-vuln-text-disabled mt-1">
+                    Show warnings when scanner databases exceed this age (default: 72 hours)
+                  </p>
+                </div>
+
+                {/* Allow Stale DB */}
+                <div>
+                  <label className="flex items-center justify-between cursor-pointer group">
+                    <div>
+                      <span className="text-sm font-medium text-vuln-text group-hover:text-vuln-text transition-colors">
+                        Allow Scans with Stale Databases
+                      </span>
+                      <p className="text-xs text-vuln-text-disabled mt-1">
+                        Allow scanning even when databases are older than the maximum age (useful for offline environments)
+                      </p>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={scannerAllowStaleDb}
+                        onChange={(e) => setScannerAllowStaleDb(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* UI Preferences */}
+            <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 break-inside-avoid">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <SettingsIcon className="w-6 h-6 text-orange-500" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-vuln-text">UI Preferences</h2>
+                    <p className="text-sm text-vuln-text-muted mt-0.5">
+                      Customize default view settings.
+                    </p>
+                  </div>
+                </div>
+                <HelpTooltip content="Customize how vulnerability data is displayed. Set default filters to focus on the severity levels most relevant to your security priorities." />
+              </div>
+
+              <div className="space-y-4">
+                {/* Default Severity Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-vuln-text mb-2">
+                    Default Severity Filter
+                  </label>
+                  <select
+                    value={defaultSeverityFilter}
+                    onChange={(e) => setDefaultSeverityFilter(e.target.value)}
+                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Severities</option>
+                    <option value="critical">Critical Only</option>
+                    <option value="high">High & Above</option>
+                    <option value="medium">Medium & Above</option>
+                    <option value="low">Low & Above</option>
+                  </select>
+                  <p className="text-xs text-vuln-text-disabled mt-1">
+                    Default filter when viewing vulnerabilities
+                  </p>
+                </div>
+
+                {/* Show Fixable Only */}
+                <div>
+                  <label className="flex items-center justify-between cursor-pointer group">
+                    <div>
+                      <span className="text-sm font-medium text-vuln-text group-hover:text-vuln-text transition-colors">
+                        Show Fixable Only by Default
+                      </span>
+                      <p className="text-xs text-vuln-text-disabled mt-1">
+                        Only show vulnerabilities with available fixes
+                      </p>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={defaultShowFixableOnly}
+                        onChange={(e) => setDefaultShowFixableOnly(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </div>
+                  </label>
+                </div>
+
+              </div>
+            </div>
+          </div>
         </>
       )}
 
       {activeTab === "security" && (
         <>
-          {/* Authentication Settings */}
-      <div className="mb-6 bg-[#1a1f2e] border border-gray-800 rounded-lg p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Lock className="w-6 h-6 text-purple-500" />
-          <div>
-            <h2 className="text-xl font-semibold text-white">Authentication</h2>
-            <p className="text-sm text-gray-400 mt-0.5">Configure access control and authentication providers</p>
-          </div>
-        </div>
+          <div className="columns-1 md:columns-2 gap-4 space-y-4">
+            {/* Authentication Settings */}
+            <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 break-inside-avoid">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Lock className="w-6 h-6 text-purple-500" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-vuln-text">Authentication</h2>
+                    <p className="text-sm text-vuln-text-muted mt-0.5">
+                      Configure access control and authentication providers
+                    </p>
+                  </div>
+                </div>
+                <HelpTooltip content="Secure VulnForge with authentication. Authentication Providers: Choose based on your infrastructure - Authentik/Custom Headers for SSO, API Keys for automation, Basic Auth for simple deployments. Security Note: Admin users can access maintenance endpoints (backup/restore, cache clear, KEV refresh). Regular users have read-only access to vulnerability data." />
+              </div>
 
-        {/* Production Warning Banner - shown when auth is disabled */}
-        {!authEnabled && (
-          <div className="mb-6 p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-amber-400">Authentication Disabled</p>
-              <p className="text-xs text-amber-300/70 mt-1">
-                VulnForge is currently accessible without authentication. Enable authentication for production deployments to secure access to vulnerability data and administrative functions.
-              </p>
-            </div>
-          </div>
-        )}
+              {/* Production Warning Banner - shown when auth is disabled */}
+              {!authEnabled && (
+                <div className="mb-6 p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-400">Authentication Disabled</p>
+                    <p className="text-xs text-amber-300/70 mt-1">
+                      VulnForge is currently accessible without authentication. Enable authentication for production deployments to secure access to vulnerability data and administrative functions.
+                    </p>
+                  </div>
+                </div>
+              )}
 
-        {/* Master Toggle */}
-        <div className="mb-6">
-          <label className="flex items-center justify-between cursor-pointer group">
-            <div>
-              <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
-                Enable Authentication
-              </span>
-              <p className="text-xs text-gray-500 mt-1">
-                Require users to authenticate before accessing VulnForge
-              </p>
-            </div>
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={authEnabled}
-                onChange={(e) => setAuthEnabled(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-            </div>
-          </label>
-        </div>
+              <div className="space-y-4">
+                {/* Master Toggle */}
+                <div>
+                  <label className="flex items-center justify-between cursor-pointer group">
+                    <div>
+                      <span className="text-sm font-medium text-vuln-text group-hover:text-vuln-text transition-colors">
+                        Enable Authentication
+                      </span>
+                      <p className="text-xs text-vuln-text-disabled mt-1">
+                        Require users to authenticate before accessing VulnForge
+                      </p>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={authEnabled}
+                        onChange={(e) => setAuthEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </div>
+                  </label>
+                </div>
 
-        {/* Provider Selection */}
-        {authEnabled && (
-          <div className="space-y-6">
+                {/* Provider Selection */}
+                {authEnabled && (
+                  <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-vuln-text mb-2">
                 Authentication Provider
               </label>
               <select
                 value={authProvider}
                 onChange={(e) => setAuthProvider(e.target.value)}
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
                 <option value="none">None (Disable)</option>
                 <option value="authentik">Authentik (Forward Auth)</option>
@@ -413,49 +1368,49 @@ export function Settings() {
                 <option value="api_key">API Keys</option>
                 <option value="basic_auth">Basic Authentication</option>
               </select>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-vuln-text-disabled mt-1">
                 Select how users will authenticate to VulnForge
               </p>
             </div>
 
             {/* Authentik Provider Settings */}
             {authProvider === "authentik" && (
-              <div className="p-4 bg-[#0f1419] border border-gray-700 rounded-lg space-y-4">
+              <div className="p-4 bg-vuln-surface-light border border-vuln-border rounded-lg space-y-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Shield className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-sm font-semibold text-white">Authentik Configuration</h3>
+                  <h3 className="text-sm font-semibold text-vuln-text">Authentik Configuration</h3>
                 </div>
-                <p className="text-xs text-gray-500 mb-4">
+                <p className="text-xs text-vuln-text-disabled mb-4">
                   Configure HTTP headers sent by Authentik forward auth proxy
                 </p>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">Username Header</label>
+                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">Username Header</label>
                   <input
                     type="text"
                     value={authAuthentikHeaderUsername}
                     onChange={(e) => setAuthAuthentikHeaderUsername(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1a1f2e] border border-gray-700 rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">Email Header</label>
+                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">Email Header</label>
                   <input
                     type="text"
                     value={authAuthentikHeaderEmail}
                     onChange={(e) => setAuthAuthentikHeaderEmail(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1a1f2e] border border-gray-700 rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">Groups Header</label>
+                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">Groups Header</label>
                   <input
                     type="text"
                     value={authAuthentikHeaderGroups}
                     onChange={(e) => setAuthAuthentikHeaderGroups(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1a1f2e] border border-gray-700 rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
               </div>
@@ -463,42 +1418,42 @@ export function Settings() {
 
             {/* Custom Headers Provider Settings */}
             {authProvider === "custom_headers" && (
-              <div className="p-4 bg-[#0f1419] border border-gray-700 rounded-lg space-y-4">
+              <div className="p-4 bg-vuln-surface-light border border-vuln-border rounded-lg space-y-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Shield className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-sm font-semibold text-white">Custom Headers Configuration</h3>
+                  <h3 className="text-sm font-semibold text-vuln-text">Custom Headers Configuration</h3>
                 </div>
-                <p className="text-xs text-gray-500 mb-4">
+                <p className="text-xs text-vuln-text-disabled mb-4">
                   Configure HTTP headers sent by your reverse proxy (Authelia, nginx, etc.)
                 </p>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">Username Header</label>
+                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">Username Header</label>
                   <input
                     type="text"
                     value={authCustomHeaderUsername}
                     onChange={(e) => setAuthCustomHeaderUsername(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1a1f2e] border border-gray-700 rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">Email Header</label>
+                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">Email Header</label>
                   <input
                     type="text"
                     value={authCustomHeaderEmail}
                     onChange={(e) => setAuthCustomHeaderEmail(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1a1f2e] border border-gray-700 rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">Groups Header</label>
+                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">Groups Header</label>
                   <input
                     type="text"
                     value={authCustomHeaderGroups}
                     onChange={(e) => setAuthCustomHeaderGroups(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1a1f2e] border border-gray-700 rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
               </div>
@@ -506,27 +1461,27 @@ export function Settings() {
 
             {/* API Keys Provider Settings */}
             {authProvider === "api_key" && (
-              <div className="p-4 bg-[#0f1419] border border-gray-700 rounded-lg">
+              <div className="p-4 bg-vuln-surface-light border border-vuln-border rounded-lg">
                 <div className="flex items-center gap-2 mb-3">
                   <Key className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-sm font-semibold text-white">API Keys Configuration</h3>
+                  <h3 className="text-sm font-semibold text-vuln-text">API Keys Configuration</h3>
                 </div>
-                <p className="text-xs text-gray-500 mb-4">
+                <p className="text-xs text-vuln-text-disabled mb-4">
                   Manage API keys for programmatic access. Format: JSON array
                 </p>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">
+                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">
                     API Keys (JSON)
                   </label>
                   <textarea
                     value={authApiKeys}
                     onChange={(e) => setAuthApiKeys(e.target.value)}
                     rows={4}
-                    className="w-full px-3 py-2 bg-[#1a1f2e] border border-gray-700 rounded text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-xs font-mono text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
                     placeholder='[{"key": "abc123...", "name": "my-script", "admin": true}]'
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-vuln-text-disabled mt-1">
                     Example: {`[{"key": "secret_key_here", "name": "automation-script", "admin": false}]`}
                   </p>
                 </div>
@@ -535,27 +1490,27 @@ export function Settings() {
 
             {/* Basic Auth Provider Settings */}
             {authProvider === "basic_auth" && (
-              <div className="p-4 bg-[#0f1419] border border-gray-700 rounded-lg">
+              <div className="p-4 bg-vuln-surface-light border border-vuln-border rounded-lg">
                 <div className="flex items-center gap-2 mb-3">
                   <Users className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-sm font-semibold text-white">Basic Authentication Configuration</h3>
+                  <h3 className="text-sm font-semibold text-vuln-text">Basic Authentication Configuration</h3>
                 </div>
-                <p className="text-xs text-gray-500 mb-4">
+                <p className="text-xs text-vuln-text-disabled mb-4">
                   Manage users with bcrypt-hashed passwords. Format: JSON array
                 </p>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">
+                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">
                     Users (JSON)
                   </label>
                   <textarea
                     value={authBasicUsers}
                     onChange={(e) => setAuthBasicUsers(e.target.value)}
                     rows={4}
-                    className="w-full px-3 py-2 bg-[#1a1f2e] border border-gray-700 rounded text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-xs font-mono text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
                     placeholder='[{"username": "admin", "password_hash": "$2b$12$...", "admin": true}]'
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-vuln-text-disabled mt-1">
                     Password hashes must be bcrypt format. Use a tool like <code className="text-purple-400">htpasswd -bnBC 12 "" password</code>
                   </p>
                 </div>
@@ -567,740 +1522,287 @@ export function Settings() {
               <div className="p-4 bg-blue-900/10 border border-blue-500/20 rounded-lg space-y-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Shield className="w-4 h-4 text-blue-400" />
-                  <h3 className="text-sm font-semibold text-white">Admin Configuration</h3>
+                  <h3 className="text-sm font-semibold text-vuln-text">Admin Configuration</h3>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">
+                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">
                     Admin Group Name
                   </label>
                   <input
                     type="text"
                     value={authAdminGroup}
                     onChange={(e) => setAuthAdminGroup(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-vuln-text-disabled mt-1">
                     Users in this group will have admin privileges (for header-based auth)
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-2">
+                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">
                     Admin Usernames (JSON array)
                   </label>
                   <textarea
                     value={authAdminUsernames}
                     onChange={(e) => setAuthAdminUsernames(e.target.value)}
                     rows={2}
-                    className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded text-xs font-mono text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded text-xs font-mono text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder='["admin", "john@example.com"]'
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-vuln-text-disabled mt-1">
                     Fallback admin list when group-based admin detection is unavailable
                   </p>
                 </div>
               </div>
-            )}
-          </div>
-        )}
+                  )}
+                </div>
+              )}
 
-        {/* Help Text */}
-        <div className="mt-6 p-4 bg-purple-900/10 border border-purple-500/20 rounded-lg">
-          <p className="text-xs text-purple-300/70">
-            <strong className="text-purple-400">Authentication Providers:</strong> Choose based on your infrastructure. Authentik/Custom Headers for SSO, API Keys for automation, Basic Auth for simple deployments.
-          </p>
-          <p className="text-xs text-purple-300/70 mt-2">
-            <strong className="text-purple-400">Security Note:</strong> Admin users can access maintenance endpoints (backup/restore, cache clear, KEV refresh). Regular users have read-only access to vulnerability data.
-          </p>
-        </div>
-      </div>
-        </>
-      )}
-
-      {activeTab === "scanning" && (
-        <>
-        {/* Scan Settings */}
-        <div className="mb-6 bg-[#1a1f2e] border border-gray-800 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Shield className="w-6 h-6 text-blue-500" />
-              <h2 className="text-xl font-semibold text-white">Scan Settings</h2>
-            </div>
-            {scanStatus?.status === "scanning" && (
-              <div className="flex items-center gap-2 text-sm">
-                <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />
-                <span className="text-blue-400">
-                  Scanning {scanStatus.current_container} ({scanStatus.progress_current}/{scanStatus.progress_total})
-                </span>
               </div>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            {/* Scan Schedule */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Scan Schedule (Cron)
-              </label>
-              <input
-                type="text"
-                value={scanSchedule}
-                onChange={(e) => setScanSchedule(e.target.value)}
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="0 2 * * *"
-              />
-              <p className="text-xs text-gray-500 mt-1">Current: Daily at 2:00 AM</p>
             </div>
 
-            {/* Scan Timeout */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Scan Timeout (seconds)
-              </label>
-              <input
-                type="number"
-                value={scanTimeout}
-                onChange={(e) => setScanTimeout(Number(e.target.value))}
-                min={60}
-                max={600}
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">Maximum time per container scan</p>
-            </div>
+            {/* KEV Settings */}
+            <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 break-inside-avoid">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Shield className="w-6 h-6 text-red-500" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-vuln-text">KEV (Known Exploited Vulnerabilities)</h2>
+                    <p className="text-sm text-vuln-text-muted mt-0.5">
+                      Track actively exploited vulnerabilities from CISA's KEV catalog.
+                    </p>
+                  </div>
+                </div>
+                <HelpTooltip content="CISA's Known Exploited Vulnerabilities catalog tracks CVEs actively being exploited in the wild. KEV vulnerabilities are confirmed by CISA to be used in real-world attacks and should be prioritized for immediate remediation. Visit cisa.gov/known-exploited-vulnerabilities-catalog for the full catalog." />
+              </div>
 
-            {/* Parallel Scans */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Parallel Scans
-              </label>
-              <input
-                type="number"
-                value={parallelScans}
-                onChange={(e) => setParallelScans(Number(e.target.value))}
-                min={1}
-                max={10}
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">Number of containers to scan simultaneously</p>
-            </div>
-
-            {/* Secret Scanning Toggle */}
-            <div>
-              <label className="flex items-center justify-between cursor-pointer group">
+              <div className="space-y-4">
+                {/* Enable KEV Checking */}
                 <div>
-                  <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
-                    Enable Secret Detection
-                  </span>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Scan for exposed credentials (API keys, tokens, passwords). Disabling speeds up scans but skips security checks.
+                  <label className="flex items-center justify-between cursor-pointer group">
+                    <div>
+                      <span className="text-sm font-medium text-vuln-text group-hover:text-vuln-text transition-colors">
+                        Enable KEV Checking
+                      </span>
+                      <p className="text-xs text-vuln-text-disabled mt-1">
+                        Check CVEs against CISA's Known Exploited Vulnerabilities catalog
+                      </p>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={kevCheckingEnabled}
+                        onChange={(e) => setKevCheckingEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </div>
+                  </label>
+                </div>
+
+                {/* Cache Hours */}
+                <div>
+                  <label className="block text-sm font-medium text-vuln-text mb-2">
+                    Cache Duration (Hours)
+                  </label>
+                  <input
+                    type="number"
+                    value={kevCacheHours}
+                    onChange={(e) => setKevCacheHours(parseSettingInt(e.target.value, 12))}
+                    disabled={!kevCheckingEnabled}
+                    min="1"
+                    max="72"
+                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  />
+                  <p className="text-xs text-vuln-text-disabled mt-1">
+                    How long to cache the KEV catalog before refreshing
                   </p>
                 </div>
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={enableSecretScanning}
-                    onChange={(e) => setEnableSecretScanning(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                </div>
-              </label>
-            </div>
 
-            {/* Log Level */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Log Level
-              </label>
-              <select
-                value={logLevel}
-                onChange={(e) => setLogLevel(e.target.value)}
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="DEBUG">DEBUG</option>
-                <option value="INFO">INFO</option>
-                <option value="WARNING">WARNING</option>
-                <option value="ERROR">ERROR</option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1">Application logging verbosity</p>
+                {/* Last Refresh */}
+                {kevLastRefresh && (
+                  <div className="bg-vuln-surface-light/20 border border-vuln-border rounded-lg p-3">
+                    <p className="text-sm text-vuln-text">
+                      <strong>Last KEV Refresh:</strong>{" "}
+                      <span className="text-vuln-text-muted">
+                        {new Date(kevLastRefresh).toLocaleString()}
+                      </span>
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
         </>
       )}
 
       {activeTab === "notifications" && (
-        <>
-        {/* Notification Settings */}
-        <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Bell className="w-6 h-6 text-purple-500" />
-            <h2 className="text-xl font-semibold text-white">Notifications</h2>
-          </div>
+        <div className="space-y-6">
+          {/* Service Sub-tabs */}
+          <NotificationSubTabs
+            activeSubTab={notificationSubTab}
+            onSubTabChange={setNotificationSubTab}
+            enabledServices={{
+              ntfy: ntfyEnabled,
+              gotify: gotifyEnabled,
+              pushover: pushoverEnabled,
+              slack: slackEnabled,
+              discord: discordEnabled,
+              telegram: telegramEnabled,
+              email: emailEnabled,
+            }}
+          />
 
-          <div className="space-y-4">
-            {/* Enable Notifications */}
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-300">Enable Notifications</label>
-              <button
-                onClick={() => setNtfyEnabled(!ntfyEnabled)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  ntfyEnabled ? "bg-green-600" : "bg-red-600"
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    ntfyEnabled ? "translate-x-6" : "translate-x-1"
-                  }`}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Service Configuration (left column) */}
+            <div>
+              {notificationSubTab === 'ntfy' && (
+                <NtfyConfig
+                  settings={notificationSettings}
+                  onSettingChange={handleNotificationSettingChange}
+                  onTextChange={handleNotificationTextChange}
+                  onTest={handleTestNtfy}
+                  testing={testingNtfy}
+                  saving={bulkUpdateMutation.isPending}
                 />
-              </button>
-            </div>
-
-            {/* ntfy URL */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">ntfy Server URL</label>
-              <input
-                type="text"
-                value={ntfyUrl}
-                onChange={(e) => setNtfyUrl(e.target.value)}
-                disabled={!ntfyEnabled}
-                autoComplete="off"
-                data-lpignore="true"
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-              />
-            </div>
-
-            {/* ntfy Topic */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">ntfy Topic</label>
-              <input
-                type="text"
-                value={ntfyTopic}
-                onChange={(e) => setNtfyTopic(e.target.value)}
-                disabled={!ntfyEnabled}
-                autoComplete="off"
-                data-lpignore="true"
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-              />
-            </div>
-
-            {/* ntfy Authentication Token */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                ntfy Access Token
-                <span className="text-xs text-gray-500 ml-2">(optional)</span>
-              </label>
-              <div className="relative">
-                <input
-                  type={showNtfyToken ? "text" : "password"}
-                  value={ntfyToken}
-                  onChange={(e) => setNtfyToken(e.target.value)}
-                  disabled={!ntfyEnabled}
-                  placeholder="tk_..."
-                  autoComplete="new-password"
-                  data-lpignore="true"
-                  className="w-full px-3 py-2 pr-10 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              )}
+              {notificationSubTab === 'gotify' && (
+                <GotifyConfig
+                  settings={notificationSettings}
+                  onSettingChange={handleNotificationSettingChange}
+                  onTextChange={handleNotificationTextChange}
+                  onTest={handleTestGotify}
+                  testing={testingGotify}
+                  saving={bulkUpdateMutation.isPending}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowNtfyToken(!showNtfyToken)}
-                  disabled={!ntfyEnabled}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {showNtfyToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Required if your ntfy server has authentication enabled
-              </p>
-            </div>
-
-            {/* Test Notification */}
-            <button
-              onClick={handleTestNotification}
-              disabled={!ntfyEnabled}
-              className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
-            >
-              Send Test Notification
-            </button>
-
-            <div className="border-t border-gray-700 pt-4">
-              {/* Notify on Scan Complete */}
-              <div className="flex items-center justify-between mb-3">
-                <label className="text-sm font-medium text-gray-300">Notify on Scan Complete</label>
-                <button
-                  onClick={() => setNotifyOnScanComplete(!notifyOnScanComplete)}
-                  disabled={!ntfyEnabled}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    notifyOnScanComplete && ntfyEnabled ? "bg-green-600" : "bg-red-600"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      notifyOnScanComplete ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Notify on Critical */}
-              <div className="flex items-center justify-between mb-3">
-                <label className="text-sm font-medium text-gray-300">Notify on Critical CVEs</label>
-                <button
-                  onClick={() => setNotifyOnCritical(!notifyOnCritical)}
-                  disabled={!ntfyEnabled}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    notifyOnCritical && ntfyEnabled ? "bg-green-600" : "bg-red-600"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      notifyOnCritical ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Critical Threshold */}
-              <div className="mb-3">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Critical CVE Threshold
-                </label>
-                <input
-                  type="number"
-                  value={notifyThresholdCritical}
-                  onChange={(e) => setNotifyThresholdCritical(Number(e.target.value))}
-                  min={1}
-                  disabled={!ntfyEnabled || !notifyOnCritical}
-                  className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              )}
+              {notificationSubTab === 'pushover' && (
+                <PushoverConfig
+                  settings={notificationSettings}
+                  onSettingChange={handleNotificationSettingChange}
+                  onTextChange={handleNotificationTextChange}
+                  onTest={handleTestPushover}
+                  testing={testingPushover}
+                  saving={bulkUpdateMutation.isPending}
                 />
-                <p className="text-xs text-gray-500 mt-1">Alert if X or more critical CVEs found</p>
-              </div>
-
-              {/* High Threshold */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  High CVE Threshold
-                </label>
-                <input
-                  type="number"
-                  value={notifyThresholdHigh}
-                  onChange={(e) => setNotifyThresholdHigh(Number(e.target.value))}
-                  min={1}
-                  disabled={!ntfyEnabled}
-                  className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              )}
+              {notificationSubTab === 'slack' && (
+                <SlackConfig
+                  settings={notificationSettings}
+                  onSettingChange={handleNotificationSettingChange}
+                  onTextChange={handleNotificationTextChange}
+                  onTest={handleTestSlack}
+                  testing={testingSlack}
+                  saving={bulkUpdateMutation.isPending}
                 />
-                <p className="text-xs text-gray-500 mt-1">Alert if X or more high CVEs found</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        </>
-      )}
-
-      {activeTab === "data" && (
-        <>
-        {/* Data Retention */}
-        <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Database className="w-6 h-6 text-green-500" />
-            <h2 className="text-xl font-semibold text-white">Data Retention</h2>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Keep Scan History (days)
-              </label>
-              <input
-                type="number"
-                value={keepScanHistoryDays}
-                onChange={(e) => setKeepScanHistoryDays(Number(e.target.value))}
-                min={7}
-                max={365}
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Scan history older than this will be automatically deleted
-              </p>
-            </div>
-
-            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
-              <p className="text-sm text-yellow-500">
-                <strong>Note:</strong> Container and vulnerability data is always retained. Only scan
-                history records are affected.
-              </p>
-            </div>
-          </div>
-        </div>
-        </>
-      )}
-
-      {activeTab === "security" && (
-        <>
-        {/* Compliance Settings */}
-        <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <FileCheck className="w-6 h-6 text-cyan-500" />
-            <h2 className="text-xl font-semibold text-white">Compliance Scanning</h2>
-          </div>
-
-          <div className="space-y-4">
-            {/* Enable Compliance Scanning */}
-            <div>
-              <label className="flex items-center justify-between cursor-pointer group">
-                <div>
-                  <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
-                    Enable Compliance Scanning
-                  </span>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Automatically run Docker Bench for Security scans on a schedule
-                  </p>
-                </div>
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={complianceScanEnabled}
-                    onChange={(e) => setComplianceScanEnabled(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                </div>
-              </label>
-            </div>
-
-            {/* Compliance Scan Schedule */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Compliance Scan Schedule (Cron)
-              </label>
-              <input
-                type="text"
-                value={complianceScanSchedule}
-                onChange={(e) => setComplianceScanSchedule(e.target.value)}
-                disabled={!complianceScanEnabled}
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                placeholder="0 3 * * 0"
-              />
-              <p className="text-xs text-gray-500 mt-1">Current: Weekly on Sunday at 3:00 AM</p>
-            </div>
-
-            {/* Notify on Scan */}
-            <div className="border-t border-gray-700 pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <label className="text-sm font-medium text-gray-300">Notify on Compliance Scan</label>
-                <button
-                  onClick={() => setComplianceNotifyOnScan(!complianceNotifyOnScan)}
-                  disabled={!complianceScanEnabled || !ntfyEnabled}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    complianceNotifyOnScan && complianceScanEnabled && ntfyEnabled ? "bg-green-600" : "bg-red-600"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      complianceNotifyOnScan ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Notify on Failures */}
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-300">Notify on Critical Failures</label>
-                <button
-                  onClick={() => setComplianceNotifyOnFailures(!complianceNotifyOnFailures)}
-                  disabled={!complianceScanEnabled || !ntfyEnabled}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    complianceNotifyOnFailures && complianceScanEnabled && ntfyEnabled ? "bg-green-600" : "bg-red-600"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      complianceNotifyOnFailures ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-4">
-              <p className="text-sm text-cyan-400">
-                <strong>Docker Bench for Security</strong> runs CIS Docker Benchmark compliance checks.
-                Manual scans are always available on the Compliance page.
-              </p>
-            </div>
-          </div>
-        </div>
-        </>
-      )}
-
-      {activeTab === "scanning" && (
-        <>
-        {/* Scanner Offline Resilience Settings */}
-        <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Database className="w-6 h-6 text-blue-500" />
-            <h2 className="text-xl font-semibold text-white">Scanner Offline Resilience</h2>
-          </div>
-
-          <div className="space-y-4">
-            {/* Skip DB Update When Fresh */}
-            <div>
-              <label className="flex items-center justify-between cursor-pointer group">
-                <div>
-                  <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
-                    Skip Database Updates When Fresh
-                  </span>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Skip updating scanner databases if they're fresh (saves network bandwidth and scan time)
-                  </p>
-                </div>
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={scannerSkipDbUpdateWhenFresh}
-                    onChange={(e) => setScannerSkipDbUpdateWhenFresh(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                </div>
-              </label>
-            </div>
-
-            {/* Max DB Age Hours */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Maximum Database Age (Hours)
-              </label>
-              <input
-                type="number"
-                value={scannerDbMaxAgeHours}
-                onChange={(e) => setScannerDbMaxAgeHours(parseInt(e.target.value) || 24)}
-                min="1"
-                max="168"
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Maximum age for scanner databases to be considered "fresh" (default: 24 hours)
-              </p>
-            </div>
-
-            {/* Stale DB Warning Hours */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Stale Database Warning (Hours)
-              </label>
-              <input
-                type="number"
-                value={scannerStaleDbWarningHours}
-                onChange={(e) => setScannerStaleDbWarningHours(parseInt(e.target.value) || 72)}
-                min="1"
-                max="720"
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Show warnings when scanner databases exceed this age (default: 72 hours)
-              </p>
-            </div>
-
-            {/* Allow Stale DB */}
-            <div>
-              <label className="flex items-center justify-between cursor-pointer group">
-                <div>
-                  <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
-                    Allow Scans with Stale Databases
-                  </span>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Allow scanning even when databases are older than the maximum age (useful for offline environments)
-                  </p>
-                </div>
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={scannerAllowStaleDb}
-                    onChange={(e) => setScannerAllowStaleDb(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                </div>
-              </label>
-            </div>
-
-            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-              <p className="text-sm text-blue-400">
-                <strong>Offline Resilience:</strong> These settings help VulnForge work better in environments with limited or
-                unreliable internet connectivity. Enable "Skip Database Updates When Fresh" to reduce network dependency by ~80%.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* UI Preferences */}
-        <div className="mb-6 bg-[#1a1f2e] border border-gray-800 rounded-lg p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <SettingsIcon className="w-6 h-6 text-orange-500" />
-            <h2 className="text-xl font-semibold text-white">UI Preferences</h2>
-          </div>
-
-          <div className="space-y-4">
-            {/* Default Severity Filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Default Severity Filter
-              </label>
-              <select
-                value={defaultSeverityFilter}
-                onChange={(e) => setDefaultSeverityFilter(e.target.value)}
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Severities</option>
-                <option value="critical">Critical Only</option>
-                <option value="high">High & Above</option>
-                <option value="medium">Medium & Above</option>
-                <option value="low">Low & Above</option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Default filter when viewing vulnerabilities
-              </p>
-            </div>
-
-            {/* Show Fixable Only */}
-            <div className="flex items-center justify-between">
-              <div>
-                <label className="text-sm font-medium text-gray-300">Show Fixable Only by Default</label>
-                <p className="text-xs text-gray-500 mt-1">
-                  Only show vulnerabilities with available fixes
-                </p>
-              </div>
-              <button
-                onClick={() => setDefaultShowFixableOnly(!defaultShowFixableOnly)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  defaultShowFixableOnly ? "bg-blue-600" : "bg-gray-700"
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    defaultShowFixableOnly ? "translate-x-6" : "translate-x-1"
-                  }`}
+              )}
+              {notificationSubTab === 'discord' && (
+                <DiscordConfig
+                  settings={notificationSettings}
+                  onSettingChange={handleNotificationSettingChange}
+                  onTextChange={handleNotificationTextChange}
+                  onTest={handleTestDiscord}
+                  testing={testingDiscord}
+                  saving={bulkUpdateMutation.isPending}
                 />
-              </button>
+              )}
+              {notificationSubTab === 'telegram' && (
+                <TelegramConfig
+                  settings={notificationSettings}
+                  onSettingChange={handleNotificationSettingChange}
+                  onTextChange={handleNotificationTextChange}
+                  onTest={handleTestTelegram}
+                  testing={testingTelegram}
+                  saving={bulkUpdateMutation.isPending}
+                />
+              )}
+              {notificationSubTab === 'email' && (
+                <EmailConfig
+                  settings={notificationSettings}
+                  onSettingChange={handleNotificationSettingChange}
+                  onTextChange={handleNotificationTextChange}
+                  onTest={handleTestEmail}
+                  testing={testingEmail}
+                  saving={bulkUpdateMutation.isPending}
+                />
+              )}
             </div>
+
+            {/* Event Notifications (right column) */}
+            <EventNotificationsCard
+              settings={notificationSettings}
+              onSettingChange={handleNotificationSettingChange}
+              onTextChange={handleNotificationTextChange}
+              saving={bulkUpdateMutation.isPending}
+              hasEnabledService={hasAnyServiceEnabled}
+            />
           </div>
         </div>
-        </>
-      )}
-
-      {activeTab === "security" && (
-        <>
-        {/* KEV Settings */}
-        <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Shield className="w-6 h-6 text-red-500" />
-            <h2 className="text-xl font-semibold text-white">KEV (Known Exploited Vulnerabilities)</h2>
-          </div>
-
-          <div className="space-y-4">
-            {/* Enable KEV Checking */}
-            <div>
-              <label className="flex items-center justify-between cursor-pointer group">
-                <div>
-                  <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
-                    Enable KEV Checking
-                  </span>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Check CVEs against CISA's Known Exploited Vulnerabilities catalog
-                  </p>
-                </div>
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={kevCheckingEnabled}
-                    onChange={(e) => setKevCheckingEnabled(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                </div>
-              </label>
-            </div>
-
-            {/* Cache Hours */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Cache Duration (Hours)
-              </label>
-              <input
-                type="number"
-                value={kevCacheHours}
-                onChange={(e) => setKevCacheHours(parseInt(e.target.value) || 12)}
-                disabled={!kevCheckingEnabled}
-                min="1"
-                max="72"
-                className="w-full px-3 py-2 bg-[#0f1419] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-              />
-              <p className="text-xs text-gray-500 mt-1">How long to cache the KEV catalog before refreshing</p>
-            </div>
-
-            {/* Last Refresh */}
-            {kevLastRefresh && (
-              <div className="bg-gray-700/20 border border-gray-700 rounded-lg p-3">
-                <p className="text-sm text-gray-300">
-                  <strong>Last KEV Refresh:</strong>{" "}
-                  <span className="text-gray-400">
-                    {new Date(kevLastRefresh).toLocaleString()}
-                  </span>
-                </p>
-              </div>
-            )}
-
-            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-              <p className="text-sm text-red-400">
-                <strong>KEV vulnerabilities are actively exploited in the wild.</strong> These CVEs have been confirmed
-                by CISA to be used in real-world attacks and should be prioritized for immediate remediation.
-              </p>
-              <a
-                href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-2 text-sm text-red-300 hover:text-red-200 underline"
-              >
-                View CISA KEV Catalog →
-              </a>
-            </div>
-          </div>
-        </div>
-        </>
       )}
 
 
       {activeTab === "data" && (
         <>
-      {/* Database Backup */}
-      <div className="mt-6 bg-[#1a1f2e] border border-gray-800 rounded-lg p-6">
-        <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-          <Database className="w-5 h-5 text-purple-500" />
-          Database Backup
-        </h2>
-        <div className="space-y-4">
-          <DatabaseBackupSection />
-        </div>
-      </div>
+          <div className="columns-1 md:columns-2 gap-4 space-y-4">
+            {/* Database Backup */}
+            <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 break-inside-avoid">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Database className="w-6 h-6 text-purple-500" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-vuln-text">Database Backup</h2>
+                    <p className="text-sm text-vuln-text-muted mt-0.5">
+                      Backup and restore your VulnForge database.
+                    </p>
+                  </div>
+                </div>
+                <HelpTooltip content="Create and restore database backups. Backups include all containers, scan history, vulnerabilities, and settings. Download backups for disaster recovery or migrate to another instance." />
+              </div>
+
+              <div className="space-y-4">
+                <DatabaseBackupSection />
+              </div>
+            </div>
+
+            {/* Data Retention */}
+            <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 break-inside-avoid">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Clock className="w-6 h-6 text-blue-500" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-vuln-text">Data Retention</h2>
+                    <p className="text-sm text-vuln-text-muted mt-0.5">
+                      Configure how long scan history is kept in the database.
+                    </p>
+                  </div>
+                </div>
+                <HelpTooltip content="Control how long historical scan data is retained. Older scans are automatically purged to save disk space. The most recent scan for each container is always kept. Data Retention Policy: Old scan history is cleaned up automatically. Current container states and the latest scan results are always retained regardless of this setting." />
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-vuln-text mb-2">
+                    Keep Scan History (Days)
+                  </label>
+                  <input
+                    type="number"
+                    value={keepScanHistoryDays}
+                    onChange={(e) => setKeepScanHistoryDays(parseSettingInt(e.target.value, 90))}
+                    min="1"
+                    max="365"
+                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-vuln-text-disabled mt-1">
+                    Scan results older than this will be automatically deleted
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </>
       )}
-
-      {/* Info Box - Show on all tabs */}
-      <div className="mt-6 bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <Clock className="w-5 h-5 text-blue-500 mt-0.5" />
-          <div>
-            <h3 className="text-sm font-medium text-blue-500 mb-1">Persistent Settings</h3>
-            <p className="text-sm text-gray-400">
-              All settings are stored in the database and persist across container restarts. Changes take effect
-              immediately after saving.
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

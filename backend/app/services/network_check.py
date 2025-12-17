@@ -55,7 +55,6 @@ class NetworkConnectivityChecker:
     # Critical hosts for vulnerability scanning
     DEFAULT_TEST_HOSTS = [
         "ghcr.io",  # GitHub Container Registry (Trivy DB)
-        "toolbox-data.anchore.io",  # Grype DB
         "github.com",  # GitHub (general connectivity)
     ]
 

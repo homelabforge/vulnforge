@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi.testclient import TestClient
+from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -21,6 +21,7 @@ if project_root_str in sys.path:
 sys.path.insert(0, project_root_str)
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+os.environ.setdefault("STRICT_MIGRATIONS", "false")  # Disable strict migrations in tests
 
 from app.db import Base, get_db
 from app.main import app
@@ -113,12 +114,20 @@ def _mock_background_services(monkeypatch):
     monkeypatch.setattr("app.main.ScanScheduler", _DummyScheduler)
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for async tests."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+@pytest.fixture(autouse=True)
+def clear_settings_cache():
+    """Clear the middleware settings cache between tests to avoid cross-contamination."""
+    try:
+        import asyncio
+        from app.middleware import auth
+        auth._settings_cache = None
+        auth._settings_cache_time = 0
+        # Recreate the lock for the current event loop to avoid "bound to different event loop" errors
+        auth._settings_lock = asyncio.Lock()
+    except (ImportError, AttributeError):
+        # If middleware doesn't exist or doesn't have cache, skip
+        pass
+    yield
 
 
 @pytest.fixture
@@ -134,7 +143,17 @@ async def db_engine():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # Override the global async_session_maker so middleware and services use test database
+    from app import db
+    original_maker = db.async_session_maker
+    db.async_session_maker = sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+
     yield engine
+
+    # Restore original session maker
+    db.async_session_maker = original_maker
 
     # Drop all tables
     async with engine.begin() as conn:
@@ -146,38 +165,48 @@ async def db_engine():
 @pytest.fixture
 async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
     """Create test database session."""
+    from app.services.settings_manager import SettingsManager
+
     async_session = sessionmaker(
         db_engine, class_=AsyncSession, expire_on_commit=False
     )
 
     async with async_session() as session:
+        # Always initialize default settings to avoid middleware errors
+        for key, value in SettingsManager.DEFAULTS.items():
+            setting = Setting(key=key, value=value)
+            session.add(setting)
+        await session.commit()
+
         yield session
 
 
 @pytest.fixture
 async def db_with_settings(db_session: AsyncSession) -> AsyncSession:
-    """Create database session with default settings."""
-    from app.services.settings_manager import SettingsManager
+    """Create database session with default settings.
 
-    # Add default settings
-    for key, value in SettingsManager.DEFAULTS.items():
-        setting = Setting(key=key, value=value)
-        db_session.add(setting)
-
-    await db_session.commit()
+    Note: Settings are now always initialized in db_session,
+    so this fixture just returns the session for compatibility.
+    """
     return db_session
 
 
 @pytest.fixture
-def client(db_session: AsyncSession):
-    """Create test client with database override."""
+async def client(db_session: AsyncSession):
+    """Create test client with database override.
 
+    Note: Settings are automatically initialized in db_session fixture.
+    """
     async def override_get_db():
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
 
-    with TestClient(app, raise_server_exceptions=False) as test_client:
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        follow_redirects=True
+    ) as test_client:
         yield test_client
 
     app.dependency_overrides.clear()

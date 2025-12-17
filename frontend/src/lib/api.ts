@@ -4,6 +4,47 @@
 
 const API_BASE = "/api/v1";
 
+// Error response types matching backend
+export interface ApiErrorResponse {
+  detail: string;
+  status_code?: number;
+  error_type?: string;
+  suggestions?: string[];
+  is_retryable?: boolean;
+}
+
+export class ApiError extends Error {
+  status: number;
+  detail: string;
+  errorType?: string;
+  suggestions?: string[];
+  isRetryable?: boolean;
+
+  constructor(response: Response, data: ApiErrorResponse) {
+    super(data.detail);
+    this.name = "ApiError";
+    this.status = response.status;
+    this.detail = data.detail;
+    this.errorType = data.error_type;
+    this.suggestions = data.suggestions;
+    this.isRetryable = data.is_retryable;
+  }
+}
+
+// Helper function to handle API responses
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let errorData: ApiErrorResponse;
+    try {
+      errorData = await res.json();
+    } catch {
+      errorData = { detail: `HTTP ${res.status}: ${res.statusText}` };
+    }
+    throw new ApiError(res, errorData);
+  }
+  return res.json();
+}
+
 // Types
 export interface Container {
   id: number;
@@ -12,6 +53,7 @@ export interface Container {
   image_tag: string;
   image_id: string;
   is_running: boolean;
+  is_my_project: boolean;
   total_vulns: number;
   fixable_vulns: number;
   critical_count: number;
@@ -88,11 +130,6 @@ export interface SecretSummary {
   low_count: number;
   affected_containers: number;
   top_categories: Record<string, number>;
-}
-
-export interface ScannerComparison {
-  total_trivy: number;
-  trivy_by_severity: Record<string, number>;
 }
 
 export interface ScanStatus {
@@ -186,22 +223,28 @@ export interface ScanTrendsResponse {
 export const containersApi = {
   getAll: async (): Promise<{ containers: Container[]; total: number }> => {
     const res = await fetch(`${API_BASE}/containers/`);
-    if (!res.ok) throw new Error("Failed to fetch containers");
-    return res.json();
+    return handleResponse(res);
   },
 
   getById: async (id: number): Promise<Container> => {
     const res = await fetch(`${API_BASE}/containers/${id}`);
-    if (!res.ok) throw new Error("Failed to fetch container");
-    return res.json();
+    return handleResponse(res);
   },
 
   discover: async (): Promise<{ total: number; discovered: string[] }> => {
     const res = await fetch(`${API_BASE}/containers/discover`, {
       method: "POST",
     });
-    if (!res.ok) throw new Error("Failed to discover containers");
-    return res.json();
+    return handleResponse(res);
+  },
+
+  update: async (id: number, updates: { is_my_project?: boolean; is_running?: boolean }): Promise<Container> => {
+    const res = await fetch(`${API_BASE}/containers/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    });
+    return handleResponse(res);
   },
 };
 
@@ -213,26 +256,22 @@ export const scansApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ container_ids: containerIds || null }),
     });
-    if (!res.ok) throw new Error("Failed to trigger scan");
-    return res.json();
+    return handleResponse(res);
   },
 
   getCurrent: async (): Promise<ScanStatus> => {
     const res = await fetch(`${API_BASE}/scans/current`);
-    if (!res.ok) throw new Error("Failed to get current scan");
-    return res.json();
+    return handleResponse(res);
   },
 
   getTrends: async (windowDays = 30): Promise<ScanTrendsResponse> => {
     const res = await fetch(`${API_BASE}/scans/trends?window_days=${windowDays}`);
-    if (!res.ok) throw new Error("Failed to get scan trends");
-    return res.json();
+    return handleResponse(res);
   },
 
   getHistory: async (containerId: number): Promise<ScanHistoryEntry[]> => {
     const res = await fetch(`${API_BASE}/scans/history/${containerId}`);
-    if (!res.ok) throw new Error("Failed to get scan history");
-    return res.json();
+    return handleResponse(res);
   },
 };
 
@@ -251,6 +290,7 @@ export const vulnerabilitiesApi = {
     fixable_only?: boolean;
     kev_only?: boolean;
     status?: string;
+    container_id?: number;
     limit?: number;
     offset?: number;
   }): Promise<PaginatedVulnerabilities> => {
@@ -259,18 +299,17 @@ export const vulnerabilitiesApi = {
     if (params?.fixable_only) query.append("fixable_only", "true");
     if (params?.kev_only) query.append("kev_only", "true");
     if (params?.status) query.append("status", params.status);
+    if (params?.container_id) query.append("container_id", params.container_id.toString());
     if (params?.limit) query.append("limit", params.limit.toString());
     if (params?.offset) query.append("offset", params.offset.toString());
 
     const res = await fetch(`${API_BASE}/vulnerabilities/?${query}`);
-    if (!res.ok) throw new Error("Failed to fetch vulnerabilities");
-    return res.json();
+    return handleResponse(res);
   },
 
   getById: async (id: number): Promise<Vulnerability> => {
     const res = await fetch(`${API_BASE}/vulnerabilities/${id}`);
-    if (!res.ok) throw new Error("Failed to fetch vulnerability");
-    return res.json();
+    return handleResponse(res);
   },
 
   updateStatus: async (id: number, status: string, notes?: string): Promise<Vulnerability> => {
@@ -279,8 +318,7 @@ export const vulnerabilitiesApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status, notes }),
     });
-    if (!res.ok) throw new Error("Failed to update vulnerability");
-    return res.json();
+    return handleResponse(res);
   },
 
   bulkUpdate: async (ids: number[], status: string, notes?: string): Promise<{ updated: number }> => {
@@ -289,21 +327,13 @@ export const vulnerabilitiesApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ vuln_ids: ids, update: { status, notes } }),
     });
-    if (!res.ok) throw new Error("Failed to bulk update vulnerabilities");
-    return res.json();
+    return handleResponse(res);
   },
 
   getRemediationGroups: async (containerId?: number): Promise<RemediationGroup[]> => {
     const query = containerId ? `?container_id=${containerId}` : "";
     const res = await fetch(`${API_BASE}/vulnerabilities/remediation-groups${query}`);
-    if (!res.ok) throw new Error("Failed to get remediation groups");
-    return res.json();
-  },
-
-  getScannerComparison: async (): Promise<ScannerComparison> => {
-    const res = await fetch(`${API_BASE}/vulnerabilities/scanner/comparison`);
-    if (!res.ok) throw new Error("Failed to get scanner comparison");
-    return res.json();
+    return handleResponse(res);
   },
 
   export: async (format: "csv" | "json", filters?: {
@@ -319,7 +349,15 @@ export const vulnerabilitiesApi = {
     if (filters?.status) query.append("status", filters.status);
 
     const res = await fetch(`${API_BASE}/vulnerabilities/export?${query}`);
-    if (!res.ok) throw new Error("Failed to export vulnerabilities");
+    if (!res.ok) {
+      let errorData: ApiErrorResponse;
+      try {
+        errorData = await res.json();
+      } catch {
+        errorData = { detail: `HTTP ${res.status}: ${res.statusText}` };
+      }
+      throw new ApiError(res, errorData);
+    }
     return res.blob();
   },
 };
@@ -328,20 +366,17 @@ export const vulnerabilitiesApi = {
 export const secretsApi = {
   getContainerSecrets: async (containerId: number): Promise<Secret[]> => {
     const res = await fetch(`${API_BASE}/containers/${containerId}/secrets`);
-    if (!res.ok) throw new Error("Failed to fetch container secrets");
-    return res.json();
+    return handleResponse(res);
   },
 
   getScanSecrets: async (scanId: number): Promise<Secret[]> => {
     const res = await fetch(`${API_BASE}/scans/${scanId}/secrets`);
-    if (!res.ok) throw new Error("Failed to fetch scan secrets");
-    return res.json();
+    return handleResponse(res);
   },
 
   getSummary: async (): Promise<SecretSummary> => {
     const res = await fetch(`${API_BASE}/secrets/summary`);
-    if (!res.ok) throw new Error("Failed to fetch secrets summary");
-    return res.json();
+    return handleResponse(res);
   },
 
   getAll: async (filters?: {
@@ -357,8 +392,7 @@ export const secretsApi = {
     if (filters?.offset) query.append("offset", filters.offset.toString());
 
     const res = await fetch(`${API_BASE}/secrets/?${query}`);
-    if (!res.ok) throw new Error("Failed to fetch secrets");
-    return res.json();
+    return handleResponse(res);
   },
 
   updateStatus: async (id: number, status: string, notes?: string): Promise<Secret> => {
@@ -367,8 +401,7 @@ export const secretsApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status, notes }),
     });
-    if (!res.ok) throw new Error("Failed to update secret");
-    return res.json();
+    return handleResponse(res);
   },
 
   bulkUpdate: async (ids: number[], status: string, notes?: string): Promise<{ updated: number }> => {
@@ -377,8 +410,7 @@ export const secretsApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ secret_ids: ids, update: { status, notes } }),
     });
-    if (!res.ok) throw new Error("Failed to bulk update secrets");
-    return res.json();
+    return handleResponse(res);
   },
 };
 
@@ -386,8 +418,7 @@ export const secretsApi = {
 export const widgetApi = {
   getSummary: async (): Promise<WidgetSummary> => {
     const res = await fetch(`${API_BASE}/widget/summary`);
-    if (!res.ok) throw new Error("Failed to fetch widget summary");
-    return res.json();
+    return handleResponse(res);
   },
 };
 
@@ -420,14 +451,12 @@ export interface ScannersInfoResponse {
 export const systemApi = {
   getTrivyDbInfo: async (): Promise<TrivyDbInfo> => {
     const res = await fetch(`${API_BASE}/system/trivy-db-info`);
-    if (!res.ok) throw new Error("Failed to fetch Trivy DB info");
-    return res.json();
+    return handleResponse(res);
   },
 
   getScannersInfo: async (): Promise<ScannersInfoResponse> => {
     const res = await fetch(`${API_BASE}/system/scanners`);
-    if (!res.ok) throw new Error("Failed to fetch scanners info");
-    return res.json();
+    return handleResponse(res);
   },
 };
 
@@ -454,17 +483,21 @@ export interface ActivityEventMetadata {
   [key: string]: unknown;
 }
 
+export interface TestConnectionResult {
+  success: boolean;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
 export const settingsApi = {
   getAll: async (): Promise<Setting[]> => {
     const res = await fetch(`${API_BASE}/settings/`);
-    if (!res.ok) throw new Error("Failed to fetch settings");
-    return res.json();
+    return handleResponse(res);
   },
 
   getByKey: async (key: string): Promise<Setting> => {
     const res = await fetch(`${API_BASE}/settings/${key}`);
-    if (!res.ok) throw new Error("Failed to fetch setting");
-    return res.json();
+    return handleResponse(res);
   },
 
   update: async (key: string, value: string): Promise<Setting> => {
@@ -473,8 +506,7 @@ export const settingsApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ value }),
     });
-    if (!res.ok) throw new Error("Failed to update setting");
-    return res.json();
+    return handleResponse(res);
   },
 
   bulkUpdate: async (settings: Record<string, string>): Promise<Setting[]> => {
@@ -483,8 +515,64 @@ export const settingsApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ settings }),
     });
-    if (!res.ok) throw new Error("Failed to bulk update settings");
-    return res.json();
+    return handleResponse(res);
+  },
+
+  testDocker: async (): Promise<TestConnectionResult> => {
+    const res = await fetch(`${API_BASE}/settings/test/docker`, {
+      method: "POST",
+    });
+    return handleResponse(res);
+  },
+
+  // Multi-service notification test endpoints
+  testNtfy: async (): Promise<TestConnectionResult> => {
+    const res = await fetch(`${API_BASE}/notifications/test/ntfy`, {
+      method: "POST",
+    });
+    return handleResponse(res);
+  },
+
+  testGotify: async (): Promise<TestConnectionResult> => {
+    const res = await fetch(`${API_BASE}/notifications/test/gotify`, {
+      method: "POST",
+    });
+    return handleResponse(res);
+  },
+
+  testPushover: async (): Promise<TestConnectionResult> => {
+    const res = await fetch(`${API_BASE}/notifications/test/pushover`, {
+      method: "POST",
+    });
+    return handleResponse(res);
+  },
+
+  testSlack: async (): Promise<TestConnectionResult> => {
+    const res = await fetch(`${API_BASE}/notifications/test/slack`, {
+      method: "POST",
+    });
+    return handleResponse(res);
+  },
+
+  testDiscord: async (): Promise<TestConnectionResult> => {
+    const res = await fetch(`${API_BASE}/notifications/test/discord`, {
+      method: "POST",
+    });
+    return handleResponse(res);
+  },
+
+  testTelegram: async (): Promise<TestConnectionResult> => {
+    const res = await fetch(`${API_BASE}/notifications/test/telegram`, {
+      method: "POST",
+    });
+    return handleResponse(res);
+  },
+
+  testEmail: async (): Promise<TestConnectionResult> => {
+    const res = await fetch(`${API_BASE}/notifications/test/email`, {
+      method: "POST",
+    });
+    return handleResponse(res);
   },
 };
 
@@ -530,21 +618,18 @@ export const activityApi = {
     if (params?.container_id) query.append("container_id", params.container_id.toString());
 
     const res = await fetch(`${API_BASE}/activity/?${query}`);
-    if (!res.ok) throw new Error("Failed to fetch activities");
-    return res.json();
+    return handleResponse(res);
   },
 
   getTypes: async (): Promise<{ types: ActivityTypeCount[] }> => {
     const res = await fetch(`${API_BASE}/activity/types`);
-    if (!res.ok) throw new Error("Failed to fetch activity types");
-    return res.json();
+    return handleResponse(res);
   },
 
   getByContainer: async (containerId: number, limit?: number): Promise<ActivityLog[]> => {
     const query = limit ? `?limit=${limit}` : "";
     const res = await fetch(`${API_BASE}/activity/container/${containerId}${query}`);
-    if (!res.ok) throw new Error("Failed to fetch container activities");
-    return res.json();
+    return handleResponse(res);
   },
 };
 
@@ -566,13 +651,11 @@ export interface AuthStatus {
 export const authApi = {
   getCurrentUser: async (): Promise<UserInfo> => {
     const res = await fetch(`${API_BASE}/auth/me`);
-    if (!res.ok) throw new Error("Failed to fetch current user");
-    return res.json();
+    return handleResponse(res);
   },
 
   getAuthStatus: async (): Promise<AuthStatus> => {
     const res = await fetch(`${API_BASE}/auth/status`);
-    if (!res.ok) throw new Error("Failed to fetch auth status");
-    return res.json();
+    return handleResponse(res);
   },
 };

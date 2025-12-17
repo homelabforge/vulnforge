@@ -108,7 +108,7 @@ class ComplianceTriggerRequest(BaseModel):
 class ComplianceCurrentScan(BaseModel):
     """Current compliance scan status."""
 
-    status: str  # idle, scanning
+    status: str  # idle, scanning, completed
     scan_id: int | None = None
     started_at: datetime | None = None
     progress: str | None = None

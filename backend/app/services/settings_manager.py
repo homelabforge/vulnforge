@@ -30,22 +30,69 @@ class SettingsManager:
     DEFAULTS = {
         # Application settings
         "log_level": "INFO",
+        "timezone": "UTC",
         # Scan settings
         "scan_schedule": "0 2 * * *",  # 2 AM daily
         "scan_timeout": "300",  # 5 minutes
         "parallel_scans": "3",
         "enable_secret_scanning": "true",  # Enable Trivy secret detection
-        "enable_grype_scanning": "true",  # Enable Grype scanner for consensus
         # Compliance settings
         "compliance_scan_enabled": "true",  # Enable Docker Bench compliance scanning
         "compliance_scan_schedule": "0 3 * * 0",  # 3 AM every Sunday
         "compliance_notify_on_scan": "true",  # Send notification after compliance scan
         "compliance_notify_on_failures": "true",  # Send notification for failed checks
-        # Notification settings
+        # ============================================
+        # Multi-Service Notification Settings
+        # ============================================
+        # Event category toggles
+        "notify_security_enabled": "true",
+        "notify_security_kev": "true",
+        "notify_security_critical": "true",
+        "notify_security_secrets": "true",
+        "notify_scans_enabled": "true",
+        "notify_scans_complete": "true",
+        "notify_scans_failed": "true",
+        "notify_scans_compliance_complete": "false",
+        "notify_scans_compliance_failures": "true",
+        "notify_system_enabled": "false",
+        "notify_system_kev_refresh": "false",
+        "notify_system_backup": "false",
+        # Retry settings (global)
+        "notification_retry_attempts": "3",
+        "notification_retry_delay": "2.0",  # seconds
+        # ntfy service (primary)
         "ntfy_enabled": "true",
         "ntfy_url": "https://ntfy:443",
         "ntfy_topic": "vulnforge",
         "ntfy_token": "",  # Access token for ntfy authentication
+        # Gotify service
+        "gotify_enabled": "false",
+        "gotify_server": "",
+        "gotify_token": "",
+        # Pushover service
+        "pushover_enabled": "false",
+        "pushover_user_key": "",
+        "pushover_api_token": "",
+        # Slack service
+        "slack_enabled": "false",
+        "slack_webhook_url": "",
+        # Discord service
+        "discord_enabled": "false",
+        "discord_webhook_url": "",
+        # Telegram service
+        "telegram_enabled": "false",
+        "telegram_bot_token": "",
+        "telegram_chat_id": "",
+        # Email service
+        "email_enabled": "false",
+        "email_smtp_host": "",
+        "email_smtp_port": "587",
+        "email_smtp_user": "",
+        "email_smtp_password": "",
+        "email_smtp_tls": "true",
+        "email_from": "",
+        "email_to": "",
+        # Legacy notification settings (for backwards compatibility)
         "notify_on_scan_complete": "true",
         "notify_on_critical": "true",
         "notify_threshold_critical": "1",
@@ -55,6 +102,7 @@ class SettingsManager:
         # UI preferences
         "default_severity_filter": "all",
         "default_show_fixable_only": "false",
+        "theme": "light",  # light or dark mode
         # KEV (Known Exploited Vulnerabilities) settings
         "kev_checking_enabled": "true",  # Enable CISA KEV checking
         "kev_cache_hours": "12",  # Cache KEV catalog for 12 hours
@@ -65,6 +113,7 @@ class SettingsManager:
         "scanner_skip_db_update_when_fresh": "true",  # Skip DB updates if database is fresh
         "scanner_allow_stale_db": "true",  # Allow scans with stale databases when network unavailable
         "scanner_stale_db_warning_hours": "72",  # Warn when database is older than this
+        # NOTE: Docker connection is now configured via DOCKER_HOST environment variable in compose
         # Authentication settings
         "auth_enabled": "false",  # Master auth toggle
         "auth_provider": "none",  # Options: none, authentik, custom_headers, api_key, basic_auth
@@ -102,19 +151,64 @@ class SettingsManager:
 
     DEFAULT_CATEGORIES = {
         "log_level": "general",
+        "timezone": "system",
         "scan_schedule": "scanning",
         "scan_timeout": "scanning",
         "parallel_scans": "scanning",
         "enable_secret_scanning": "scanning",
-        "enable_grype_scanning": "scanning",
         "compliance_scan_enabled": "compliance",
         "compliance_scan_schedule": "compliance",
         "compliance_notify_on_scan": "compliance",
         "compliance_notify_on_failures": "compliance",
+        # Event toggles
+        "notify_security_enabled": "notifications",
+        "notify_security_kev": "notifications",
+        "notify_security_critical": "notifications",
+        "notify_security_secrets": "notifications",
+        "notify_scans_enabled": "notifications",
+        "notify_scans_complete": "notifications",
+        "notify_scans_failed": "notifications",
+        "notify_scans_compliance_complete": "notifications",
+        "notify_scans_compliance_failures": "notifications",
+        "notify_system_enabled": "notifications",
+        "notify_system_kev_refresh": "notifications",
+        "notify_system_backup": "notifications",
+        # Retry settings
+        "notification_retry_attempts": "notifications",
+        "notification_retry_delay": "notifications",
+        # ntfy service
         "ntfy_enabled": "notifications",
         "ntfy_url": "notifications",
         "ntfy_topic": "notifications",
         "ntfy_token": "notifications",
+        # Gotify service
+        "gotify_enabled": "notifications",
+        "gotify_server": "notifications",
+        "gotify_token": "notifications",
+        # Pushover service
+        "pushover_enabled": "notifications",
+        "pushover_user_key": "notifications",
+        "pushover_api_token": "notifications",
+        # Slack service
+        "slack_enabled": "notifications",
+        "slack_webhook_url": "notifications",
+        # Discord service
+        "discord_enabled": "notifications",
+        "discord_webhook_url": "notifications",
+        # Telegram service
+        "telegram_enabled": "notifications",
+        "telegram_bot_token": "notifications",
+        "telegram_chat_id": "notifications",
+        # Email service
+        "email_enabled": "notifications",
+        "email_smtp_host": "notifications",
+        "email_smtp_port": "notifications",
+        "email_smtp_user": "notifications",
+        "email_smtp_password": "notifications",
+        "email_smtp_tls": "notifications",
+        "email_from": "notifications",
+        "email_to": "notifications",
+        # Legacy notification settings
         "notify_on_scan_complete": "notifications",
         "notify_on_critical": "notifications",
         "notify_threshold_critical": "notifications",
@@ -327,6 +421,7 @@ class SettingsManager:
         """Get human-readable description for a setting key."""
         descriptions = {
             "log_level": "Application logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
+            "timezone": "System timezone for schedules and timestamps (IANA name, e.g., 'UTC', 'America/New_York')",
             "scan_schedule": "Cron schedule for automatic scans (e.g., '0 2 * * *' for 2 AM daily)",
             "scan_timeout": "Maximum time (seconds) allowed for a single container scan",
             "parallel_scans": "Maximum number of containers to scan in parallel",

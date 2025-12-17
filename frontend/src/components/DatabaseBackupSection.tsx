@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Download, Trash2, RefreshCw, Calendar, HardDrive, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import { handleApiError } from "@/lib/errorHandler";
 
 // Simple relative time formatter
 const formatRelativeTime = (dateString: string): string => {
@@ -63,12 +64,15 @@ export function DatabaseBackupSection() {
         toast.success(`Backup created: ${data.filename} (${data.size_mb} MB)`);
         await loadBackups(); // Reload the list
       } else {
-        const error = await response.json();
-        toast.error(`Backup failed: ${error.detail}`);
+        const errorData = await response.json();
+        toast.error(errorData.detail || "Backup failed", {
+          description: errorData.suggestions?.[0],
+          duration: 6000,
+        });
       }
     } catch (error) {
       console.error("Failed to create backup", error);
-      toast.error("Failed to create backup");
+      handleApiError(error, "Failed to create backup");
     } finally {
       setCreating(false);
     }
@@ -89,11 +93,12 @@ export function DatabaseBackupSection() {
         window.URL.revokeObjectURL(url);
         toast.success("Backup downloaded");
       } else {
-        toast.error("Download failed");
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.detail || "Download failed");
       }
     } catch (error) {
       console.error("Failed to download backup", error);
-      toast.error("Failed to download backup");
+      handleApiError(error, "Failed to download backup");
     }
   };
 
@@ -111,12 +116,14 @@ export function DatabaseBackupSection() {
         toast.success("Backup deleted");
         await loadBackups(); // Reload the list
       } else {
-        const error = await response.json();
-        toast.error(`Delete failed: ${error.detail}`);
+        const errorData = await response.json();
+        toast.error(errorData.detail || "Delete failed", {
+          description: errorData.suggestions?.[0],
+        });
       }
     } catch (error) {
       console.error("Failed to delete backup", error);
-      toast.error("Failed to delete backup");
+      handleApiError(error, "Failed to delete backup");
     }
   };
 
@@ -155,8 +162,12 @@ Type 'RESTORE' to confirm:`;
           window.location.reload();
         }, 2000);
       } else {
-        const error = await response.json();
-        toast.error(`Restore failed: ${error.detail}`, { id: "restore" });
+        const errorData = await response.json();
+        toast.error(errorData.detail || "Restore failed", {
+          id: "restore",
+          description: errorData.suggestions?.[0],
+          duration: 6000,
+        });
       }
     } catch (error) {
       console.error("Failed to restore backup", error);
@@ -167,17 +178,17 @@ Type 'RESTORE' to confirm:`;
   return (
     <div className="space-y-4">
       {/* Manual Backup Button */}
-      <div className="flex items-center justify-between p-4 bg-[#0f1419] border border-gray-700 rounded-lg">
+      <div className="flex items-center justify-between p-4 bg-vuln-surface-light border border-vuln-border rounded-lg">
         <div>
-          <h3 className="text-sm font-medium text-white">Create Manual Backup</h3>
-          <p className="text-xs text-gray-500 mt-1">
+          <h3 className="text-sm font-medium text-vuln-text">Create Manual Backup</h3>
+          <p className="text-xs text-vuln-text-disabled mt-1">
             Create an instant backup of your database including all scans, settings, and secret reviews
           </p>
         </div>
         <button
           onClick={createBackup}
           disabled={creating}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white rounded-lg flex items-center gap-2 transition-colors"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-vuln-surface text-white rounded-lg flex items-center gap-2 transition-colors"
         >
           {creating ? (
             <>
@@ -194,32 +205,32 @@ Type 'RESTORE' to confirm:`;
       </div>
 
       {/* Backup List */}
-      <div className="bg-[#0f1419] border border-gray-700 rounded-lg p-4">
+      <div className="bg-vuln-surface-light border border-vuln-border rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-medium text-white">Available Backups ({backups.length})</h3>
+          <h3 className="text-sm font-medium text-vuln-text">Available Backups ({backups.length})</h3>
           <button
             onClick={loadBackups}
             disabled={loading}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-vuln-text-muted hover:text-vuln-text transition-colors"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
 
         {loading ? (
-          <p className="text-sm text-gray-500 text-center py-4">Loading backups...</p>
+          <p className="text-sm text-vuln-text-disabled text-center py-4">Loading backups...</p>
         ) : backups.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">No backups found. Create your first backup above.</p>
+          <p className="text-sm text-vuln-text-disabled text-center py-4">No backups found. Create your first backup above.</p>
         ) : (
           <div className="space-y-2">
             {backups.map((backup) => (
               <div
                 key={backup.filename}
-                className="flex items-center justify-between p-3 bg-[#1a1f2e] border border-gray-800 rounded-lg hover:border-purple-500/50 transition-colors"
+                className="flex items-center justify-between p-3 bg-vuln-surface border border-vuln-border rounded-lg hover:border-purple-500/50 transition-colors"
               >
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-white font-mono">{backup.filename}</p>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                  <p className="text-sm font-medium text-vuln-text font-mono">{backup.filename}</p>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-vuln-text-disabled">
                     <span className="flex items-center gap-1">
                       <HardDrive className="w-3 h-3" />
                       {backup.size_mb} MB
@@ -261,9 +272,9 @@ Type 'RESTORE' to confirm:`;
 
       {/* Info */}
       <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3">
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-vuln-text-muted">
           <strong className="text-purple-400">Note:</strong> Backups are stored in{" "}
-          <code className="bg-[#0f1419] px-1 rounded">/data/backups/</code> and persist across container rebuilds.
+          <code className="bg-vuln-surface-light px-1 rounded">/data/backups/</code> and persist across container rebuilds.
           Download backups to keep them outside the container for extra safety.
         </p>
       </div>

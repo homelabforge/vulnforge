@@ -4,6 +4,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.config import settings
+from app.services.dive_service import DiveService
 from app.services.docker_bench_service import DockerBenchService
 from app.services.docker_client import DockerService
 from app.services.docker_hub import get_docker_hub_client
@@ -114,7 +115,7 @@ async def get_scanners_info():
 
         scanners.append(trivy_info)
 
-        # Docker Bench Security (Compliance Scanner)
+        # Docker Bench Security (Compliance Scanner - legacy)
         docker_bench_service = DockerBenchService(docker_service)
 
         # Check if Docker Bench image exists
@@ -123,7 +124,7 @@ async def get_scanners_info():
             docker_service.client.images.get("docker/docker-bench-security:latest")
             bench_available = True
         except Exception:
-            bench_available = False
+            bench_available = False  # INTENTIONAL: Image not found or Docker error means unavailable.
 
         bench_info = ScannerInfo(
             name="Docker Bench",
@@ -153,29 +154,34 @@ async def get_scanners_info():
 
         scanners.append(bench_info)
 
-        # Dockle (Image Compliance Scanner) - On-Demand only
-        dockle_available = False
+        # Dive - Image Efficiency Analysis
+        dive_available = False
         try:
-            docker_service.client.images.get("goodwithtech/dockle:latest")
-            dockle_available = True
+            docker_service.client.containers.get(settings.dive_container_name)
+            dive_available = True
         except Exception:
-            dockle_available = False
+            dive_available = False  # INTENTIONAL: Container not found or Docker error means unavailable.
 
-        dockle_info = ScannerInfo(
-            name="Dockle",
-            enabled=True,  # Always enabled (on-demand execution)
-            available=dockle_available,
+        dive_info = ScannerInfo(
+            name="Dive",
+            enabled=True,  # Dive is always enabled
+            available=dive_available,
             version=None,
             latest_version=None,
             update_available=False,
-            db_version="Rule-Based",  # Uses built-in CIS rules, no database
+            db_version=None,
             db_latest_version=None,
             db_update_available=False,
             db_updated_at=None,
             db_age_hours=None,
         )
 
-        scanners.append(dockle_info)
+        if dive_available:
+            # Dive doesn't have a database or version API, so we just show it as available
+            # Version could be extracted from container image tag if needed
+            pass
+
+        scanners.append(dive_info)
 
         return ScannersInfoResponse(scanners=scanners)
 

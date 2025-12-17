@@ -49,13 +49,10 @@ class TestScanWorkflowIntegration:
         assert container is not None
         assert container.id is not None
 
-    @patch("app.services.trivy_scanner.TrivyScanner.scan_image")
-    @patch("app.services.grype_service.GrypeService.scan_image")
-    async def test_scanner_fallback_workflow(self, mock_grype, mock_trivy, db_with_settings):
-        """Test workflow with Trivy failure and Grype fallback."""
+    async def test_scanner_fallback_workflow_placeholder(self, db_with_settings):
+        """Placeholder for legacy Grype fallback workflow (removed)."""
         from app.repositories.container_repository import ContainerRepository
 
-        # Create container
         container_repo = ContainerRepository(db_with_settings)
         container = await container_repo.create(
             container_id="test456",
@@ -64,26 +61,7 @@ class TestScanWorkflowIntegration:
             status="running"
         )
 
-        # Trivy fails
-        mock_trivy.side_effect = Exception("Trivy scan failed")
-
-        # Grype succeeds
-        mock_grype.return_value = {
-            "matches": [
-                {
-                    "vulnerability": {
-                        "id": "CVE-2024-0002",
-                        "severity": "CRITICAL"
-                    },
-                    "artifact": {
-                        "name": "curl",
-                        "version": "7.0.0"
-                    }
-                }
-            ]
-        }
-
-        # Should fall back to Grype
+        # With Grype removed, fallback is handled by Trivy/offline policies.
         assert container is not None
 
     async def test_scan_with_database_transaction_rollback(self, db_with_settings):

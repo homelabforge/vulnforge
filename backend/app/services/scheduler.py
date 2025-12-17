@@ -16,7 +16,6 @@ async def scheduled_scan_task():
     from app.db import async_session_maker
     from app.models import Container
     from app.services.docker_client import DockerService
-    from app.services.notifier import NotificationService
 
     logger.info("Starting scheduled scan...")
 
@@ -52,6 +51,8 @@ async def scheduled_scan_task():
 
         docker_service.close()
     except Exception as e:
+        # INTENTIONAL: Pre-scan discovery failures should not stop the scan.
+        # Log and continue to the actual scan.
         logger.error(f"Error during pre-scan discovery: {e}")
 
     # Now trigger the scan
@@ -64,19 +65,20 @@ async def scheduled_scan_task():
             container_ids = [row[0] for row in result.fetchall()]
 
             docker_service = DockerService()
-            notifier = NotificationService()
 
             # Queue scans for all containers
             for cid in container_ids:
                 try:
-                    await perform_scan(cid, db, docker_service, notifier)
+                    await perform_scan(cid, db, docker_service)
                 except Exception as e:
+                    # INTENTIONAL: One container failure should not stop other scans.
                     logger.error(f"Error scanning container {cid}: {e}")
 
             docker_service.close()
             logger.info(f"Scheduled scan complete: {len(container_ids)} containers scanned")
 
     except Exception as e:
+        # INTENTIONAL: Scheduled scan errors should be logged but not crash the scheduler.
         logger.error(f"Error during scheduled scan: {e}")
 
 
@@ -93,6 +95,7 @@ async def scheduled_compliance_scan_task():
         docker_service.close()
         logger.info("Scheduled compliance scan complete")
     except Exception as e:
+        # INTENTIONAL: Scheduled compliance scan errors should not crash the scheduler.
         logger.error(f"Error during scheduled compliance scan: {e}")
 
 
@@ -151,6 +154,7 @@ async def scheduled_kev_refresh_task():
             logger.info(f"KEV refresh complete: {updated_count} vulnerabilities updated")
 
     except Exception as e:
+        # INTENTIONAL: Scheduled KEV refresh errors should not crash the scheduler.
         logger.error(f"Error during KEV refresh: {e}")
 
 

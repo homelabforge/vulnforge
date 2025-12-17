@@ -40,6 +40,9 @@ class Scan(ScanBase):
     high_count: int
     medium_count: int
     low_count: int
+    # CVE delta tracking - JSON encoded arrays of CVE IDs
+    cves_fixed: str | None = None
+    cves_introduced: str | None = None
 
 
 class ScanProgress(BaseModel):

@@ -4,95 +4,80 @@ __pycache__/
 *$py.class
 *.so
 .Python
-*.egg-info/
-dist/
 build/
-.venv/
-venv/
-env/
-ENV/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 .pytest_cache/
-.ruff_cache/
-*.log
-pip-log.txt
-pip-delete-this-directory.txt
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
 
-# Node
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+backend/.venv/
+backend/venv/
+
+# Node / JavaScript
 node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-lerna-debug.log*
+bun.lock
+frontend/bun.lock
 
-# Environment variables
+# Environment files
 .env
 .env.local
 .env.*.local
+*.env
 
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-*.db-shm
-*.db-wal
-
-# IDEs and editors
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+
+# OS
 .DS_Store
 Thumbs.db
-*.sublime-project
-*.sublime-workspace
 
-# Build outputs
-frontend/dist/
-backend/dist/
-*.tar.gz
-*.zip
-
-# Runtime data
+# VulnForge specific
 data/
-tmp/
+data-dev/
 trivy-cache/
+dive-cache/
+dive-output/
+*.db
+*.db-shm
+*.db-wal
 
-# Logs
-*.log
-logs/
-*.log.*
-
-# Test coverage
-.coverage
-htmlcov/
-coverage/
-*.cover
-.hypothesis/
-
-# OS files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+# Backups
+*.backup.*
+backend/pyproject.toml.backup.*
+frontend/package.json.backup.*
 
 # Temporary files
+*.log
 *.tmp
 *.temp
-*.bak
-*.swp
-*~.nib
-
-# Docker
-.dockerignore.bak
-
-# Secrets and credentials
-*.pem
-*.key
-*.cert
-secrets/
-credentials/

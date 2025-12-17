@@ -3,9 +3,12 @@
 import asyncio
 import json
 import logging
+import os
 import re
 from typing import Any
+from urllib.parse import urlparse
 
+from app.config import settings
 from app.services.docker_client import DockerService
 from app.services.compliance_state import compliance_state
 from app.utils.timezone import get_now
@@ -34,26 +37,69 @@ class DockerBenchService:
             # Initialize progress tracking (Docker Bench typically has ~150 checks)
             compliance_state.start_scan(total_checks=150)
 
+            # Resolve Docker host for Docker Bench from environment variable or settings.
+            # Environment variable (DOCKER_HOST) takes precedence, matching Docker CLI behavior.
+            # Falls back to settings or local Unix socket for first-run setups.
+            docker_host = os.getenv("DOCKER_HOST") or settings.docker_socket_proxy or "unix:///var/run/docker.sock"
+
+            parsed = urlparse(docker_host)
+            if parsed.scheme == "unix":
+                # Docker Bench image expects the host socket mounted at /host/var/run/docker.sock.
+                # Normalize any unix:// value to that internal path so first-run setups
+                # work without extra configuration.
+                docker_host_env = "unix:///host/var/run/docker.sock"
+            else:
+                docker_host_env = docker_host
+
+            logger.info(f"Using Docker host for Docker Bench: {docker_host_env}")
+
+            environment = {
+                "DOCKER_HOST": docker_host_env,
+            }
+
+            # Attach Docker Bench container to the same network as the
+            # running VulnForge container so it can reach the configured
+            # Docker host (socket proxy or unix socket).
+            network_name: str | None = None
+            current_container_id = os.getenv("HOSTNAME")
+            if current_container_id:
+                try:
+                    current_container = self.docker_service.client.containers.get(current_container_id)
+                    networks = current_container.attrs.get("NetworkSettings", {}).get("Networks") or {}
+                    if networks:
+                        # Use the first attached network (matches compose order)
+                        network_name = next(iter(networks.keys()))
+                        logger.info(f"Using Docker Bench network: {network_name}")
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.warning(f"Failed to determine current container network for Docker Bench: {exc}")
+
             # Run Docker Bench in DETACHED mode for log streaming
-            container = self.docker_service.client.containers.run(
-                image="docker/docker-bench-security:latest",
-                command=[],  # Default command runs all checks
-                environment={
-                    "DOCKER_HOST": "tcp://socket-proxy-ro:2375",
-                },
-                network="docker_api_ro",
-                volumes={
-                    # Mount host directories for file permission checks
-                    "/etc": {"bind": "/host/etc", "mode": "ro"},
-                    "/lib/systemd": {"bind": "/host/lib/systemd", "mode": "ro"},
-                    "/usr/lib/systemd": {"bind": "/host/usr/lib/systemd", "mode": "ro"},
-                    "/var/lib/docker": {"bind": "/host/var/lib/docker", "mode": "ro"},
-                    "/var/run/docker.sock": {"bind": "/host/var/run/docker.sock", "mode": "ro"},
-                },
-                detach=True,  # Changed to True for streaming
-                cap_add=["AUDIT_CONTROL"],  # Required for some checks
-                labels={"managed_by": "vulnforge"},
-            )
+            volumes = {
+                # Mount host directories for file permission checks
+                "/etc": {"bind": "/host/etc", "mode": "ro"},
+                "/lib/systemd": {"bind": "/host/lib/systemd", "mode": "ro"},
+                "/usr/lib/systemd": {"bind": "/host/usr/lib/systemd", "mode": "ro"},
+                "/var/lib/docker": {"bind": "/host/var/lib/docker", "mode": "ro"},
+            }
+
+            # Only mount docker.sock if using unix socket (not TCP socket proxy)
+            if parsed.scheme == "unix":
+                volumes["/var/run/docker.sock"] = {"bind": "/host/var/run/docker.sock", "mode": "ro"}
+
+            run_kwargs: dict[str, Any] = {
+                "image": "vulnforge/docker-bench:latest",  # Custom image with updated Docker client for API compatibility
+                "command": [],  # Default command runs all checks
+                "environment": environment,
+                "volumes": volumes,
+                "detach": True,  # Changed to True for streaming
+                "cap_add": ["AUDIT_CONTROL"],  # Required for some checks
+                "labels": {"managed_by": "vulnforge"},
+            }
+
+            if network_name:
+                run_kwargs["network"] = network_name
+
+            container = self.docker_service.client.containers.run(**run_kwargs)
 
             # Stream logs and parse findings
             findings = []

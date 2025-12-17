@@ -281,7 +281,7 @@ async def update_secret(
                 if container:
                     container_name = container.name
         except Exception:
-            pass
+            pass  # INTENTIONAL: Container lookup failure should not prevent secret status update.
 
     await activity_logger.log_secret_status_changed(
         secret_id=secret.id,

@@ -56,7 +56,6 @@ def _force_api_key_auth(monkeypatch):
 
 
 @pytest.mark.usefixtures("_force_api_key_auth")
-@pytest.mark.asyncio
 class TestSettingsAuthorization:
     """Tests for settings endpoint authorization."""
 
@@ -70,7 +69,7 @@ class TestSettingsAuthorization:
         from app.main import app
         app.dependency_overrides[get_db] = override_get_db
 
-        response = client.get("/api/v1/settings")
+        response = await client.get("/api/v1/settings")
 
         assert response.status_code == 401
         assert "Authentication required" in response.json()["detail"]
@@ -87,7 +86,7 @@ class TestSettingsAuthorization:
         from app.main import app
         app.dependency_overrides[get_db] = override_get_db
 
-        response = client.get(
+        response = await client.get(
             "/api/v1/settings",
             headers={"Authorization": "Bearer user-token"},
         )
@@ -107,7 +106,7 @@ class TestSettingsAuthorization:
         from app.main import app
         app.dependency_overrides[get_db] = override_get_db
 
-        response = client.get(
+        response = await client.get(
             "/api/v1/settings",
             headers={"Authorization": "Bearer admin-token"},
         )
@@ -127,7 +126,7 @@ class TestSettingsAuthorization:
         from app.main import app
         app.dependency_overrides[get_db] = override_get_db
 
-        response = client.get(
+        response = await client.get(
             "/api/v1/settings/auth_enabled",
             headers={"Authorization": "Bearer user-token"},
         )
@@ -146,7 +145,7 @@ class TestSettingsAuthorization:
         from app.main import app
         app.dependency_overrides[get_db] = override_get_db
 
-        response = client.put(
+        response = await client.put(
             "/api/v1/settings/auth_enabled",
             json={"value": "true"},
             headers={"Authorization": "Bearer user-token"},
@@ -166,7 +165,7 @@ class TestSettingsAuthorization:
         from app.main import app
         app.dependency_overrides[get_db] = override_get_db
 
-        response = client.put(
+        response = await client.put(
             "/api/v1/settings/auth_enabled",
             json={"value": "true"},
             headers={"Authorization": "Bearer admin-token"},
@@ -189,7 +188,7 @@ class TestSettingsAuthorization:
         app.dependency_overrides[get_db] = override_get_db
 
         # Use POST (correct HTTP verb) instead of PUT
-        response = client.post(
+        response = await client.post(
             "/api/v1/settings/bulk",
             json={
                 "settings": [
@@ -215,7 +214,7 @@ class TestSettingsAuthorization:
         app.dependency_overrides[get_db] = override_get_db
 
         # Try to disable authentication
-        response = client.put(
+        response = await client.put(
             "/api/v1/settings/auth_enabled",
             json={"value": "false"},
             headers={"Authorization": "Bearer user-token"},
@@ -223,7 +222,7 @@ class TestSettingsAuthorization:
         assert response.status_code == 403
 
         # Try to change auth provider
-        response = client.put(
+        response = await client.put(
             "/api/v1/settings/auth_provider",
             json={"value": "none"},
             headers={"Authorization": "Bearer user-token"},
@@ -231,7 +230,7 @@ class TestSettingsAuthorization:
         assert response.status_code == 403
 
         # Try to modify API keys
-        response = client.put(
+        response = await client.put(
             "/api/v1/settings/auth_api_keys",
             json={"value": '[{"key": "backdoor", "name": "evil", "admin": true}]'},
             headers={"Authorization": "Bearer user-token"},
@@ -241,7 +240,6 @@ class TestSettingsAuthorization:
         app.dependency_overrides.clear()
 
 
-@pytest.mark.asyncio
 class TestSettingsCacheMutability:
     """Tests for settings cache immutability."""
 

@@ -211,7 +211,6 @@ To run tests in CI/CD pipelines:
 
 ### Scan Workflow Integration Tests (`test_scan_workflow_integration.py`)
 - **End-to-End**: Queue → scan → store → notify workflow
-- **Scanner Fallback**: Trivy failure → Grype fallback
 - **Transaction Safety**: Database rollback on failure
 - **Batch Scanning**: Multiple containers, partial failures
 - **KEV Integration**: KEV checking during scans

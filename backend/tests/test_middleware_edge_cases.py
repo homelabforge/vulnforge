@@ -18,7 +18,6 @@ class MockRequest:
         self.client = type("Client", (), {"host": client_host})()
 
 
-@pytest.mark.asyncio
 class TestPathNormalizationEdgeCases:
     """Advanced path normalization security tests."""
 
@@ -32,7 +31,7 @@ class TestPathNormalizationEdgeCases:
         ]
 
         for path in null_byte_attempts:
-            response = client.get(path)
+            response = await client.get(path)
 
             # Should not succeed with 200
             assert response.status_code in [400, 401, 403, 404]
@@ -49,7 +48,7 @@ class TestPathNormalizationEdgeCases:
         ]
 
         for path in backslash_attempts:
-            response = client.get(path)
+            response = await client.get(path)
 
             # Should either reject or treat as API path
             if response.status_code == 200:
@@ -65,7 +64,7 @@ class TestPathNormalizationEdgeCases:
         ]
 
         for path in unicode_attempts:
-            response = client.get(path)
+            response = await client.get(path)
 
             # Should require auth or reject
             assert response.status_code in [401, 403, 404, 400]
@@ -79,7 +78,7 @@ class TestPathNormalizationEdgeCases:
         ]
 
         for path in overlong_attempts:
-            response = client.get(path)
+            response = await client.get(path)
 
             # Should reject or normalize correctly
             assert response.status_code in [400, 401, 403, 404]
@@ -93,7 +92,7 @@ class TestPathNormalizationEdgeCases:
         ]
 
         for path in mixed_attempts:
-            response = client.get(path)
+            response = await client.get(path)
 
             assert response.status_code in [401, 403, 404, 400]
 
@@ -105,13 +104,12 @@ class TestPathNormalizationEdgeCases:
         ]
 
         for path in windows_attempts:
-            response = client.get(path)
+            response = await client.get(path)
 
             # Should not successfully access API without auth
             assert response.status_code in [401, 403, 404, 400]
 
 
-@pytest.mark.asyncio
 class TestSettingsCacheRaceConditions:
     """Tests for settings cache concurrency safety."""
 
@@ -161,7 +159,6 @@ class TestSettingsCacheRaceConditions:
         assert cache3["auth_enabled"] != "HACKED"
 
 
-@pytest.mark.asyncio
 class TestAuthProviderFactoryErrors:
     """Tests for auth provider factory error handling."""
 
@@ -194,44 +191,46 @@ class TestAuthProviderFactoryErrors:
         assert user is None
 
 
-@pytest.mark.asyncio
 class TestAnonymousUserHandling:
     """Tests for anonymous user handling in middleware."""
 
     async def test_frontend_gets_anonymous_user(self, client):
         """Test that frontend paths get anonymous user."""
         # Frontend paths should work without auth
-        response = client.get("/")
+        response = await client.get("/")
 
         # Should succeed with 200 or redirect
         assert response.status_code in [200, 301, 302, 404]
 
     async def test_api_rejects_anonymous_user(self, client):
         """Test that API paths reject anonymous users."""
-        response = client.get("/api/v1/containers")
+        response = await client.get("/api/v1/containers")
 
         # APIs are publicly accessible when auth disabled
         assert response.status_code in [200, 500]
 
     async def test_anonymous_user_not_admin(self, client):
         """Test that anonymous users are never admin."""
-        response = client.get("/api/v1/settings")
+        response = await client.get("/api/v1/settings")
 
         # Endpoint now returns data even when auth disabled; just ensure no error
         assert response.status_code in [200, 401, 403, 500]
 
 
-@pytest.mark.asyncio
 class TestSettingsDatabaseCorruption:
     """Tests for handling corrupted settings in database."""
 
     async def test_corrupted_json_settings(self, db_session):
         """Test handling of settings with invalid JSON."""
         from app.middleware.auth import AuthentikProvider
+        from sqlalchemy import select
 
-        # Create setting with invalid JSON
-        setting = Setting(key="auth_admin_usernames", value="{invalid json[")
-        db_session.add(setting)
+        # Update existing setting with invalid JSON
+        result = await db_session.execute(
+            select(Setting).where(Setting.key == "auth_admin_usernames")
+        )
+        setting = result.scalar_one()
+        setting.value = "{invalid json["
         await db_session.commit()
 
         # Provider should handle gracefully
@@ -262,7 +261,6 @@ class TestSettingsDatabaseCorruption:
         assert settings["auth_enabled"] == "false"  # Default value
 
 
-@pytest.mark.asyncio
 class TestRequestStateCorruption:
     """Tests for handling corrupted request state."""
 
@@ -297,7 +295,6 @@ class TestRequestStateCorruption:
         assert result is not None
 
 
-@pytest.mark.asyncio
 class TestCacheTimingAttacks:
     """Tests for cache timing attack prevention."""
 

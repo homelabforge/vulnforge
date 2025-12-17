@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "sqlite+aiosqlite:////data/vulnforge.db"
 
-    # Docker
-    docker_socket_proxy: str = "tcp://socket-proxy-ro:2375"
+    # Docker (can be overridden by DOCKER_HOST or database setting)
+    docker_socket_proxy: str = "unix:///var/run/docker.sock"
     trivy_container_name: str = "trivy"
     trivy_server: str | None = None  # Optional: Trivy server URL for client mode (e.g., http://trivy:8080)
     dive_container_name: str = "dive"
@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     scan_timeout: int = 300  # 5 minutes per container
     dive_timeout: int = 120  # 2 minutes for Dive analysis
     parallel_scans: int = 3  # Number of containers to scan in parallel
+
+    # Trivy retry configuration
+    trivy_max_lock_retries: int = 3  # Max retries for database lock errors
+    trivy_max_corruption_retries: int = 1  # Max retries for cache corruption
+    trivy_lock_retry_base_wait: int = 2  # Base wait time in seconds for lock retries
+    trivy_lock_retry_backoff_multiplier: int = 2  # Backoff multiplier (4s, 6s, 8s)
 
     # Notifications
     ntfy_url: str = "https://ntfy:443"
@@ -61,6 +67,9 @@ class Settings(BaseSettings):
 
     # GitHub API (optional - for checking Trivy DB updates via GHCR)
     github_token: str | None = None  # Optional GitHub token for API access
+
+    # Database migrations
+    strict_migrations: bool = True  # Fail startup if migrations fail (False for test environments)
 
 
 settings = Settings()

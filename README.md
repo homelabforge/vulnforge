@@ -24,6 +24,7 @@ VulnForge is a self-hosted dashboard that keeps homelab operators on top of cont
 - Access to Docker socket (via socket proxy)
 - 1GB RAM minimum
 - Linux/macOS/Windows with WSL2
+- Bun 1.3.4+ (for development only)
 
 ### Installation
 
@@ -185,40 +186,55 @@ Create regex patterns to automatically mark recurring false positives:
 
 ### Building from Source
 
+**Requirements:** Bun 1.3.4+, Python 3.14+
+
 ```bash
 # Install backend dependencies
 cd backend
-pip install -r requirements.txt
+pip install -e .[dev]
 
 # Install frontend dependencies
 cd ../frontend
-npm install
+bun install
 
-# Build frontend
-npm run build
+# Build frontend (fast - 2-5x faster than npm)
+bun run build
 
 # Run backend
 cd ../backend
 uvicorn app.main:app --reload --port 8787
 ```
 
+**Why Bun 1.3.4?**
+- 100x reduction in idle CPU time
+- 40% reduction in idle memory usage
+- 2-5x faster builds compared to npm
+- Native TypeScript support
+
 ### Running Tests
 
 ```bash
-# Backend tests
+# Backend tests (pytest 9.0.2)
 cd backend
-pytest
+pytest                    # Run all tests
+pytest -v                 # Verbose output
+pytest --cov=app          # With coverage
 
-# Frontend linting
+# Frontend tests (Vitest)
 cd frontend
-npm run lint
+bun run test              # Run tests in watch mode
+bun run test:ui           # Open Vitest UI in browser
+
+# Frontend linting (ESLint)
+bun run lint              # Check for linting errors
 ```
 
 ## Architecture
 
 - **Backend**: Python 3.14 + FastAPI + SQLAlchemy + aiosqlite
-- **Frontend**: React 19 + TypeScript + Vite + TailwindCSS
+- **Frontend**: React 19 + TypeScript + Vite 7.3 + TailwindCSS 4.1 + Bun 1.3.4
 - **Database**: SQLite with WAL mode
+- **Testing**: pytest 9.0.2 (backend) + Vitest 3.1 (frontend)
 - **Scanners**: Trivy (vulnerabilities), Docker Bench (compliance), Dockle (linting), Dive (layers)
 - **Deployment**: Docker multi-stage build → GHCR
 
@@ -228,7 +244,7 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
 ## Version
 
-Current version: **2.7.0**
+Current version: **3.3.0**
 
 ## License
 

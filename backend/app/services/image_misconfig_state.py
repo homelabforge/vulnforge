@@ -1,4 +1,4 @@
-"""Global state manager for image compliance (Dockle) scans."""
+"""Global state manager for image misconfiguration (Trivy) scans."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from app.utils.timezone import get_now
 logger = logging.getLogger(__name__)
 
 
-class ImageComplianceState:
-    """Track progress for Dockle image compliance scans."""
+class ImageMisconfigState:
+    """Track progress for Trivy image misconfiguration scans."""
 
     def __init__(self):
         self._is_scanning: bool = False
@@ -24,7 +24,7 @@ class ImageComplianceState:
         self._last_result: Optional[dict] = None
 
     def start_scan(self, *, total_images: int, mode: str, targets: Sequence[str]):
-        """Initialize scan state before launching Dockle jobs."""
+        """Initialize scan state before launching Trivy misconfiguration jobs."""
         self._is_scanning = True
         self._mode = mode
         self._targets = list(targets)
@@ -34,7 +34,7 @@ class ImageComplianceState:
         self._started_at = get_now()
         self._last_result = None
         logger.info(
-            "Image compliance scan started (mode=%s, total=%d)",
+            "Image misconfiguration scan started (mode=%s, total=%d)",
             mode,
             self._progress_total,
         )
@@ -59,17 +59,17 @@ class ImageComplianceState:
         }
 
         if success:
-            logger.info("Image compliance scan finished for %s", image_name)
+            logger.info("Image misconfiguration scan finished for %s", image_name)
         else:
             logger.warning(
-                "Image compliance scan failed for %s: %s",
+                "Image misconfiguration scan failed for %s: %s",
                 image_name,
                 error_message or "unknown error",
             )
 
     def finish_scan(self):
         """Reset state when all scans complete or a task aborts."""
-        logger.info("Image compliance scan finished (mode=%s)", self._mode)
+        logger.info("Image misconfiguration scan finished (mode=%s)", self._mode)
         self._is_scanning = False
         self._mode = "single"
         self._targets = []
@@ -101,4 +101,4 @@ class ImageComplianceState:
 
 
 # Shared instance
-image_compliance_state = ImageComplianceState()
+image_misconfig_state = ImageMisconfigState()

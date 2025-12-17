@@ -1,0 +1,9 @@
+# Custom Docker Bench image with updated Docker client
+# Addresses API version compatibility issues with modern Docker daemons
+FROM docker/docker-bench-security:latest
+
+# Install current Docker CLI from docker:cli image
+COPY --from=docker:cli /usr/local/bin/docker /usr/bin/docker
+
+# Verify the new Docker client works
+RUN docker --version

@@ -11,10 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import db_session
 from app.models import NotificationLog, NotificationRule
-from app.services.notifier import NotificationService
+from app.services.notifications import NotificationDispatcher
 from app.utils.timezone import get_now
 
 logger = logging.getLogger(__name__)
+
+# Priority mapping from int (1-5) to string
+PRIORITY_INT_TO_STR = {
+    1: "min",
+    2: "low",
+    3: "default",
+    4: "high",
+    5: "urgent",
+}
 
 
 class EnhancedNotificationService:
@@ -22,7 +31,7 @@ class EnhancedNotificationService:
 
     def __init__(self):
         """Initialize enhanced notification service."""
-        self.base_notifier = NotificationService()
+        pass  # No longer needs base_notifier - uses dispatcher per-request
 
     async def send_notification_with_logging(
         self,
@@ -49,19 +58,27 @@ class EnhancedNotificationService:
         """
         async with db_session() as db:
             try:
-                # Send notification using base service
-                sent = await self.base_notifier.send_notification(
+                # Send notification using multi-service dispatcher
+                dispatcher = NotificationDispatcher(db)
+                priority_str = PRIORITY_INT_TO_STR.get(priority, "default")
+
+                results = await dispatcher.dispatch(
+                    event_type=notification_type,
+                    title=title or "VulnForge Notification",
                     message=message,
-                    title=title,
-                    priority=priority,
+                    priority=priority_str,
                     tags=tags,
                 )
+
+                # Check if any service succeeded
+                sent = any(results.values()) if results else False
+                channels = ",".join(k for k, v in results.items() if v) if results else "none"
 
                 # Log notification
                 log_entry = NotificationLog(
                     scan_id=scan_id,
                     notification_type=notification_type,
-                    channel="ntfy",
+                    channel=channels if channels else "none",
                     title=title,
                     message=message,
                     status="sent" if sent else "failed",
@@ -81,7 +98,7 @@ class EnhancedNotificationService:
                     log_entry = NotificationLog(
                         scan_id=scan_id,
                         notification_type=notification_type,
-                        channel="ntfy",
+                        channel="error",
                         title=title,
                         message=message,
                         status="failed",

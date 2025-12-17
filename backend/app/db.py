@@ -87,29 +87,51 @@ async def init_db():
 
 
 async def _run_migrations():
-    """Run database migrations for schema updates."""
+    """Run database migrations for schema updates.
+
+    Tracks migration status and can fail strictly (raise) or gracefully (log)
+    depending on settings.strict_migrations configuration.
+
+    Raises:
+        RuntimeError: If strict_migrations=True and any migration fails.
+    """
+    migrations_applied = []
+    migrations_failed = []
+    is_test_env = ":memory:" in settings.database_url
+
     async with engine.connect() as conn:
-        # Migration: Add is_sensitive column to settings table if it doesn't exist
+        # Migration 1: Add is_sensitive and category columns to settings table
         try:
-            # Check if column exists
+            # Check if settings table exists first
+            result = await conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name='settings'")
+            )
+            if not result.fetchone():
+                logger.debug("Settings table doesn't exist yet - skipping settings migrations")
+                return
+
+            # Check if columns exist
             result = await conn.execute(text("PRAGMA table_info(settings)"))
             columns = [row[1] for row in result]
 
+            # Add is_sensitive column
             if "is_sensitive" not in columns:
                 logger.info("Running migration: Adding is_sensitive column to settings table")
                 await conn.execute(text("ALTER TABLE settings ADD COLUMN is_sensitive BOOLEAN DEFAULT 0"))
 
                 # Update existing token/password fields to be marked as sensitive
-                await conn.execute(
-                    text(
-                        "UPDATE settings SET is_sensitive = 1 WHERE "
-                        "key LIKE '%token%' OR key LIKE '%password%' OR "
-                        "key LIKE '%secret%' OR key LIKE '%key%' OR key LIKE '%apikey%'"
+                # Use parameterized query for better security
+                sensitive_patterns = ['%token%', '%password%', '%secret%', '%key%', '%apikey%']
+                for i, pattern in enumerate(sensitive_patterns):
+                    await conn.execute(
+                        text(f"UPDATE settings SET is_sensitive = 1 WHERE key LIKE :pattern{i}"),
+                        {f"pattern{i}": pattern}
                     )
-                )
                 await conn.commit()
-                logger.info("Migration completed: is_sensitive column added")
+                migrations_applied.append("settings.is_sensitive")
+                logger.info("✓ Migration completed: is_sensitive column added")
 
+            # Add category column
             if "category" not in columns:
                 logger.info("Running migration: Adding category column to settings table")
                 await conn.execute(
@@ -118,8 +140,10 @@ async def _run_migrations():
                     )
                 )
                 await conn.commit()
-                logger.info("Migration completed: category column added")
+                migrations_applied.append("settings.category")
+                logger.info("✓ Migration completed: category column added")
             else:
+                # Fix NULL/empty categories
                 await conn.execute(
                     text(
                         "UPDATE settings SET category = 'general' "
@@ -128,8 +152,86 @@ async def _run_migrations():
                 )
                 await conn.commit()
         except Exception as e:
-            logger.error(f"Error running migration: {e}")
+            error_msg = f"settings.is_sensitive/category: {e}"
+            migrations_failed.append(error_msg)
+            logger.error(f"✗ Error running migration: {e}")
             await conn.rollback()
+
+            if settings.strict_migrations and not is_test_env:
+                raise RuntimeError(f"Critical migration failed: {error_msg}") from e
+
+        # Migration 2: Add is_my_project column to containers table
+        try:
+            # Check if containers table exists first
+            result = await conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name='containers'")
+            )
+            if not result.fetchone():
+                logger.debug("Containers table doesn't exist yet - skipping container migrations")
+                # Log summary and return
+                _log_migration_summary(migrations_applied, migrations_failed)
+                return
+
+            result = await conn.execute(text("PRAGMA table_info(containers)"))
+            columns = [row[1] for row in result]
+
+            if "is_my_project" not in columns:
+                logger.info("Running migration: Adding is_my_project column to containers table")
+                await conn.execute(text("ALTER TABLE containers ADD COLUMN is_my_project BOOLEAN DEFAULT 0"))
+                await conn.commit()
+                migrations_applied.append("containers.is_my_project")
+                logger.info("✓ Migration completed: is_my_project column added")
+        except Exception as e:
+            error_msg = f"containers.is_my_project: {e}"
+            migrations_failed.append(error_msg)
+            logger.error(f"✗ Error running migration for is_my_project: {e}")
+            await conn.rollback()
+
+            if settings.strict_migrations and not is_test_env:
+                raise RuntimeError(f"Critical migration failed: {error_msg}") from e
+
+        # Migration 3: Add CVE delta tracking columns to scans table
+        try:
+            # Check if scans table exists first
+            result = await conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table' AND name='scans'")
+            )
+            if result.fetchone():
+                result = await conn.execute(text("PRAGMA table_info(scans)"))
+                columns = [row[1] for row in result]
+
+                if "cves_fixed" not in columns:
+                    logger.info("Running migration: Adding cves_fixed column to scans table")
+                    await conn.execute(text("ALTER TABLE scans ADD COLUMN cves_fixed TEXT"))
+                    await conn.commit()
+                    migrations_applied.append("scans.cves_fixed")
+                    logger.info("✓ Migration completed: cves_fixed column added")
+
+                if "cves_introduced" not in columns:
+                    logger.info("Running migration: Adding cves_introduced column to scans table")
+                    await conn.execute(text("ALTER TABLE scans ADD COLUMN cves_introduced TEXT"))
+                    await conn.commit()
+                    migrations_applied.append("scans.cves_introduced")
+                    logger.info("✓ Migration completed: cves_introduced column added")
+        except Exception as e:
+            error_msg = f"scans.cves_fixed/cves_introduced: {e}"
+            migrations_failed.append(error_msg)
+            logger.error(f"✗ Error running CVE delta migration: {e}")
+            await conn.rollback()
+
+            if settings.strict_migrations and not is_test_env:
+                raise RuntimeError(f"Critical migration failed: {error_msg}") from e
+
+    # Log summary
+    _log_migration_summary(migrations_applied, migrations_failed)
+
+
+def _log_migration_summary(applied: list[str], failed: list[str]):
+    """Log migration results summary."""
+    if applied:
+        logger.info(f"Migrations applied successfully: {', '.join(applied)}")
+    if failed:
+        logger.warning(f"Migrations failed: {', '.join(failed)}")
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

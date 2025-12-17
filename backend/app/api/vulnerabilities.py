@@ -30,6 +30,7 @@ async def list_vulnerabilities(
     fixable_only: bool = False,
     kev_only: bool = False,
     status: str | None = None,
+    container_id: int | None = None,
     limit: int = 100,
     offset: int = 0,
     vuln_repo: VulnerabilityRepository = Depends(get_vulnerability_repository),
@@ -40,6 +41,7 @@ async def list_vulnerabilities(
         fixable_only=fixable_only,
         kev_only=kev_only,
         status=status,
+        container_id=container_id,
         limit=limit,
         offset=offset,
     )
@@ -166,37 +168,6 @@ async def export_vulnerabilities(
             media_type="application/json",
             headers={"Content-Disposition": "attachment; filename=vulnerabilities.json"},
         )
-
-
-@router.get("/scanner/comparison")
-async def get_scanner_comparison(
-    vuln_repo: VulnerabilityRepository = Depends(get_vulnerability_repository),
-):
-    """Get scanner statistics (Trivy only)."""
-    from sqlalchemy import func, select
-    from app.models import Vulnerability
-
-    async with db_session() as db:
-        # Get total vulnerability count
-        result = await db.execute(
-            select(func.count(Vulnerability.id))
-        )
-        total_vulns = result.scalar() or 0
-
-        # Get Trivy vulnerabilities breakdown by severity
-        severity_result = await db.execute(
-            select(
-                Vulnerability.severity,
-                func.count(Vulnerability.id).label("count")
-            )
-            .group_by(Vulnerability.severity)
-        )
-        trivy_by_severity = {row[0]: row[1] for row in severity_result.fetchall()}
-
-        return {
-            "total_trivy": total_vulns,
-            "trivy_by_severity": trivy_by_severity,
-        }
 
 
 # Path parameter routes MUST come last

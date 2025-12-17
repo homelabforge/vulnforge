@@ -14,7 +14,8 @@ import {
   Clock,
   Bug,
 } from "lucide-react";
-import { formatRelativeDate } from "@/lib/utils";
+import { formatRelativeDate, formatDate } from "@/lib/utils";
+import { useTimezone } from "@/contexts/SettingsContext";
 import type { ActivityEventMetadata, ActivityLog } from "@/lib/api";
 
 interface ActivityTimelineProps {
@@ -28,70 +29,70 @@ const renderMetadata = (metadata: ActivityEventMetadata | null | undefined) => {
   }
 
   return (
-    <div className="bg-[#0f1419] rounded-lg p-4 space-y-2">
+    <div className="bg-vuln-surface-light rounded-lg p-4 space-y-2">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {metadata.total_vulns !== undefined && (
           <div>
-            <p className="text-xs text-gray-400 mb-1">Total Vulns</p>
-            <p className="text-lg font-bold text-white">{metadata.total_vulns}</p>
+            <p className="text-xs text-vuln-text-muted mb-1">Total Vulns</p>
+            <p className="text-lg font-bold text-vuln-text">{metadata.total_vulns}</p>
           </div>
         )}
         {metadata.fixable_vulns !== undefined && (
           <div>
-            <p className="text-xs text-gray-400 mb-1">Fixable</p>
+            <p className="text-xs text-vuln-text-muted mb-1">Fixable</p>
             <p className="text-lg font-bold text-green-500">{metadata.fixable_vulns}</p>
           </div>
         )}
         {metadata.critical_count !== undefined && (
           <div>
-            <p className="text-xs text-gray-400 mb-1">Critical</p>
+            <p className="text-xs text-vuln-text-muted mb-1">Critical</p>
             <p className="text-lg font-bold text-red-500">{metadata.critical_count}</p>
           </div>
         )}
         {metadata.high_count !== undefined && (
           <div>
-            <p className="text-xs text-gray-400 mb-1">High</p>
+            <p className="text-xs text-vuln-text-muted mb-1">High</p>
             <p className="text-lg font-bold text-orange-500">{metadata.high_count}</p>
           </div>
         )}
         {metadata.medium_count !== undefined && (
           <div>
-            <p className="text-xs text-gray-400 mb-1">Medium</p>
+            <p className="text-xs text-vuln-text-muted mb-1">Medium</p>
             <p className="text-lg font-bold text-yellow-500">{metadata.medium_count}</p>
           </div>
         )}
         {metadata.low_count !== undefined && (
           <div>
-            <p className="text-xs text-gray-400 mb-1">Low</p>
+            <p className="text-xs text-vuln-text-muted mb-1">Low</p>
             <p className="text-lg font-bold text-blue-400">{metadata.low_count}</p>
           </div>
         )}
         {metadata.duration_seconds !== undefined && (
           <div>
-            <p className="text-xs text-gray-400 mb-1">Duration</p>
-            <p className="text-lg font-bold text-white">{metadata.duration_seconds}s</p>
+            <p className="text-xs text-vuln-text-muted mb-1">Duration</p>
+            <p className="text-lg font-bold text-vuln-text">{metadata.duration_seconds}s</p>
           </div>
         )}
         {metadata.total_secrets !== undefined && (
           <div>
-            <p className="text-xs text-gray-400 mb-1">Secrets</p>
+            <p className="text-xs text-vuln-text-muted mb-1">Secrets</p>
             <p className="text-lg font-bold text-yellow-500">{metadata.total_secrets}</p>
           </div>
         )}
         {metadata.containers_count !== undefined && (
           <div>
-            <p className="text-xs text-gray-400 mb-1">Containers</p>
-            <p className="text-lg font-bold text-white">{metadata.containers_count}</p>
+            <p className="text-xs text-vuln-text-muted mb-1">Containers</p>
+            <p className="text-lg font-bold text-vuln-text">{metadata.containers_count}</p>
           </div>
         )}
       </div>
 
       {Array.isArray(metadata.categories) && metadata.categories.length > 0 && (
-        <div className="pt-2 border-t border-gray-800">
-          <p className="text-xs text-gray-400 mb-2">Categories:</p>
+        <div className="pt-2 border-t border-vuln-border">
+          <p className="text-xs text-vuln-text-muted mb-2">Categories:</p>
           <div className="flex flex-wrap gap-2">
             {metadata.categories.map((category) => (
-              <span key={category} className="px-2 py-1 bg-gray-700 text-gray-300 rounded text-xs">
+              <span key={category} className="px-2 py-1 bg-vuln-surface-light text-vuln-text rounded text-xs">
                 {category}
               </span>
             ))}
@@ -100,8 +101,8 @@ const renderMetadata = (metadata: ActivityEventMetadata | null | undefined) => {
       )}
 
       {metadata.error_message && (
-        <div className="pt-2 border-t border-gray-800">
-          <p className="text-xs text-gray-400 mb-1">Error:</p>
+        <div className="pt-2 border-t border-vuln-border">
+          <p className="text-xs text-vuln-text-muted mb-1">Error:</p>
           <p className="text-sm text-red-400 font-mono">{metadata.error_message}</p>
         </div>
       )}
@@ -110,16 +111,18 @@ const renderMetadata = (metadata: ActivityEventMetadata | null | undefined) => {
 };
 
 export function ActivityTimeline({ activities, isLoading }: ActivityTimelineProps) {
+  const timezone = useTimezone();
+
   if (isLoading) {
     return (
       <div className="space-y-4">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-6 animate-pulse">
+          <div key={i} className="bg-vuln-surface border border-vuln-border rounded-lg p-6 animate-pulse">
             <div className="flex items-start gap-4">
-              <div className="w-10 h-10 bg-gray-700 rounded-full"></div>
+              <div className="w-10 h-10 bg-vuln-surface-light rounded-full"></div>
               <div className="flex-1">
-                <div className="h-4 bg-gray-700 rounded w-1/3 mb-2"></div>
-                <div className="h-3 bg-gray-700 rounded w-1/2"></div>
+                <div className="h-4 bg-vuln-surface-light rounded w-1/3 mb-2"></div>
+                <div className="h-3 bg-vuln-surface-light rounded w-1/2"></div>
               </div>
             </div>
           </div>
@@ -130,10 +133,10 @@ export function ActivityTimeline({ activities, isLoading }: ActivityTimelineProp
 
   if (!activities || activities.length === 0) {
     return (
-      <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-12 text-center">
-        <Clock className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-        <p className="text-gray-400 text-lg mb-2">No activity yet</p>
-        <p className="text-sm text-gray-500">Run a scan to start tracking activity</p>
+      <div className="bg-vuln-surface border border-vuln-border rounded-lg p-12 text-center">
+        <Clock className="w-16 h-16 text-vuln-text-disabled mx-auto mb-4" />
+        <p className="text-vuln-text-muted text-lg mb-2">No activity yet</p>
+        <p className="text-sm text-vuln-text-disabled">Run a scan to start tracking activity</p>
       </div>
     );
   }
@@ -174,8 +177,8 @@ export function ActivityTimeline({ activities, isLoading }: ActivityTimelineProp
         );
       case "container_status_changed":
         return (
-          <div className={`${baseClasses} bg-gray-500/10 border border-gray-500/30`}>
-            <Circle className="w-full h-full text-gray-500" />
+          <div className={`${baseClasses} bg-vuln-text-disabled/10 border border-vuln-border`}>
+            <Circle className="w-full h-full text-vuln-text-disabled" />
           </div>
         );
       case "batch_scan_completed":
@@ -186,8 +189,8 @@ export function ActivityTimeline({ activities, isLoading }: ActivityTimelineProp
         );
       default:
         return (
-          <div className={`${baseClasses} bg-gray-500/10 border border-gray-500/30`}>
-            <Bug className="w-full h-full text-gray-500" />
+          <div className={`${baseClasses} bg-vuln-text-disabled/10 border border-vuln-border`}>
+            <Bug className="w-full h-full text-vuln-text-disabled" />
           </div>
         );
     }
@@ -211,11 +214,11 @@ export function ActivityTimeline({ activities, isLoading }: ActivityTimelineProp
       {activities.map((activity, index) => (
         <div
           key={activity.id}
-          className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-6 hover:border-gray-700 transition-colors relative"
+          className="bg-vuln-surface border border-vuln-border rounded-lg p-6 hover:border-vuln-border transition-colors relative"
         >
           {/* Timeline connector line */}
           {index < activities.length - 1 && (
-            <div className="absolute left-11 top-[4.5rem] h-4 w-0.5 bg-gray-800" />
+            <div className="absolute left-11 top-[4.5rem] h-4 w-0.5 bg-vuln-surface" />
           )}
 
           <div className="flex items-start gap-4">
@@ -227,11 +230,11 @@ export function ActivityTimeline({ activities, isLoading }: ActivityTimelineProp
               {/* Header */}
               <div className="flex items-start justify-between gap-4 mb-2">
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-white font-medium text-lg mb-1">{activity.title}</h3>
-                  <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <span>{formatRelativeDate(activity.timestamp)}</span>
+                  <h3 className="text-vuln-text font-medium text-lg mb-1">{activity.title}</h3>
+                  <div className="flex items-center gap-2 text-sm text-vuln-text-muted">
+                    <span>{formatRelativeDate(activity.timestamp, timezone)}</span>
                     <span>•</span>
-                    <span>{new Date(activity.timestamp).toLocaleString()}</span>
+                    <span>{formatDate(activity.timestamp, timezone)}</span>
                     {activity.container_name && (
                       <>
                         <span>•</span>
@@ -254,7 +257,7 @@ export function ActivityTimeline({ activities, isLoading }: ActivityTimelineProp
 
               {/* Description */}
               {activity.description && (
-                <p className="text-gray-300 mb-3 leading-relaxed">{activity.description}</p>
+                <p className="text-vuln-text mb-3 leading-relaxed">{activity.description}</p>
               )}
 
               {/* Metadata Display */}

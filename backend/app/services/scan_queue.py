@@ -17,7 +17,6 @@ from app.services.activity_logger import ActivityLogger
 from app.services.cache_manager import get_cache
 from app.services.dive_service import DiveError, DiveService
 from app.services.docker_client import DockerService
-from app.services.enhanced_notifier import get_enhanced_notifier
 from app.services.settings_manager import SettingsManager
 from app.services.trivy_scanner import TrivyScanner
 from app.services.trivy_health import TrivyHealthMonitor
@@ -151,12 +150,6 @@ class ScanQueue:
         logger.info(f"Worker {worker_id} started")
 
         try:
-            docker_service = DockerService()
-        except Exception as e:
-            logger.error(f"Worker {worker_id} failed to initialize Docker client: {e}")
-            return
-
-        try:
             while self.running:
                 try:
                     # Get job from queue with timeout
@@ -187,8 +180,20 @@ class ScanQueue:
                 self._current_scan = job.container_name
                 self._emit_status_update()
 
+                # Create a DockerService per job so we always respect the latest
+                # docker_socket_proxy setting and can refresh connections as needed.
+                try:
+                    job_docker_service = DockerService()
+                except Exception as e:
+                    logger.error(f"Worker {worker_id} failed to initialize Docker client for job {job.container_name}: {e}")
+                    self.active_scans.discard(job.container_id)
+                    self._current_scan = None
+                    self.queue.task_done()
+                    self._emit_status_update()
+                    continue
+
                 # Create and track the scan task for abort functionality
-                scan_task = asyncio.create_task(self._process_scan(job, docker_service))
+                scan_task = asyncio.create_task(self._process_scan(job, job_docker_service))
                 self._current_scan_tasks[job.container_id] = scan_task
 
                 try:
@@ -232,8 +237,8 @@ class ScanQueue:
                         self._current_scan = None
                     self.queue.task_done()
                     self._emit_status_update()
+                    job_docker_service.close()
         finally:
-            docker_service.close()
             logger.info(f"Worker {worker_id} stopped")
 
     async def _process_scan(self, job: ScanJob, docker_service: DockerService):
@@ -273,11 +278,29 @@ class ScanQueue:
                         select(Container).where(Container.id == job.container_id)
                     )
                     container = result.scalar_one_or_none()
-    
+
                     if not container:
                         logger.error(f"Container {job.container_id} not found in database")
                         return
-    
+
+                    # Refresh container image tag from Docker before scanning
+                    # This ensures we scan the CURRENT image, not stale data
+                    # (Important when TideWatch triggers rescan after an update)
+                    live_container = docker_service.get_container(container.name)
+                    if live_container:
+                        old_tag = container.image_tag
+                        new_tag = live_container.get("image_tag", container.image_tag)
+                        if old_tag != new_tag:
+                            logger.info(
+                                f"Container {container.name} image tag changed: "
+                                f"{old_tag} → {new_tag} (refreshing before scan)"
+                            )
+                            container.image = live_container.get("image", container.image)
+                            container.image_tag = new_tag
+                            container.image_id = live_container.get("image_id", container.image_id)
+                            await db.commit()
+                            await db.refresh(container)
+
                     # Create scan record
                     scan = Scan(
                         container_id=container.id,
@@ -400,11 +423,12 @@ class ScanQueue:
                                 vulnerabilities.append(vuln)
 
                         secrets = trivy_result.get("secrets", []) if trivy_result else []
-    
+
                         duration = (get_now() - start_time).total_seconds()
 
-                        # Process results
-                        if vulnerabilities or secrets:
+                        # Process results - trivy_result being truthy means scan succeeded
+                        # A scan with 0 vulns and 0 secrets is a valid "clean" result
+                        if trivy_result is not None:
                             # Calculate summary statistics from vulnerabilities
                             severity_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
                             fixable_count = 0
@@ -413,9 +437,47 @@ class ScanQueue:
                                 severity_counts[severity] = severity_counts.get(severity, 0) + 1
                                 if vuln.get("is_fixable", False):
                                     fixable_count += 1
-    
+
+                            # Calculate CVE delta compared to previous scan
+                            current_cves = {vuln["cve_id"] for vuln in vulnerabilities}
+                            previous_cves: set[str] = set()
+
+                            # Get the previous completed scan for this container
+                            prev_scan_result = await db.execute(
+                                select(Scan)
+                                .where(
+                                    Scan.container_id == container.id,
+                                    Scan.scan_status == "completed",
+                                    Scan.id != scan.id
+                                )
+                                .order_by(Scan.scan_date.desc())
+                                .limit(1)
+                            )
+                            prev_scan = prev_scan_result.scalar_one_or_none()
+
+                            if prev_scan:
+                                # Get CVEs from previous scan
+                                prev_vulns_result = await db.execute(
+                                    select(Vulnerability.cve_id)
+                                    .where(Vulnerability.scan_id == prev_scan.id)
+                                )
+                                previous_cves = {row[0] for row in prev_vulns_result.fetchall()}
+
+                            # Calculate delta
+                            cves_fixed = list(previous_cves - current_cves)
+                            cves_introduced = list(current_cves - previous_cves)
+
+                            # Log delta info
+                            if cves_fixed or cves_introduced:
+                                logger.info(
+                                    f"CVE delta for {container.name}: "
+                                    f"{len(cves_fixed)} fixed, {len(cves_introduced)} introduced"
+                                )
+
                             # Update scan with results
                             scan.scan_status = "completed"
+                            scan.cves_fixed = json.dumps(cves_fixed) if cves_fixed else None
+                            scan.cves_introduced = json.dumps(cves_introduced) if cves_introduced else None
                             scan.scan_duration_seconds = duration
                             scan.total_vulns = len(vulnerabilities)
                             scan.fixable_vulns = fixable_count
@@ -496,17 +558,17 @@ class ScanQueue:
     
                             # Send notification if secrets detected
                             if secrets_list:
-                                from app.services.notifier import NotificationService
-    
+                                from app.services.notifications import NotificationDispatcher
+
                                 # Count secrets by severity
                                 secret_critical = sum(1 for s in secrets_list if s["severity"] == "CRITICAL")
                                 secret_high = sum(1 for s in secrets_list if s["severity"] == "HIGH")
-    
+
                                 # Get unique categories
                                 secret_categories = list(set(s["category"] for s in secrets_list))
-    
-                                notifier = NotificationService()
-                                await notifier.notify_secrets_detected(
+
+                                dispatcher = NotificationDispatcher(db)
+                                await dispatcher.notify_secrets_detected(
                                     container_name=container.name,
                                     total_secrets=len(secrets_list),
                                     critical_count=secret_critical,
@@ -622,17 +684,18 @@ class ScanQueue:
                                 logger.error(f"Failed to log scan activity: {e}", exc_info=True)
     
                         else:
+                            # trivy_result was None - scanner failed to return any data
                             scan.scan_status = "failed"
-                            scan.error_message = "Scan returned no results"
+                            scan.error_message = "Scanner returned no data"
                             container.last_scan_status = "failed"
-    
+
                             # Log activity: scan failure (non-invasive)
                             try:
                                 activity_logger = ActivityLogger(db)
                                 await activity_logger.log_scan_failed(
                                     container_name=container.name,
                                     container_id=container.id,
-                                    error_message="Scan returned no results",
+                                    error_message="Scanner returned no data",
                                     scan_id=scan.id,
                                 )
                             except Exception as e:
@@ -716,22 +779,26 @@ class ScanQueue:
         total_high = sum(r["high_count"] for r in self._batch_results)
         total_fixable = sum(r["fixable_count"] for r in self._batch_results)
 
-        # Send single notification with batch summary
-        notifier = get_enhanced_notifier()
-        context = {
-            "total_containers": total_containers,
-            "total_vulns": total_vulns,
-            "critical_count": total_critical,
-            "high_count": total_high,
-            "fixable_count": total_fixable,
-            "batch_results": self._batch_results,
-        }
-
-        await notifier.process_rules(
-            event_type="scan_batch_complete",
-            context=context,
-            scan_id=None,
+        # Calculate fixable critical and high for scan_complete notification
+        fixable_critical = sum(
+            r.get("fixable_critical", 0) for r in self._batch_results
         )
+        fixable_high = sum(
+            r.get("fixable_high", 0) for r in self._batch_results
+        )
+
+        # Send notification via multi-service dispatcher
+        from app.services.notifications import NotificationDispatcher
+
+        async with db_session() as db:
+            dispatcher = NotificationDispatcher(db)
+            await dispatcher.notify_scan_complete(
+                total_containers=total_containers,
+                critical=total_critical,
+                high=total_high,
+                fixable_critical=fixable_critical,
+                fixable_high=fixable_high,
+            )
 
         logger.info(
             f"Batch scan complete: {total_containers} containers, "
@@ -749,7 +816,6 @@ class ScanQueue:
                 duration=0.0,  # Batch duration tracking could be added as enhancement
                 failed_count=0,  # Could track failures if needed
             )
-        return result_payload
 
     def _record_metrics(self, duration: float, queue_wait: float) -> None:
         """Update rolling performance metrics for scan processing."""

@@ -5,7 +5,6 @@ from fastapi import HTTPException
 from app.models.user import User
 
 
-@pytest.mark.asyncio
 class TestSecretsList:
     """Tests for secret listing endpoint."""
 
@@ -19,7 +18,7 @@ class TestSecretsList:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.get("/api/v1/secrets/")
+        response = await client.get("/api/v1/secrets/")
 
         assert response.status_code == 403
 
@@ -35,7 +34,7 @@ class TestSecretsList:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.get("/api/v1/secrets/")
+        response = await client.get("/api/v1/secrets/")
 
         assert response.status_code == 200
         data = response.json()
@@ -53,7 +52,7 @@ class TestSecretsList:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.get("/api/v1/secrets/")
+        response = await client.get("/api/v1/secrets/")
 
         assert response.status_code == 200
         data = response.json()
@@ -79,14 +78,13 @@ class TestSecretsList:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.get("/api/v1/secrets/containers/1/secrets")
+        response = await client.get("/api/v1/secrets/containers/1/secrets")
 
         assert response.status_code in [200, 404]
 
         app.dependency_overrides.clear()
 
 
-@pytest.mark.asyncio
 class TestSecretsBulkUpdate:
     """Tests for bulk secret update endpoint."""
 
@@ -100,7 +98,7 @@ class TestSecretsBulkUpdate:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.post(
+        response = await client.post(
             "/api/v1/secrets/bulk-update",
             json={"secret_ids": [1, 2], "update": {"status": "false_positive"}},
         )
@@ -119,7 +117,7 @@ class TestSecretsBulkUpdate:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.post(
+        response = await client.post(
             "/api/v1/secrets/bulk-update",
             json={
                 "secret_ids": [1, 2],
@@ -135,7 +133,6 @@ class TestSecretsBulkUpdate:
         app.dependency_overrides.clear()
 
 
-@pytest.mark.asyncio
 class TestSecretsFalsePositivePatterns:
     """Tests for false positive pattern management."""
 
@@ -149,7 +146,7 @@ class TestSecretsFalsePositivePatterns:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.post(
+        response = await client.post(
             "/api/v1/false-positive-patterns",
             json={
                 "secret_id": 1,
@@ -163,12 +160,11 @@ class TestSecretsFalsePositivePatterns:
 
     async def test_list_false_positive_patterns(self, client, db_with_settings):
         """Test listing false positive patterns."""
-        response = client.get("/api/v1/false-positive-patterns")
+        response = await client.get("/api/v1/false-positive-patterns")
 
         assert response.status_code == 200
 
 
-@pytest.mark.asyncio
 class TestSecretsExport:
     """Tests for secret export functionality."""
 
@@ -204,7 +200,7 @@ class TestSecretsExport:
         app.dependency_overrides[require_admin] = override_require_admin
         app.dependency_overrides[get_secret_repository] = lambda: DummySecretRepo()
 
-        response = client.get("/api/v1/secrets/export?format=csv")
+        response = await client.get("/api/v1/secrets/export?format=csv")
 
         assert response.status_code == 200
 
@@ -215,7 +211,6 @@ class TestSecretsExport:
         app.dependency_overrides.clear()
 
 
-@pytest.mark.asyncio
 class TestSecretsRedactionSecurity:
     """Security tests for secret redaction."""
 
@@ -229,7 +224,7 @@ class TestSecretsRedactionSecurity:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.get("/api/v1/secrets/")
+        response = await client.get("/api/v1/secrets/")
 
         assert response.status_code == 200
         content = response.text

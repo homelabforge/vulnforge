@@ -42,24 +42,20 @@ async def _get_cached_settings(db) -> dict[str, str]:
     import time
     global _settings_cache, _settings_cache_time
 
-    # Fast path: check without lock
-    now = time.time()
-    if _settings_cache is not None and (now - _settings_cache_time) <= SETTINGS_CACHE_TTL:
-        # Return shallow copy to prevent mutations of cached dict
-        return _settings_cache.copy()
-
-    # Slow path: acquire lock and refresh
+    # Always acquire lock to prevent TOCTOU race conditions
+    # With 60s TTL, lock contention is minimal (only during refresh)
     async with _settings_lock:
-        # Double-check after acquiring lock
         now = time.time()
+
+        # Check if cache needs refresh while holding lock
         if _settings_cache is None or (now - _settings_cache_time) > SETTINGS_CACHE_TTL:
             settings_manager = SettingsManager(db)
             _settings_cache = await settings_manager.get_all()
             _settings_cache_time = now
             logger.debug(f"Settings cache refreshed ({len(_settings_cache)} settings)")
 
-    # Return shallow copy to prevent mutations of cached dict
-    return _settings_cache.copy()
+        # Return shallow copy to prevent mutations of cached dict
+        return _settings_cache.copy()
 
 
 def _normalize_trusted_entries(raw_entries: list) -> list[str]:
@@ -662,6 +658,12 @@ class BasicAuthProvider(AuthProvider):
             logger.debug(f"Basic auth failed: decode error - {e}")
             return None
 
+        # Validate password length (bcrypt v5 requires max 72 bytes)
+        password_bytes = password.encode("utf-8")
+        if len(password_bytes) > 72:
+            logger.debug(f"Basic auth failed: password exceeds 72 bytes ({len(password_bytes)} bytes)")
+            return None
+
         # Load users from settings
         try:
             users = json.loads(self.settings.get("auth_basic_users", "[]"))
@@ -768,7 +770,23 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
         async with async_session_maker() as db:
             # Use cached settings for better performance
-            settings_dict = await _get_cached_settings(db)
+            try:
+                settings_dict = await _get_cached_settings(db)
+            except Exception as e:
+                # During startup or if settings can't be loaded, fail-secure for sensitive endpoints
+                logger.error(f"Failed to load settings during authentication: {e}")
+
+                # For settings endpoints, deny access until system is ready
+                if request.url.path.startswith("/api/v1/settings"):
+                    return JSONResponse(
+                        status_code=503,
+                        content={"detail": "Service initializing, please retry in a moment"}
+                    )
+
+                # For other endpoints, use safe defaults (auth disabled)
+                settings_dict = {"auth_enabled": "false", "auth_provider": "none"}
+                logger.warning("Using fail-safe default settings (auth disabled) due to settings load failure")
+
             auth_enabled = settings_dict.get("auth_enabled", "false").lower() == "true"
 
             # If auth is disabled, allow all requests

@@ -6,18 +6,17 @@ from fastapi import HTTPException
 from app.models.user import User
 
 
-@pytest.mark.asyncio
 class TestVulnerabilitiesList:
     """Tests for vulnerability listing endpoint."""
 
     async def test_list_requires_auth(self, client):
         """Listing vulnerabilities is available without authentication in the new model."""
-        response = client.get("/api/v1/vulnerabilities")
+        response = await client.get("/api/v1/vulnerabilities")
         assert response.status_code == 200
 
     async def test_list_vulnerabilities_success(self, client, db_with_settings):
         """Test successful vulnerability listing."""
-        response = client.get("/api/v1/vulnerabilities")
+        response = await client.get("/api/v1/vulnerabilities")
 
         assert response.status_code == 200
         data = response.json()
@@ -29,7 +28,7 @@ class TestVulnerabilitiesList:
         severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
 
         for severity in severities:
-            response = client.get(f"/api/v1/vulnerabilities?severity={severity}")
+            response = await client.get(f"/api/v1/vulnerabilities?severity={severity}")
 
             assert response.status_code == 200
             data = response.json()
@@ -37,12 +36,12 @@ class TestVulnerabilitiesList:
 
     async def test_filter_fixable_only(self, client, db_with_settings):
         """Test filtering for fixable vulnerabilities only."""
-        response = client.get("/api/v1/vulnerabilities?fixable_only=true")
+        response = await client.get("/api/v1/vulnerabilities?fixable_only=true")
         assert response.status_code == 200
 
     async def test_filter_kev_only(self, client, db_with_settings):
         """Test filtering for KEV (Known Exploited Vulnerabilities) only."""
-        response = client.get("/api/v1/vulnerabilities?kev_only=true")
+        response = await client.get("/api/v1/vulnerabilities?kev_only=true")
         assert response.status_code == 200
 
     async def test_filter_by_status(self, client, db_with_settings):
@@ -50,11 +49,10 @@ class TestVulnerabilitiesList:
         statuses = ["active", "ignored", "resolved", "false_positive"]
 
         for status in statuses:
-            response = client.get(f"/api/v1/vulnerabilities?status={status}")
+            response = await client.get(f"/api/v1/vulnerabilities?status={status}")
             assert response.status_code == 200
 
 
-@pytest.mark.asyncio
 class TestVulnerabilitiesSQLInjection:
     """Tests for SQL injection prevention in vulnerability filters."""
 
@@ -68,7 +66,7 @@ class TestVulnerabilitiesSQLInjection:
         ]
 
         for injection in injection_attempts:
-            response = client.get(f"/api/v1/vulnerabilities?severity={injection}")
+            response = await client.get(f"/api/v1/vulnerabilities?severity={injection}")
 
             # Should reject or treat as invalid, not execute SQL
             assert response.status_code in [200, 400, 422]
@@ -88,13 +86,12 @@ class TestVulnerabilitiesSQLInjection:
         ]
 
         for injection in injection_attempts:
-            response = client.get(f"/api/v1/vulnerabilities?package_name={injection}")
+            response = await client.get(f"/api/v1/vulnerabilities?package_name={injection}")
 
             # Should handle safely
             assert response.status_code in [200, 400, 422]
 
 
-@pytest.mark.asyncio
 class TestVulnerabilitiesBulkUpdate:
     """Tests for bulk vulnerability update endpoint."""
 
@@ -108,7 +105,7 @@ class TestVulnerabilitiesBulkUpdate:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.post(
+        response = await client.post(
             "/api/v1/vulnerabilities/bulk-update",
             json={
                 "vuln_ids": [1, 2],
@@ -146,7 +143,7 @@ class TestVulnerabilitiesBulkUpdate:
         app.dependency_overrides[get_vulnerability_repository] = lambda: DummyVulnRepo()
         app.dependency_overrides[get_activity_logger] = lambda: DummyActivityLogger()
 
-        response = client.post(
+        response = await client.post(
             "/api/v1/vulnerabilities/bulk-update",
             json={
                 "vuln_ids": [1, 2, 3],
@@ -173,7 +170,7 @@ class TestVulnerabilitiesBulkUpdate:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = client.post(
+        response = await client.post(
             "/api/v1/vulnerabilities/bulk-update",
             json={
                 "vuln_ids": [1],
@@ -187,13 +184,12 @@ class TestVulnerabilitiesBulkUpdate:
         app.dependency_overrides.clear()
 
 
-@pytest.mark.asyncio
 class TestVulnerabilitiesRemediationGroups:
     """Tests for vulnerability remediation groups endpoint."""
 
     async def test_remediation_groups_requires_auth(self, client):
         """Remediation groups endpoint is public in current model."""
-        response = client.get("/api/v1/vulnerabilities/remediation-groups")
+        response = await client.get("/api/v1/vulnerabilities/remediation-groups")
         assert response.status_code == 200
 
     async def test_remediation_groups_success(self, client, db_with_settings):
@@ -218,7 +214,7 @@ class TestVulnerabilitiesRemediationGroups:
 
         app.dependency_overrides[get_vulnerability_repository] = lambda: DummyVulnRepo()
 
-        response = client.get("/api/v1/vulnerabilities/remediation-groups")
+        response = await client.get("/api/v1/vulnerabilities/remediation-groups")
 
         assert response.status_code == 200
         data = response.json()
@@ -229,13 +225,12 @@ class TestVulnerabilitiesRemediationGroups:
         app.dependency_overrides.clear()
 
 
-@pytest.mark.asyncio
 class TestVulnerabilitiesExport:
     """Tests for vulnerability export functionality."""
 
     async def test_export_csv_requires_auth(self, client):
         """CSV export is publicly accessible in the new workflow."""
-        response = client.get("/api/v1/vulnerabilities/export?format=csv")
+        response = await client.get("/api/v1/vulnerabilities/export?format=csv")
         assert response.status_code in [200, 204, 404]
 
     async def test_export_csv_success(self, client, db_with_settings):
@@ -262,7 +257,7 @@ class TestVulnerabilitiesExport:
 
         app.dependency_overrides[get_vulnerability_repository] = lambda: DummyVulnRepo()
 
-        response = client.get("/api/v1/vulnerabilities/export?format=csv")
+        response = await client.get("/api/v1/vulnerabilities/export?format=csv")
 
         assert response.status_code == 200
         assert "text/csv" in response.headers.get("content-type", "").lower()
@@ -294,7 +289,7 @@ class TestVulnerabilitiesExport:
 
         app.dependency_overrides[get_vulnerability_repository] = lambda: DummyVulnRepo()
 
-        response = client.get("/api/v1/vulnerabilities/export?format=json")
+        response = await client.get("/api/v1/vulnerabilities/export?format=json")
 
         assert response.status_code == 200
         data = response.json()
@@ -304,25 +299,24 @@ class TestVulnerabilitiesExport:
         app.dependency_overrides.clear()
 
 
-@pytest.mark.asyncio
 class TestVulnerabilitiesPagination:
     """Tests for vulnerability pagination."""
 
     async def test_pagination_parameters(self, client, db_with_settings):
         """Test pagination with skip and limit parameters."""
         # Test various pagination parameters
-        response = client.get("/api/v1/vulnerabilities?offset=0&limit=10")
+        response = await client.get("/api/v1/vulnerabilities?offset=0&limit=10")
         assert response.status_code == 200
 
-        response = client.get("/api/v1/vulnerabilities?offset=10&limit=20")
+        response = await client.get("/api/v1/vulnerabilities?offset=10&limit=20")
         assert response.status_code == 200
 
     async def test_pagination_negative_values(self, client, db_with_settings):
         """Test that negative pagination values are rejected."""
         # Negative offset
-        response = client.get("/api/v1/vulnerabilities?offset=-1&limit=10")
+        response = await client.get("/api/v1/vulnerabilities?offset=-1&limit=10")
         assert response.status_code in [200, 400, 422]
 
         # Negative limit
-        response = client.get("/api/v1/vulnerabilities?offset=0&limit=-1")
+        response = await client.get("/api/v1/vulnerabilities?offset=0&limit=-1")
         assert response.status_code in [200, 400, 422]

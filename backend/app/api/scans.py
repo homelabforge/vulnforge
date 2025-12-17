@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import subprocess
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -15,7 +16,7 @@ from app.models import Container, Scan, Vulnerability
 from app.schemas import Scan as ScanSchema, ScanRequest, ScanSummary
 from app.services.docker_client import DockerService
 from app.services.kev import get_kev_service
-from app.services.notifier import NotificationService
+from app.services.notifications import NotificationDispatcher
 from app.services.scan_queue import ScanPriority, get_scan_queue
 from app.services.scan_state import scan_state
 from app.services.settings_manager import SettingsManager
@@ -23,6 +24,7 @@ from app.services.trivy_scanner import TrivyScanner
 from app.utils.timezone import get_now
 from app.services.scan_events import scan_events
 from app.services.scan_trends import build_scan_trends
+from app.services.scan_errors import get_error_classifier
 
 router = APIRouter()
 
@@ -36,7 +38,7 @@ def _format_sse(payload: dict, event: str = "scan-status") -> str:
 
 
 async def perform_scan(
-    container_id: int, db: AsyncSession, docker_service: DockerService, notifier: NotificationService
+    container_id: int, db: AsyncSession, docker_service: DockerService
 ):
     """Perform a single container scan."""
     # Get container
@@ -134,9 +136,12 @@ async def perform_scan(
 
         await db.commit()
 
+        # Send notifications via multi-service dispatcher
+        dispatcher = NotificationDispatcher(db)
+
         # Send notification if KEV vulnerabilities found (highest priority)
         if kev_count > 0:
-            await notifier.notify_kev_detected(container.name, kev_count)
+            await dispatcher.notify_kev_detected(container.name, kev_count)
 
         # Send notification if critical vulnerabilities found
         if scan.critical_count > 0:
@@ -145,21 +150,56 @@ async def perform_scan(
                 for v in scan_data["vulnerabilities"]
                 if v["severity"] == "CRITICAL" and v["is_fixable"]
             )
-            await notifier.notify_critical_vulnerabilities(
+            await dispatcher.notify_critical_vulnerabilities(
                 container.name, scan.critical_count, fixable_critical
             )
 
-    except Exception as e:
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"Scan timed out for container {container.name}: {e}")
         scan.scan_status = "failed"
-        scan.error_message = str(e)
+        scan.error_message = "Scan timed out"
         await db.commit()
-        await notifier.notify_scan_failed(container.name, str(e))
+        dispatcher = NotificationDispatcher(db)
+        await dispatcher.notify_scan_failed(container.name, "Scan timed out - try increasing timeout in settings")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Scanner process failed for {container.name}: exit code {e.returncode}")
+        error_classifier = get_error_classifier()
+        classified = error_classifier.classify_error("Trivy", str(e.stderr) if e.stderr else str(e))
+        scan.scan_status = "failed"
+        scan.error_message = classified.user_message
+        await db.commit()
+        dispatcher = NotificationDispatcher(db)
+        await dispatcher.notify_scan_failed(container.name, classified.user_message)
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse scan output for {container.name}: {e}")
+        scan.scan_status = "failed"
+        scan.error_message = "Invalid scan output format"
+        await db.commit()
+        dispatcher = NotificationDispatcher(db)
+        await dispatcher.notify_scan_failed(container.name, "Scanner returned invalid output")
+    except FileNotFoundError as e:
+        logger.error(f"Scanner binary not found: {e}")
+        scan.scan_status = "failed"
+        scan.error_message = "Scanner binary not found"
+        await db.commit()
+        dispatcher = NotificationDispatcher(db)
+        await dispatcher.notify_scan_failed(container.name, "Trivy scanner not installed")
+    except Exception as e:
+        # INTENTIONAL: Catch-all for unexpected scanner errors to ensure scan record is updated.
+        # The error is classified for user-friendly messaging.
+        logger.error(f"Unexpected scan error for {container.name}: {e}", exc_info=True)
+        error_classifier = get_error_classifier()
+        classified = error_classifier.classify_error("Trivy", str(e))
+        scan.scan_status = "failed"
+        scan.error_message = classified.user_message
+        await db.commit()
+        dispatcher = NotificationDispatcher(db)
+        await dispatcher.notify_scan_failed(container.name, classified.user_message)
 
 
 async def run_scans_sequentially(container_ids: list[int], db: AsyncSession):
     """Run scans sequentially with progress tracking."""
     docker_service = DockerService()
-    notifier = NotificationService()
 
     # Start scan tracking
     scan_state.start_scan(len(container_ids))
@@ -175,7 +215,7 @@ async def run_scans_sequentially(container_ids: list[int], db: AsyncSession):
                 scan_state.update_progress(container.name, idx - 1)
 
                 # Perform scan
-                await perform_scan(container_id, db, docker_service, notifier)
+                await perform_scan(container_id, db, docker_service)
 
                 # Update progress after completion
                 scan_state.update_progress(container.name, idx)
@@ -240,7 +280,8 @@ async def scan_containers(
 
 
 @router.get("/history/{container_id}", response_model=list[ScanSchema])
-async def get_scan_history(container_id: int, limit: int = 10, db: AsyncSession = Depends(get_db)):
+@limiter.limit("60/minute")
+async def get_scan_history(container_id: int, limit: int = 10, request: Request = None, db: AsyncSession = Depends(get_db)):
     """Get scan history for a container."""
     result = await db.execute(
         select(Scan)
@@ -255,7 +296,8 @@ async def get_scan_history(container_id: int, limit: int = 10, db: AsyncSession 
 
 
 @router.get("/current")
-async def get_current_scan():
+@limiter.limit("120/minute")
+async def get_current_scan(request: Request = None):
     """
     Get currently running scan status with queue information.
 
@@ -267,6 +309,7 @@ async def get_current_scan():
 
 
 @router.get("/stream", response_class=StreamingResponse)
+@limiter.limit("10/minute")
 async def stream_scan_status(request: Request):
     """Stream scan status updates over Server-Sent Events."""
     scan_queue = get_scan_queue()
@@ -301,20 +344,23 @@ async def stream_scan_status(request: Request):
 
 
 @router.get("/trends")
-async def get_scan_trends(window_days: int = Query(30, ge=1, le=90), db: AsyncSession = Depends(get_db)):
+@limiter.limit("30/minute")
+async def get_scan_trends(window_days: int = Query(30, ge=1, le=90), request: Request = None, db: AsyncSession = Depends(get_db)):
     """Return aggregated scan trends for dashboards."""
     return await build_scan_trends(db, window_days=window_days)
 
 
 @router.get("/queue/status")
-async def get_queue_status():
+@limiter.limit("120/minute")
+async def get_queue_status(request: Request = None):
     """Get scan queue status."""
     scan_queue = get_scan_queue()
     return scan_queue.get_status()
 
 
 @router.get("/scanner/health")
-async def get_scanner_health():
+@limiter.limit("30/minute")
+async def get_scanner_health(request: Request = None):
     """
     Get health status of Trivy scanner.
 
@@ -326,7 +372,8 @@ async def get_scanner_health():
 
 
 @router.post("/{scan_id}/abort")
-async def abort_scan(scan_id: int, db: AsyncSession = Depends(get_db)):
+@limiter.limit("20/minute")
+async def abort_scan(scan_id: int, request: Request = None, db: AsyncSession = Depends(get_db)):
     """
     Abort a running or queued scan.
 
@@ -365,7 +412,8 @@ async def abort_scan(scan_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{scan_id}/retry")
-async def retry_scan(scan_id: int, db: AsyncSession = Depends(get_db)):
+@limiter.limit("20/minute")
+async def retry_scan(scan_id: int, request: Request = None, db: AsyncSession = Depends(get_db)):
     """
     Retry a failed scan.
 
@@ -412,3 +460,89 @@ async def retry_scan(scan_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(
             status_code=409, detail="Container is already being scanned"
         )
+
+
+@router.get("/cve-delta")
+async def get_cve_delta(
+    db: AsyncSession = Depends(get_db),
+    since_hours: int = Query(default=24, ge=1, le=720, description="Hours to look back for scan deltas"),
+    container_name: str | None = Query(default=None, description="Filter by container name"),
+):
+    """
+    Get CVE delta information from recent scans.
+
+    Returns a summary of CVEs fixed and introduced across all containers
+    within the specified time window. Used by TideWatch for integration.
+
+    Args:
+        since_hours: Number of hours to look back (default 24, max 720/30 days)
+        container_name: Optional filter for specific container
+
+    Returns:
+        List of scan deltas with container info, cves_fixed, and cves_introduced
+    """
+    from datetime import timedelta
+
+    cutoff_time = get_now() - timedelta(hours=since_hours)
+
+    # Build query for completed scans with delta info
+    query = (
+        select(
+            Scan.id,
+            Scan.scan_date,
+            Scan.cves_fixed,
+            Scan.cves_introduced,
+            Scan.total_vulns,
+            Container.name.label("container_name"),
+            Container.image,
+            Container.image_tag,
+        )
+        .join(Container, Scan.container_id == Container.id)
+        .where(
+            Scan.scan_status == "completed",
+            Scan.scan_date >= cutoff_time,
+        )
+        .order_by(Scan.scan_date.desc())
+    )
+
+    if container_name:
+        query = query.where(Container.name == container_name)
+
+    result = await db.execute(query)
+    rows = result.fetchall()
+
+    # Format response
+    deltas = []
+    total_fixed = 0
+    total_introduced = 0
+
+    for row in rows:
+        cves_fixed = json.loads(row.cves_fixed) if row.cves_fixed else []
+        cves_introduced = json.loads(row.cves_introduced) if row.cves_introduced else []
+
+        total_fixed += len(cves_fixed)
+        total_introduced += len(cves_introduced)
+
+        deltas.append({
+            "scan_id": row.id,
+            "scan_date": row.scan_date.isoformat(),
+            "container_name": row.container_name,
+            "image": f"{row.image}:{row.image_tag}",
+            "total_vulns": row.total_vulns,
+            "cves_fixed": cves_fixed,
+            "cves_fixed_count": len(cves_fixed),
+            "cves_introduced": cves_introduced,
+            "cves_introduced_count": len(cves_introduced),
+        })
+
+    return {
+        "since_hours": since_hours,
+        "cutoff_time": cutoff_time.isoformat(),
+        "total_scans": len(deltas),
+        "summary": {
+            "total_cves_fixed": total_fixed,
+            "total_cves_introduced": total_introduced,
+            "net_change": total_introduced - total_fixed,
+        },
+        "scans": deltas,
+    }

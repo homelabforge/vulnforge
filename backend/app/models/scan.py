@@ -43,6 +43,12 @@ class Scan(Base):
     medium_count: Mapped[int] = mapped_column(Integer, default=0)
     low_count: Mapped[int] = mapped_column(Integer, default=0)
 
+    # CVE Delta Tracking - stores JSON arrays of CVE IDs compared to previous scan
+    # cves_fixed: CVEs that were present in the previous scan but not in this one
+    # cves_introduced: CVEs that are new in this scan compared to the previous scan
+    cves_fixed: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array
+    cves_introduced: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array
+
     # Relationships
     container: Mapped["Container"] = relationship("Container", back_populates="scans")
     vulnerabilities: Mapped[List["Vulnerability"]] = relationship(

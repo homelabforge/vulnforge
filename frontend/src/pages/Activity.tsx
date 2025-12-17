@@ -30,31 +30,31 @@ export function Activity() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-vuln-text flex items-center gap-3">
             <ActivityIcon className="w-8 h-8 text-blue-500" />
             Activity
           </h1>
-          <p className="text-gray-400 mt-1">System event timeline</p>
+          <p className="text-sm text-vuln-text-muted mt-0.5">System event timeline</p>
         </div>
 
         {/* Auto-refresh indicator */}
-        <div className="flex items-center gap-2 text-sm text-gray-400">
+        <div className="flex items-center gap-2 text-sm text-vuln-text-muted">
           <RefreshCw className="w-4 h-4 animate-spin" />
           <span>Auto-refreshing every 15s</span>
         </div>
       </div>
 
       {/* Stats Summary */}
-      <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-6 mb-6">
+      <div className="bg-vuln-surface border border-vuln-border rounded-lg p-6 mb-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-gray-400 mb-1">Total Events</p>
-            <p className="text-3xl font-bold text-white">{total}</p>
+            <p className="text-sm text-vuln-text-muted mb-1">Total Events</p>
+            <p className="text-2xl font-bold text-vuln-text">{total}</p>
           </div>
           <div className="text-right">
-            <p className="text-sm text-gray-400 mb-1">
+            <p className="text-sm text-vuln-text-muted mb-1">
               {eventTypeFilter ? "Filtered" : "All Events"}
             </p>
             <p className="text-xl font-semibold text-blue-400">{activities.length} displayed</p>
@@ -75,7 +75,7 @@ export function Activity() {
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-6 mb-6">
           <p className="text-red-500 font-medium mb-2">Failed to load activities</p>
-          <p className="text-sm text-gray-400">{error.message}</p>
+          <p className="text-sm text-vuln-text-muted">{error.message}</p>
         </div>
       )}
 
@@ -84,11 +84,11 @@ export function Activity() {
 
       {/* Empty State (when filter returns no results) */}
       {!isLoading && activities.length === 0 && !error && eventTypeFilter && (
-        <div className="bg-[#1a1f2e] border border-gray-800 rounded-lg p-8 text-center">
-          <p className="text-gray-400">No events found for this filter</p>
+        <div className="bg-vuln-surface border border-vuln-border rounded-lg p-8 text-center">
+          <p className="text-vuln-text-muted">No events found for this filter</p>
           <button
             onClick={() => setEventTypeFilter(null)}
-            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            className="mt-4 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
           >
             Clear Filter
           </button>

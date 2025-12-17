@@ -1,50 +1,21 @@
 services:
-  socket-proxy-dev:
-    container_name: socket-proxy-dev
-    image: tecnativa/docker-socket-proxy:latest
-    environment:
-      CONTAINERS: 1
-      EXEC: 1
-      IMAGES: 1
-      INFO: 1
-      NETWORKS: 1
-      POST: 1
-      VOLUMES: 1
-    networks: [vulnforge-dev]
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-
-  trivy-dev:
-    container_name: trivy-dev
-    image: aquasec/trivy:latest
-    command: ["server", "--listen", "0.0.0.0:8080"]
-    networks: [vulnforge-dev]
-    restart: unless-stopped
-    volumes:
-      - ./trivy-cache:/root/.cache
-
   vulnforge-dev:
     container_name: vulnforge-dev
     build:
       context: .
       dockerfile: Dockerfile
-    depends_on:
-      - socket-proxy-dev
-      - trivy-dev
     deploy:
       resources:
         limits:
           memory: 1G
           pids: 200
     environment:
-      TZ: ${TZ}
-      DATABASE_URL: sqlite+aiosqlite:///data/vulnforge.db
-      DOCKER_SOCKET_PROXY: tcp://socket-proxy-dev:2375
-      TRIVY_CONTAINER_NAME: trivy-dev
-      TRIVY_SERVER: http://trivy-dev:8080
-      PORT: 8787
+      DIVE_CONTAINER_NAME: dive
+      DOCKER_HOST: tcp://socket-proxy-rw:2375
+      TRIVY_CONTAINER_NAME: trivy
+      TRIVY_SERVER: http://trivy:8080
       LOG_LEVEL: INFO
+      PORT: "8787"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
       interval: 20s
@@ -60,7 +31,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks: [vulnforge-dev]
+    networks: [docker_api_rw, monitoring, proxy, security]
     ports: ["12348:8787"]
     restart: unless-stopped
     security_opt: [no-new-privileges:true]
@@ -68,5 +39,14 @@ services:
       - ./data:/data
 
 networks:
-  vulnforge-dev:
-    name: vulnforge-dev
+  docker_api_rw:
+    external: true
+  monitoring:
+    external: true
+    name: monitoring
+  proxy:
+    external: true
+    name: proxy
+  security:
+    external: true
+    name: security
