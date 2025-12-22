@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import UTC
 from typing import Any
 
 from docker.errors import DockerException
@@ -36,7 +36,9 @@ class TrivyScanner:
         if self.use_server_mode:
             logger.info(f"Trivy client mode enabled (server: {self.server_url})")
         else:
-            logger.info(f"Trivy docker exec mode enabled (container: {settings.trivy_container_name})")
+            logger.info(
+                f"Trivy docker exec mode enabled (container: {settings.trivy_container_name})"
+            )
 
     async def _exec_trivy_command(self, container, cmd: list[str], **kwargs):
         """
@@ -96,7 +98,9 @@ class TrivyScanner:
         max_lock_retries = settings.trivy_max_lock_retries
         max_corruption_retries = settings.trivy_max_corruption_retries
 
-        for attempt in range(max_lock_retries + max_corruption_retries + 1):  # Allow multiple lock retries + corruption retry
+        for attempt in range(
+            max_lock_retries + max_corruption_retries + 1
+        ):  # Allow multiple lock retries + corruption retry
             cmd = list(base_cmd)
 
             if local_skip:
@@ -124,7 +128,10 @@ class TrivyScanner:
                 else str(last_output)
             )
 
-            if local_skip and "--skip-db-update cannot be specified on the first run" in output_text:
+            if (
+                local_skip
+                and "--skip-db-update cannot be specified on the first run" in output_text
+            ):
                 logger.warning("Trivy cache missing; retrying without --skip-db-update")
                 await self._clear_trivy_cache(container)
                 local_skip = False
@@ -136,7 +143,9 @@ class TrivyScanner:
                 and "vulnerability database may be in use by another process" in output_text
             ):
                 lock_retry_count += 1
-                wait_time = settings.trivy_lock_retry_base_wait + (lock_retry_count * settings.trivy_lock_retry_backoff_multiplier)
+                wait_time = settings.trivy_lock_retry_base_wait + (
+                    lock_retry_count * settings.trivy_lock_retry_backoff_multiplier
+                )
                 logger.warning(
                     f"Trivy database locked by another process; "
                     f"waiting {wait_time}s and retrying (attempt {lock_retry_count}/{max_lock_retries})"
@@ -145,12 +154,9 @@ class TrivyScanner:
                 continue
 
             # Handle database corruption - clear cache and retry once
-            if (
-                not retried_on_db_corruption
-                and (
-                    "db corrupted" in output_text
-                    or "failed to download vulnerability DB" in output_text
-                )
+            if not retried_on_db_corruption and (
+                "db corrupted" in output_text
+                or "failed to download vulnerability DB" in output_text
             ):
                 retried_on_db_corruption = True
                 logger.warning("Trivy database error detected; refreshing cache and retrying")
@@ -163,8 +169,11 @@ class TrivyScanner:
         return last_exit_code or 1, last_output
 
     async def _scan_via_exec(
-        self, image: str, scan_secrets: bool = True, timeout: int | None = None,
-        skip_db_update: bool = False
+        self,
+        image: str,
+        scan_secrets: bool = True,
+        timeout: int | None = None,
+        skip_db_update: bool = False,
     ) -> dict[str, Any] | None:
         """
         Scan an image with Trivy using docker exec mode.
@@ -180,6 +189,10 @@ class TrivyScanner:
         """
         if timeout is None:
             timeout = settings.scan_timeout
+
+        # TODO: Implement timeout functionality for Trivy vulnerability scans
+        # Currently timeout parameter is accepted but not enforced
+        _ = timeout  # Acknowledge parameter to suppress unused warning
 
         # Prefer an injected DockerService (tests / custom wiring), otherwise
         # create a fresh instance so we respect the latest docker_socket_proxy.
@@ -197,7 +210,9 @@ class TrivyScanner:
                 logger.error("Trivy container not available")
                 return None
 
-            logger.info(f"Scanning image: {image} (secrets: {scan_secrets}, skip_db_update: {skip_db_update})")
+            logger.info(
+                f"Scanning image: {image} (secrets: {scan_secrets}, skip_db_update: {skip_db_update})"
+            )
             start_time = get_now()
 
             # Build scanner list
@@ -208,9 +223,12 @@ class TrivyScanner:
             # Execute Trivy scan with both vulnerability and secret scanning
             # Command: trivy image --scanners vuln,secret --format json --quiet [--skip-db-update] <image>
             base_cmd = [
-                "trivy", "image",
-                "--scanners", ",".join(scanners),
-                "--format", "json",
+                "trivy",
+                "image",
+                "--scanners",
+                ",".join(scanners),
+                "--format",
+                "json",
                 "--quiet",
             ]
 
@@ -251,7 +269,10 @@ class TrivyScanner:
                 docker_service.close()
 
     async def _scan_via_client_mode(
-        self, image: str, scan_secrets: bool = True, timeout: int | None = None,
+        self,
+        image: str,
+        scan_secrets: bool = True,
+        timeout: int | None = None,
         skip_db_update: bool = False,
         extra_args: list[str] | None = None,
     ) -> tuple[int, bytes | str | None, float]:
@@ -269,6 +290,10 @@ class TrivyScanner:
         """
         if timeout is None:
             timeout = settings.scan_timeout
+
+        # TODO: Implement timeout functionality for Trivy client mode scans
+        # Currently timeout parameter is accepted but not enforced
+        _ = timeout  # Acknowledge parameter to suppress unused warning
 
         # Prefer an injected DockerService (tests / custom wiring), otherwise
         # create a fresh instance so we respect the latest docker_socket_proxy.
@@ -288,7 +313,9 @@ class TrivyScanner:
                     docker_service.close()
                 return None, None, 0.0
 
-            logger.info(f"Scanning image: {image} (mode: client, secrets: {scan_secrets}, skip_db_update: {skip_db_update})")
+            logger.info(
+                f"Scanning image: {image} (mode: client, secrets: {scan_secrets}, skip_db_update: {skip_db_update})"
+            )
             start_time = get_now()
 
             # Execute Trivy in client mode pointing to server.
@@ -297,14 +324,16 @@ class TrivyScanner:
             if extra_args:
                 base_cmd.extend(extra_args)
             else:
-                base_cmd.extend([
-                    "image",
-                    "--server",
-                    self.server_url,
-                    "--format",
-                    "json",
-                    "--quiet",
-                ])
+                base_cmd.extend(
+                    [
+                        "image",
+                        "--server",
+                        self.server_url,
+                        "--format",
+                        "json",
+                        "--quiet",
+                    ]
+                )
 
             exit_code, output = await self._run_trivy_scan(
                 trivy_container,
@@ -329,8 +358,11 @@ class TrivyScanner:
                 docker_service.close()
 
     async def scan_image(
-        self, image: str, scan_secrets: bool = True, timeout: int | None = None,
-        skip_db_update: bool = False
+        self,
+        image: str,
+        scan_secrets: bool = True,
+        timeout: int | None = None,
+        skip_db_update: bool = False,
     ) -> dict[str, Any] | None:
         """
         Scan an image with Trivy for vulnerabilities and optionally secrets.
@@ -406,23 +438,27 @@ class TrivyScanner:
             timeout = settings.scan_timeout
 
         # For now, we treat all compliance scans as image-focused.
-        base_args = [
-            "image",
-            "--server",
-            self.server_url,
-            "--compliance",
-            compliance_id,
-            "--format",
-            "json",
-            "--quiet",
-        ] if self.use_server_mode else [
-            "image",
-            "--compliance",
-            compliance_id,
-            "--format",
-            "json",
-            "--quiet",
-        ]
+        base_args = (
+            [
+                "image",
+                "--server",
+                self.server_url,
+                "--compliance",
+                compliance_id,
+                "--format",
+                "json",
+                "--quiet",
+            ]
+            if self.use_server_mode
+            else [
+                "image",
+                "--compliance",
+                compliance_id,
+                "--format",
+                "json",
+                "--quiet",
+            ]
+        )
 
         if self.use_server_mode:
             exit_code, output, scan_duration = await self._scan_via_client_mode(
@@ -443,7 +479,9 @@ class TrivyScanner:
                     logger.error("Trivy container not available for compliance scan")
                     return None
 
-                logger.info(f"Running Trivy compliance scan: target={target}, profile={compliance_id}")
+                logger.info(
+                    f"Running Trivy compliance scan: target={target}, profile={compliance_id}"
+                )
                 start_time = get_now()
 
                 base_cmd = ["trivy"] + base_args
@@ -608,11 +646,13 @@ class TrivyScanner:
                 redacted_lines = []
                 if code_lines:
                     for line in code_lines:
-                        redacted_lines.append({
-                            "Number": line.get("Number"),
-                            "Content": "***REDACTED***",  # Hide actual secret
-                            "IsCause": line.get("IsCause", False)
-                        })
+                        redacted_lines.append(
+                            {
+                                "Number": line.get("Number"),
+                                "Content": "***REDACTED***",  # Hide actual secret
+                                "IsCause": line.get("IsCause", False),
+                            }
+                        )
 
                     # Format for display (line numbers only, content redacted)
                     code_snippet = "\n".join(
@@ -693,7 +733,7 @@ class TrivyScanner:
             #           NextUpdate: TIMESTAMP
             #         ...
 
-            lines = output.decode('utf-8').split('\n')
+            lines = output.decode("utf-8").split("\n")
             db_info = {}
 
             in_vuln_db_section = False
@@ -750,12 +790,13 @@ class TrivyScanner:
 
             # Parse updated_at timestamp
             # Format can be ISO8601 ("2025-10-28T12:34:56.789Z") or Go format ("2025-10-28 06:30:22.195426703 +0000 UTC")
-            from datetime import datetime, timezone
+            from datetime import datetime
+
             updated_at_str = db_info["updated_at"]
 
             try:
                 # Try ISO8601 format first
-                updated_at = datetime.fromisoformat(updated_at_str.replace('Z', '+00:00'))
+                updated_at = datetime.fromisoformat(updated_at_str.replace("Z", "+00:00"))
             except ValueError:
                 # Try Go timestamp format: "2025-10-28 06:30:22.195426703 +0000 UTC"
                 # Remove " UTC" suffix and parse
@@ -764,8 +805,11 @@ class TrivyScanner:
                     # Format: "2025-10-28 06:30:22.195426703 +0000"
                     # Truncate nanoseconds to microseconds (Python only supports 6 digits)
                     import re
+
                     # Match: date time.nanoseconds timezone
-                    match = re.match(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.(\d+) (.+)', updated_at_str)
+                    match = re.match(
+                        r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.(\d+) (.+)", updated_at_str
+                    )
                     if match:
                         date_time = match.group(1)
                         nanos = match.group(2)[:6]  # Truncate to microseconds
@@ -774,13 +818,15 @@ class TrivyScanner:
                     updated_at = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S.%f %z")
 
             # Calculate age
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             age = now - updated_at
             age_hours = int(age.total_seconds() / 3600)
 
             is_fresh = age_hours < max_age_hours
 
-            logger.info(f"Trivy DB age: {age_hours} hours (fresh: {is_fresh}, threshold: {max_age_hours}h)")
+            logger.info(
+                f"Trivy DB age: {age_hours} hours (fresh: {is_fresh}, threshold: {max_age_hours}h)"
+            )
             return is_fresh, age_hours
 
         except Exception as e:
@@ -813,7 +859,7 @@ class TrivyScanner:
                 return None
 
             # Parse output - first line format: "Version: X.Y.Z"
-            lines = output.decode('utf-8').split('\n')
+            lines = output.decode("utf-8").split("\n")
             for line in lines:
                 if line.strip().startswith("Version:"):
                     version = line.split(":")[-1].strip()

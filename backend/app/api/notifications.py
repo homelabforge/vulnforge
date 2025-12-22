@@ -136,7 +136,7 @@ async def get_notification_rules(
     query = select(NotificationRuleModel)
 
     if enabled_only:
-        query = query.where(NotificationRuleModel.enabled == True)
+        query = query.where(NotificationRuleModel.enabled)
 
     result = await db.execute(query)
     rules = result.scalars().all()
@@ -173,9 +173,7 @@ async def create_notification_rule(
         select(NotificationRuleModel).where(NotificationRuleModel.name == rule.name)
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=400, detail=f"Rule with name '{rule.name}' already exists"
-        )
+        raise HTTPException(status_code=400, detail=f"Rule with name '{rule.name}' already exists")
 
     new_rule = NotificationRuleModel(**rule.model_dump())
     db.add(new_rule)
@@ -276,9 +274,13 @@ async def send_test_notification():
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Notification server timed out")
     except httpx.ConnectError:
-        raise HTTPException(status_code=503, detail="Cannot connect to notification server - check ntfy URL")
+        raise HTTPException(
+            status_code=503, detail="Cannot connect to notification server - check ntfy URL"
+        )
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail=f"Notification server error: {e}")
+        raise HTTPException(
+            status_code=e.response.status_code, detail=f"Notification server error: {e}"
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid notification configuration: {e}")
 
@@ -314,12 +316,12 @@ async def test_ntfy_connection(db: AsyncSession = Depends(get_db)):
             response = await client.post(
                 f"{server_url}/{ntfy_topic}",
                 content="This is a test notification from VulnForge.",
-                headers=headers
+                headers=headers,
             )
             response.raise_for_status()
             return {"success": True, "message": "Test notification sent"}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
+    except Exception:
+        return {"success": False, "message": "Connection test failed. Check logs for details."}
 
 
 @router.post("/test/gotify")
@@ -347,13 +349,13 @@ async def test_gotify_connection(db: AsyncSession = Depends(get_db)):
                 json={
                     "title": "Test Notification",
                     "message": "This is a test notification from VulnForge.",
-                    "priority": 5
-                }
+                    "priority": 5,
+                },
             )
             response.raise_for_status()
             return {"success": True, "message": "Test notification sent"}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
+    except Exception:
+        return {"success": False, "message": "Connection test failed. Check logs for details."}
 
 
 @router.post("/test/pushover")
@@ -392,16 +394,22 @@ async def test_pushover_connection(db: AsyncSession = Depends(get_db)):
                             "title": "Test Notification",
                             "message": "This is a test notification from VulnForge.",
                             "priority": -1,
-                        }
+                        },
                     )
                     response.raise_for_status()
                     return {"success": True, "message": "Test notification sent"}
                 else:
-                    return {"success": False, "message": f"Invalid credentials: {result.get('errors', ['Unknown'])}"}
+                    return {
+                        "success": False,
+                        "message": f"Invalid credentials: {result.get('errors', ['Unknown'])}",
+                    }
 
-            return {"success": False, "message": f"Validation failed with status {validate_response.status_code}"}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
+            return {
+                "success": False,
+                "message": f"Validation failed with status {validate_response.status_code}",
+            }
+    except Exception:
+        return {"success": False, "message": "Connection test failed. Check logs for details."}
 
 
 @router.post("/test/slack")
@@ -424,21 +432,23 @@ async def test_slack_connection(db: AsyncSession = Depends(get_db)):
             response = await client.post(
                 slack_webhook_url,
                 json={
-                    "attachments": [{
-                        "color": "#10b981",
-                        "title": "Test Notification",
-                        "text": "This is a test notification from VulnForge.",
-                        "footer": "VulnForge",
-                    }]
-                }
+                    "attachments": [
+                        {
+                            "color": "#10b981",
+                            "title": "Test Notification",
+                            "text": "This is a test notification from VulnForge.",
+                            "footer": "VulnForge",
+                        }
+                    ]
+                },
             )
 
             if response.status_code == 200 and response.text == "ok":
                 return {"success": True, "message": "Test notification sent"}
             else:
                 return {"success": False, "message": f"Unexpected response: {response.text}"}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
+    except Exception:
+        return {"success": False, "message": "Connection test failed. Check logs for details."}
 
 
 @router.post("/test/discord")
@@ -461,21 +471,23 @@ async def test_discord_connection(db: AsyncSession = Depends(get_db)):
             response = await client.post(
                 discord_webhook_url,
                 json={
-                    "embeds": [{
-                        "title": "Test Notification",
-                        "description": "This is a test notification from VulnForge.",
-                        "color": 0x10B981,
-                        "footer": {"text": "VulnForge"},
-                    }]
-                }
+                    "embeds": [
+                        {
+                            "title": "Test Notification",
+                            "description": "This is a test notification from VulnForge.",
+                            "color": 0x10B981,
+                            "footer": {"text": "VulnForge"},
+                        }
+                    ]
+                },
             )
 
             if response.status_code in (200, 204):
                 return {"success": True, "message": "Test notification sent"}
             else:
                 return {"success": False, "message": f"Unexpected response: {response.status_code}"}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
+    except Exception:
+        return {"success": False, "message": "Connection test failed. Check logs for details."}
 
 
 @router.post("/test/telegram")
@@ -506,7 +518,10 @@ async def test_telegram_connection(db: AsyncSession = Depends(get_db)):
 
             me_result = me_response.json()
             if not me_result.get("ok"):
-                return {"success": False, "message": f"Bot validation failed: {me_result.get('description', 'Unknown')}"}
+                return {
+                    "success": False,
+                    "message": f"Bot validation failed: {me_result.get('description', 'Unknown')}",
+                }
 
             bot_name = me_result.get("result", {}).get("username", "Unknown")
 
@@ -517,16 +532,19 @@ async def test_telegram_connection(db: AsyncSession = Depends(get_db)):
                     "chat_id": telegram_chat_id,
                     "text": f"\u2705 <b>Test Notification</b>\n\nThis is a test notification from VulnForge.\nBot: @{bot_name}",
                     "parse_mode": "HTML",
-                }
+                },
             )
 
             result = response.json()
             if result.get("ok"):
                 return {"success": True, "message": f"Test notification sent via @{bot_name}"}
             else:
-                return {"success": False, "message": f"Failed: {result.get('description', 'Unknown error')}"}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
+                return {
+                    "success": False,
+                    "message": f"Failed: {result.get('description', 'Unknown error')}",
+                }
+    except Exception:
+        return {"success": False, "message": "Connection test failed. Check logs for details."}
 
 
 @router.post("/test/email")
@@ -566,5 +584,5 @@ async def test_email_connection(db: AsyncSession = Depends(get_db)):
 
         success, message = await email_service.test_connection()
         return {"success": success, "message": message}
-    except Exception as e:
-        return {"success": False, "message": str(e)}
+    except Exception:
+        return {"success": False, "message": "Connection test failed. Check logs for details."}

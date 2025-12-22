@@ -1,13 +1,18 @@
 """Container model."""
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import List
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Float, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.utils.timezone import get_now
+
+if TYPE_CHECKING:
+    from app.models.scan import Scan
 
 
 class Container(Base):
@@ -58,11 +63,9 @@ class Container(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=get_now)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=get_now, onupdate=get_now
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=get_now, onupdate=get_now)
 
     # Relationships
-    scans: Mapped[List["Scan"]] = relationship(
+    scans: Mapped[list[Scan]] = relationship(
         "Scan", back_populates="container", cascade="all, delete-orphan"
     )

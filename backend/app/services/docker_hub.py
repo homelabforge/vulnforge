@@ -1,9 +1,9 @@
 """Docker Hub API client for checking image versions."""
 
-import httpx
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
+
+import httpx
 
 from app.config import settings
 from app.utils.timezone import get_now
@@ -19,7 +19,7 @@ class DockerHubClient:
         self._cache: dict[str, tuple[str, datetime]] = {}
         self._cache_duration = timedelta(hours=6)  # Cache for 6 hours
 
-    async def get_latest_tag(self, repository: str, registry: str = "docker.io") -> Optional[str]:
+    async def get_latest_tag(self, repository: str, registry: str = "docker.io") -> str | None:
         """
         Get the latest version tag for a repository from Docker Hub or GHCR.
 
@@ -65,7 +65,7 @@ class DockerHubClient:
             logger.error(f"Error fetching latest tag for {registry}/{repository}: {e}")
             return None
 
-    async def _fetch_dockerhub_tags(self, repository: str) -> Optional[str]:
+    async def _fetch_dockerhub_tags(self, repository: str) -> str | None:
         """
         Fetch tags from Docker Hub API.
 
@@ -78,7 +78,7 @@ class DockerHubClient:
         url = f"https://hub.docker.com/v2/repositories/{repository}/tags"
         params = {
             "page_size": 100,  # Get more tags to find semantic versions
-            "ordering": "last_updated"  # Sort by most recently updated
+            "ordering": "last_updated",  # Sort by most recently updated
         }
 
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -89,7 +89,7 @@ class DockerHubClient:
         tags = data.get("results", [])
         return self._extract_latest_version(tags)
 
-    async def _fetch_ghcr_tags(self, repository: str) -> Optional[str]:
+    async def _fetch_ghcr_tags(self, repository: str) -> str | None:
         """
         Fetch tags from GitHub Container Registry API.
 
@@ -115,17 +115,16 @@ class DockerHubClient:
         url = f"https://api.github.com/orgs/{org}/packages/container/{package}/versions"
 
         # Build headers with optional authentication
-        headers = {
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28"
-        }
+        headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
 
         # Add GitHub token if available
         if settings.github_token:
             headers["Authorization"] = f"Bearer {settings.github_token}"
             logger.debug(f"Using GitHub token for GHCR API request to {org}/{package}")
         else:
-            logger.warning(f"No GitHub token configured - GHCR API may fail with 401. Set GITHUB_TOKEN environment variable.")
+            logger.warning(
+                "No GitHub token configured - GHCR API may fail with 401. Set GITHUB_TOKEN environment variable."
+            )
 
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(url, headers=headers)
@@ -149,7 +148,7 @@ class DockerHubClient:
 
         return self._extract_latest_version(tags)
 
-    def _extract_latest_version(self, tags: list[dict]) -> Optional[str]:
+    def _extract_latest_version(self, tags: list[dict]) -> str | None:
         """
         Extract the latest semantic version from a list of tags.
 
@@ -206,7 +205,7 @@ class DockerHubClient:
         except ValueError:
             return False
 
-    def _get_from_cache(self, repository: str) -> Optional[str]:
+    def _get_from_cache(self, repository: str) -> str | None:
         """
         Get a cached version if it exists and is not expired.
 
@@ -245,8 +244,7 @@ class DockerHubClient:
         self._cache.clear()
         logger.info("Docker Hub version cache cleared")
 
-
-    async def get_github_release_version(self, repo: str) -> Optional[str]:
+    async def get_github_release_version(self, repo: str) -> str | None:
         """
         Get the latest release version from a GitHub repository.
 
@@ -272,7 +270,7 @@ class DockerHubClient:
             # Build headers with optional authentication
             headers = {
                 "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28"
+                "X-GitHub-Api-Version": "2022-11-28",
             }
 
             # Add GitHub token if available
@@ -280,7 +278,9 @@ class DockerHubClient:
                 headers["Authorization"] = f"Bearer {settings.github_token}"
                 logger.debug(f"Using GitHub token for release API request to {repo}")
             else:
-                logger.warning(f"No GitHub token configured - GitHub API may be rate limited. Set GITHUB_TOKEN environment variable.")
+                logger.warning(
+                    "No GitHub token configured - GitHub API may be rate limited. Set GITHUB_TOKEN environment variable."
+                )
 
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(url, headers=headers)
@@ -308,7 +308,7 @@ class DockerHubClient:
             return None
 
 
-_docker_hub_client: Optional[DockerHubClient] = None
+_docker_hub_client: DockerHubClient | None = None
 
 
 def get_docker_hub_client() -> DockerHubClient:

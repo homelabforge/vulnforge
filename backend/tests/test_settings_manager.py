@@ -1,6 +1,7 @@
 """Tests for SettingsManager service."""
 
 import pytest
+
 from app.models import Setting
 from app.services.settings_manager import SettingsManager
 
@@ -123,11 +124,7 @@ class TestSettingsUpdate:
         """Test bulk updating multiple settings."""
         manager = SettingsManager(db_session)
 
-        settings_dict = {
-            "key1": "value1",
-            "key2": "value2",
-            "key3": "value3"
-        }
+        settings_dict = {"key1": "value1", "key2": "value2", "key3": "value3"}
 
         for key, value in settings_dict.items():
             await manager.set(key, value)
@@ -147,6 +144,7 @@ class TestSettingsJSONHandling:
         manager = SettingsManager(db_session)
 
         import json
+
         json_value = json.dumps(["item1", "item2", "item3"])
 
         setting = Setting(key="test_list", value=json_value)
@@ -163,6 +161,7 @@ class TestSettingsJSONHandling:
         manager = SettingsManager(db_session)
 
         import json
+
         json_value = json.dumps({"key1": "value1", "key2": "value2"})
 
         setting = Setting(key="test_dict", value=json_value)
@@ -197,12 +196,7 @@ class TestSettingsDefaults:
         manager = SettingsManager(db_session)
 
         # Test a few key defaults
-        default_keys = [
-            "auth_enabled",
-            "auth_provider",
-            "scan_schedule",
-            "ntfy_enabled"
-        ]
+        default_keys = ["auth_enabled", "auth_provider", "scan_schedule", "ntfy_enabled"]
 
         for key in default_keys:
             value = await manager.get(key)
@@ -232,7 +226,7 @@ class TestSettingsCacheInvalidation:
         manager = SettingsManager(db_with_settings)
 
         # Get value (may cache)
-        value1 = await manager.get("auth_enabled")
+        await manager.get("auth_enabled")
 
         # Update value
         await manager.set("auth_enabled", "true")

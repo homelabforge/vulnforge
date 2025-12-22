@@ -59,10 +59,12 @@ class DiveService:
         if timeout is None:
             timeout = settings.dive_timeout
 
+        # TODO: Implement timeout functionality for Dive analysis
+        # Currently timeout parameter is accepted but not enforced
+        _ = timeout  # Acknowledge parameter to suppress unused warning
+
         try:
-            dive_container = self.docker_service.client.containers.get(
-                settings.dive_container_name
-            )
+            dive_container = self.docker_service.client.containers.get(settings.dive_container_name)
         except docker.errors.NotFound:
             raise DiveError(
                 f"Dive container '{settings.dive_container_name}' not found. "

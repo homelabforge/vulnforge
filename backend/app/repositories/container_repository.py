@@ -145,9 +145,7 @@ class ContainerRepository:
         for vuln in vulnerabilities:
             vuln_map.setdefault(vuln.scan_id, []).append(vuln)
 
-        return {
-            scan.container_id: (scan, vuln_map.get(scan.id, [])) for scan in scans
-        }
+        return {scan.container_id: (scan, vuln_map.get(scan.id, [])) for scan in scans}
 
     async def get_by_id(self, container_id: int) -> Container | None:
         """

@@ -1,12 +1,18 @@
 """Notification log database model."""
 
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.utils.timezone import get_now
+
+if TYPE_CHECKING:
+    from app.models.scan import Scan
 
 
 class NotificationLog(Base):
@@ -20,7 +26,9 @@ class NotificationLog(Base):
     scan_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("scans.id"), nullable=True)
 
     # Notification details
-    notification_type: Mapped[str] = mapped_column(String(50))  # e.g., "scan_complete", "critical_vulns", "scan_failed"
+    notification_type: Mapped[str] = mapped_column(
+        String(50)
+    )  # e.g., "scan_complete", "critical_vulns", "scan_failed"
     channel: Mapped[str] = mapped_column(String(20))  # e.g., "ntfy", "email", "slack"
     title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     message: Mapped[str] = mapped_column(Text)
@@ -38,4 +46,4 @@ class NotificationLog(Base):
     sent_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     # Relationships
-    scan: Mapped["Scan"] = relationship("Scan", back_populates="notification_logs")
+    scan: Mapped[Scan] = relationship("Scan", back_populates="notification_logs")

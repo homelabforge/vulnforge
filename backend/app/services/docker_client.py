@@ -2,7 +2,7 @@
 
 import logging
 import os
-from typing import Any, List
+from typing import Any
 from urllib.parse import urlparse
 
 import docker
@@ -30,7 +30,7 @@ class DockerService:
         Raises:
             DockerException: If all attempts fail
         """
-        candidates: List[str] = []
+        candidates: list[str] = []
 
         def _add_candidate(url: str | None):
             if url and url not in candidates:
@@ -66,9 +66,8 @@ class DockerService:
                 errors.append(f"{base_url}: {exc}")
                 logger.warning(f"Docker connection attempt failed for {base_url}: {exc}")
 
-        message = (
-            "Failed to connect to Docker using available hosts. "
-            "Attempts: " + "; ".join(errors)
+        message = "Failed to connect to Docker using available hosts. Attempts: " + "; ".join(
+            errors
         )
         logger.error(message)
         raise DockerException(message)

@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  # VulnForge - Container Vulnerability Scanning Platform
+  vulnforge:
+    image: ghcr.io/homelabforge/vulnforge:latest
+    container_name: vulnforge
+    ports:
+      - "8787:8787"
+    volumes:
+      # Data directory for SQLite database and backups
+      - ./data:/data
+      # Docker socket access (read-write for container inspection and Trivy/Dive exec)
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Docker configuration
+      DOCKER_SOCKET_PROXY: ""  # Optional: use tcp://socket-proxy-rw:2375 for Docker socket proxy
+
+      # Scanner containers (optional - VulnForge will use docker exec if available)
+      TRIVY_CONTAINER_NAME: trivy
+      TRIVY_SERVER: ""  # Optional: http://trivy:8080 for Trivy server mode
+      DIVE_CONTAINER_NAME: dive
+
+      # Application settings (optional)
+      # LOG_LEVEL: INFO
+      # CORS_ORIGINS: http://localhost:8787
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    security_opt:
+      - no-new-privileges:true
+
+  # Trivy - Vulnerability Scanner (optional but recommended)
+  trivy:
+    image: aquasec/trivy:latest
+    container_name: trivy
+    command: server --listen 0.0.0.0:8080
+    volumes:
+      - trivy-cache:/root/.cache/trivy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Dive - Image Efficiency Analyzer (optional)
+  dive:
+    image: wagoodman/dive:latest
+    container_name: dive
+    command: tail -f /dev/null
+    volumes:
+      - dive-output:/output
+    restart: unless-stopped
+
+volumes:
+  trivy-cache:
+  dive-output:

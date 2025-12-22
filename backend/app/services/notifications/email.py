@@ -3,7 +3,6 @@
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Optional
 
 import aiosmtplib
 
@@ -44,8 +43,8 @@ class EmailNotificationService(NotificationService):
         title: str,
         message: str,
         priority: str = "default",
-        tags: Optional[list[str]] = None,
-        url: Optional[str] = None,
+        tags: list[str] | None = None,
+        url: str | None = None,
     ) -> bool:
         try:
             # Create message
@@ -92,7 +91,7 @@ class EmailNotificationService(NotificationService):
                 url_html = (
                     f'<p style="margin-top:16px;">'
                     f'<a href="{url}" style="color:{priority_color};">View Details</a>'
-                    f'</p>'
+                    f"</p>"
                 )
 
             html_content = f"""

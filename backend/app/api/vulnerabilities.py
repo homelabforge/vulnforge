@@ -7,7 +7,6 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from app.db import db_session
 from app.dependencies.auth import require_admin
 from app.models.user import User
 from app.repositories.dependencies import get_activity_logger, get_vulnerability_repository
@@ -15,9 +14,11 @@ from app.repositories.vulnerability_repository import VulnerabilityRepository
 from app.schemas import (
     PaginatedVulnerabilities,
     RemediationGroup,
-    Vulnerability as VulnSchema,
     VulnerabilitySummary,
     VulnerabilityUpdate,
+)
+from app.schemas import (
+    Vulnerability as VulnSchema,
 )
 from app.services.activity_logger import ActivityLogger
 

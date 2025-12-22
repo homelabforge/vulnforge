@@ -1,19 +1,21 @@
 """Global scan state manager for tracking progress."""
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Optional
+
 from app.utils.timezone import get_now
 
 
 class ScanState:
     """Singleton to track current scan state."""
 
-    _instance: Optional["ScanState"] = None
+    _instance: ScanState | None = None
     _is_scanning: bool = False
     _current_container: str = ""
     _progress_current: int = 0
     _progress_total: int = 0
-    _started_at: Optional[datetime] = None
+    _started_at: datetime | None = None
 
     def __new__(cls):
         if cls._instance is None:

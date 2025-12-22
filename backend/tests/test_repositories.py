@@ -3,7 +3,7 @@
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Container, ScanResult, Vulnerability, Secret
+from app.models import Secret, Vulnerability
 from app.repositories.container_repository import ContainerRepository
 from app.repositories.scan_result_repository import ScanResultRepository
 
@@ -19,10 +19,7 @@ class TestContainerRepository:
     async def test_create_container(self, repository, db_session):
         """Test creating a new container."""
         container = await repository.create(
-            container_id="abc123",
-            name="test-container",
-            image="nginx:latest",
-            status="running"
+            container_id="abc123", name="test-container", image="nginx:latest", status="running"
         )
 
         assert container.id is not None
@@ -36,10 +33,7 @@ class TestContainerRepository:
         """Test retrieving container by Docker container ID."""
         # Create container
         created = await repository.create(
-            container_id="xyz789",
-            name="test-app",
-            image="python:3.12",
-            status="running"
+            container_id="xyz789", name="test-app", image="python:3.12", status="running"
         )
 
         # Retrieve by container_id
@@ -61,16 +55,10 @@ class TestContainerRepository:
         """Test listing all containers."""
         # Create multiple containers
         await repository.create(
-            container_id="container1",
-            name="app1",
-            image="nginx:1.21",
-            status="running"
+            container_id="container1", name="app1", image="nginx:1.21", status="running"
         )
         await repository.create(
-            container_id="container2",
-            name="app2",
-            image="redis:7",
-            status="exited"
+            container_id="container2", name="app2", image="redis:7", status="exited"
         )
 
         # List all
@@ -86,7 +74,7 @@ class TestContainerRepository:
             container_id="update-test",
             name="test-container",
             image="alpine:latest",
-            status="running"
+            status="running",
         )
 
         # Update status
@@ -105,7 +93,7 @@ class TestContainerRepository:
             container_id="delete-test",
             name="temp-container",
             image="busybox:latest",
-            status="exited"
+            status="exited",
         )
 
         # Delete
@@ -147,10 +135,7 @@ class TestScanResultRepository:
         """Create a test container."""
         container_repo = ContainerRepository(db_session)
         return await container_repo.create(
-            container_id="scan-test",
-            name="test-app",
-            image="vulnerable:latest",
-            status="running"
+            container_id="scan-test", name="test-app", image="vulnerable:latest", status="running"
         )
 
     @pytest.fixture
@@ -163,7 +148,7 @@ class TestScanResultRepository:
             container_id=container.id,
             image_name="vulnerable:latest",
             scan_type="vulnerability",
-            status="completed"
+            status="completed",
         )
 
         assert scan_result.id is not None
@@ -180,17 +165,18 @@ class TestScanResultRepository:
             container_id=container.id,
             image_name="vulnerable:latest",
             scan_type="vulnerability",
-            status="completed"
+            status="completed",
         )
 
         import asyncio
+
         await asyncio.sleep(0.1)  # Ensure different timestamps
 
         latest = await repository.create(
             container_id=container.id,
             image_name="vulnerable:latest",
             scan_type="vulnerability",
-            status="completed"
+            status="completed",
         )
 
         # Get latest
@@ -206,7 +192,7 @@ class TestScanResultRepository:
             container_id=container.id,
             image_name="vulnerable:latest",
             scan_type="vulnerability",
-            status="completed"
+            status="completed",
         )
 
         # Add vulnerabilities
@@ -218,7 +204,7 @@ class TestScanResultRepository:
             fixed_version="1.0.1",
             is_fixable=True,
             severity="HIGH",
-            title="Test vulnerability"
+            title="Test vulnerability",
         )
         vuln2 = Vulnerability(
             scan_result_id=scan.id,
@@ -228,7 +214,7 @@ class TestScanResultRepository:
             fixed_version="7.1.0",
             is_fixable=True,
             severity="CRITICAL",
-            title="Another test vulnerability"
+            title="Another test vulnerability",
         )
 
         db_session.add(vuln1)
@@ -248,7 +234,7 @@ class TestScanResultRepository:
             container_id=container.id,
             image_name="vulnerable:latest",
             scan_type="vulnerability",
-            status="completed"
+            status="completed",
         )
 
         # Add vulnerabilities of different severities
@@ -260,14 +246,15 @@ class TestScanResultRepository:
                 installed_version="1.0.0",
                 is_fixable=False,
                 severity=severity,
-                title=f"Test vuln {i}"
+                title=f"Test vuln {i}",
             )
             db_session.add(vuln)
 
         await db_session.commit()
 
         # Manually count (would normally be a repository method)
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
+
         result = await db_session.execute(
             select(Vulnerability.severity, func.count(Vulnerability.id))
             .where(Vulnerability.scan_result_id == scan.id)
@@ -293,7 +280,7 @@ class TestSecretRepository:
             container_id="secret-test",
             name="app-with-secrets",
             image="leaky:latest",
-            status="running"
+            status="running",
         )
 
         scan_repo = ScanResultRepository(db_session)
@@ -301,7 +288,7 @@ class TestSecretRepository:
             container_id=container.id,
             image_name="leaky:latest",
             scan_type="secret",
-            status="completed"
+            status="completed",
         )
 
     async def test_create_secret_finding(self, scan_result, db_session):
@@ -344,9 +331,8 @@ class TestSecretRepository:
 
         # Retrieve and verify
         from sqlalchemy import select
-        result = await db_session.execute(
-            select(Secret).where(Secret.id == secret.id)
-        )
+
+        result = await db_session.execute(select(Secret).where(Secret.id == secret.id))
         found = result.scalar_one()
 
         assert "***REDACTED***" in found.code_snippet

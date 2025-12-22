@@ -81,3 +81,9 @@ frontend/package.json.backup.*
 *.log
 *.tmp
 *.temp
+
+# CodeQL
+codeql-db/
+codeql-databases/
+*.sarif
+.codeql/

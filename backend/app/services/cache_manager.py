@@ -2,8 +2,9 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
+
 from app.utils.timezone import get_now
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ class CacheManager:
         self._locks: dict[str, asyncio.Lock] = {}
         self._lock = asyncio.Lock()
 
-    async def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Any | None:
         """
         Get cached value.
 
@@ -156,10 +157,10 @@ class CacheManager:
     @staticmethod
     def _matches_pattern(text: str, pattern: str) -> bool:
         """Check if text matches pattern with * wildcard."""
-        if '*' not in pattern:
+        if "*" not in pattern:
             return text == pattern
 
-        parts = pattern.split('*')
+        parts = pattern.split("*")
         if not text.startswith(parts[0]):
             return False
 
@@ -189,7 +190,7 @@ class CacheManager:
 
 
 # Global cache instance
-_cache_manager: Optional[CacheManager] = None
+_cache_manager: CacheManager | None = None
 
 
 def get_cache() -> CacheManager:

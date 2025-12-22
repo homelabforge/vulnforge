@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 
 class ScannerStatus(Enum):
@@ -32,10 +31,10 @@ class DatabaseHealth:
     scanner_name: str
     status: ScannerStatus
     freshness: DatabaseFreshness
-    age_hours: Optional[int]
-    version: Optional[str]
-    updated_at: Optional[str]
-    next_update: Optional[str]
+    age_hours: int | None
+    version: str | None
+    updated_at: str | None
+    next_update: str | None
     can_skip_update: bool
     warnings: list[str]
 
@@ -84,12 +83,12 @@ class ScannerHealthMonitor(ABC):
         pass
 
     @abstractmethod
-    async def get_database_version(self) -> Optional[str]:
+    async def get_database_version(self) -> str | None:
         """Get the current database version."""
         pass
 
     @abstractmethod
-    async def get_database_updated_at(self) -> Optional[datetime]:
+    async def get_database_updated_at(self) -> datetime | None:
         """Get when the database was last updated."""
         pass
 

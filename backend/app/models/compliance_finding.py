@@ -18,21 +18,27 @@ class ComplianceFinding(Base):
 
     # Check identification
     check_id: Mapped[str] = mapped_column(String(20), index=True)  # e.g., "1.1.1", "4.5.2"
-    check_number: Mapped[str | None] = mapped_column(String(20), nullable=True)  # Alternative ID format
+    check_number: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # Alternative ID format
     title: Mapped[str] = mapped_column(String(500))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Status and severity
     status: Mapped[str] = mapped_column(String(20), index=True)  # PASS, WARN, FAIL, INFO, NOTE
     severity: Mapped[str] = mapped_column(String(20), index=True)  # HIGH, MEDIUM, LOW, INFO
-    category: Mapped[str] = mapped_column(String(100), index=True)  # Host, Daemon, Files, Images, Runtime, Operations
+    category: Mapped[str] = mapped_column(
+        String(100), index=True
+    )  # Host, Daemon, Files, Images, Runtime, Operations
 
     # Remediation
     remediation: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Additional details
     actual_value: Mapped[str | None] = mapped_column(Text, nullable=True)  # Current configuration
-    expected_value: Mapped[str | None] = mapped_column(Text, nullable=True)  # Recommended configuration
+    expected_value: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # Recommended configuration
 
     # False positive / ignore support
     is_ignored: Mapped[bool] = mapped_column(Boolean, default=False, index=True)

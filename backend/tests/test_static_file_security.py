@@ -1,8 +1,5 @@
 """Tests for static file serving security (path traversal prevention)."""
 
-import pytest
-from pathlib import Path
-
 
 class TestStaticFilePathTraversal:
     """Tests for path traversal protection in SPA static file serving."""

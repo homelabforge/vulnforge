@@ -1,6 +1,6 @@
 """Legacy-compatible ScanResult repository implementation."""
 
-from typing import Any, List, Optional
+from typing import Any
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,7 +44,7 @@ class ScanResultRepository:
         await self.db.refresh(scan)
         return scan
 
-    async def get_by_id(self, scan_id: int) -> Optional[Scan]:
+    async def get_by_id(self, scan_id: int) -> Scan | None:
         """Return a scan with vulnerabilities and secrets eagerly loaded."""
 
         result = await self.db.execute(
@@ -57,28 +57,24 @@ class ScanResultRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_for_container(self, container_id: int) -> List[Scan]:
+    async def get_for_container(self, container_id: int) -> list[Scan]:
         """List scans for a container ordered from newest to oldest."""
 
         result = await self.db.execute(
-            select(Scan)
-            .where(Scan.container_id == container_id)
-            .order_by(desc(Scan.scan_date))
+            select(Scan).where(Scan.container_id == container_id).order_by(desc(Scan.scan_date))
         )
         return list(result.scalars().all())
 
     async def get_latest_for_container(
-        self, container_id: int, scan_type: Optional[str] = None
-    ) -> Optional[Scan]:
+        self, container_id: int, scan_type: str | None = None
+    ) -> Scan | None:
         """Return the most recent scan for the given container and type."""
 
         stmt = select(Scan).where(Scan.container_id == container_id)
         if scan_type:
             stmt = stmt.where(Scan.scan_type == scan_type)
 
-        result = await self.db.execute(
-            stmt.order_by(desc(Scan.scan_date)).limit(1)
-        )
+        result = await self.db.execute(stmt.order_by(desc(Scan.scan_date)).limit(1))
         return result.scalar_one_or_none()
 
     async def update(self, scan: Scan) -> Scan:
@@ -94,12 +90,12 @@ class ScanResultRepository:
         scan = await self.get_by_id(scan_id)
         if scan:
             await self.db.delete(scan)
-            await self.db.flush()  # Use flush instead of commit - let test fixture manage transactions
+            await (
+                self.db.flush()
+            )  # Use flush instead of commit - let test fixture manage transactions
 
-    async def get_all(self) -> List[Scan]:
+    async def get_all(self) -> list[Scan]:
         """Return every scan ordered by most recent."""
 
-        result = await self.db.execute(
-            select(Scan).order_by(desc(Scan.scan_date))
-        )
+        result = await self.db.execute(select(Scan).order_by(desc(Scan.scan_date)))
         return list(result.scalars().all())

@@ -1,4 +1,11 @@
-"""Tests for containers API endpoints."""
+"""Tests for containers API endpoints.
+
+This module tests the containers API which provides:
+- Container discovery from Docker daemon
+- Container listing with statistics
+- Container detail retrieval
+- Activity logging for container operations
+"""
 
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -40,7 +47,9 @@ def docker_service_mock():
 class TestContainersDiscovery:
     """Tests for container discovery endpoint."""
 
-    async def test_discover_containers_success(self, client, db_with_settings, docker_service_mock):
+    async def test_discover_containers_success(
+        self, authenticated_client, db_with_settings, docker_service_mock
+    ):
         """Test successful container discovery."""
         from app.dependencies.auth import get_current_user
 
@@ -49,6 +58,7 @@ class TestContainersDiscovery:
             return User(username="admin", provider="test", is_admin=True)
 
         from app.main import app
+
         app.dependency_overrides[get_current_user] = override_get_current_user
 
         docker_service_mock.list_containers.return_value = [
@@ -63,7 +73,7 @@ class TestContainersDiscovery:
             ),
         ]
 
-        response = await client.post("/api/v1/containers/discover")
+        response = await authenticated_client.post("/api/v1/containers/discover")
 
         assert response.status_code in [200, 201]
         data = response.json()
@@ -73,7 +83,7 @@ class TestContainersDiscovery:
 
     async def test_discover_removes_stale_containers(
         self,
-        client,
+        authenticated_client,
         db_with_settings,
         docker_service_mock,
     ):
@@ -94,9 +104,10 @@ class TestContainersDiscovery:
         docker_service_mock.list_containers.return_value = []
 
         from app.main import app
+
         app.dependency_overrides[get_current_user] = override_get_current_user
 
-        response = await client.post("/api/v1/containers/discover")
+        response = await authenticated_client.post("/api/v1/containers/discover")
 
         assert response.status_code in [200, 201]
         payload = response.json()
@@ -109,7 +120,7 @@ class TestContainersDiscovery:
 
     async def test_discover_skips_internal_scanner_containers(
         self,
-        client,
+        authenticated_client,
         db_with_settings,
         docker_service_mock,
     ):
@@ -150,9 +161,10 @@ class TestContainersDiscovery:
         ]
 
         from app.main import app
+
         app.dependency_overrides[get_current_user] = override_get_current_user
 
-        response = await client.post("/api/v1/containers/discover")
+        response = await authenticated_client.post("/api/v1/containers/discover")
         assert response.status_code in [200, 201]
 
         data = response.json()
@@ -169,7 +181,9 @@ class TestContainersDiscovery:
 
         app.dependency_overrides.clear()
 
-    async def test_discover_containers_docker_error(self, client, db_with_settings, docker_service_mock):
+    async def test_discover_containers_docker_error(
+        self, authenticated_client, db_with_settings, docker_service_mock
+    ):
         """Test container discovery with Docker connection error."""
         from app.dependencies.auth import get_current_user
 
@@ -178,20 +192,21 @@ class TestContainersDiscovery:
             return User(username="admin", provider="test", is_admin=True)
 
         from app.main import app
+
         app.dependency_overrides[get_current_user] = override_get_current_user
 
         docker_service_mock.list_containers.side_effect = Exception("Docker daemon not available")
 
-        response = await client.post("/api/v1/containers/discover")
+        response = await authenticated_client.post("/api/v1/containers/discover")
 
         # Should return error or empty result, not crash
         assert response.status_code in [200, 500, 503]
 
         app.dependency_overrides.clear()
 
-    async def test_discover_allows_when_auth_disabled(self, client):
+    async def test_discover_allows_when_auth_disabled(self, authenticated_client):
         """Ensure discovery is accessible when authentication is disabled."""
-        response = await client.post("/api/v1/containers/discover")
+        response = await authenticated_client.post("/api/v1/containers/discover")
 
         assert response.status_code in [200, 201]
 
@@ -199,13 +214,13 @@ class TestContainersDiscovery:
 class TestContainersList:
     """Tests for container listing endpoint."""
 
-    async def test_list_containers_allows_when_auth_disabled(self, client):
+    async def test_list_containers_allows_when_auth_disabled(self, authenticated_client):
         """Ensure listing containers works when authentication is disabled."""
-        response = await client.get("/api/v1/containers")
+        response = await authenticated_client.get("/api/v1/containers")
 
         assert response.status_code == 200
 
-    async def test_list_containers_success(self, client, db_with_settings):
+    async def test_list_containers_success(self, authenticated_client, db_with_settings):
         """Test successful container listing."""
         from app.dependencies.auth import get_current_user
 
@@ -214,9 +229,10 @@ class TestContainersList:
             return User(username="user", provider="test", is_admin=False)
 
         from app.main import app
+
         app.dependency_overrides[get_current_user] = override_get_current_user
 
-        response = await client.get("/api/v1/containers")
+        response = await authenticated_client.get("/api/v1/containers")
 
         assert response.status_code == 200
         data = response.json()
@@ -228,7 +244,7 @@ class TestContainersList:
 
         app.dependency_overrides.clear()
 
-    async def test_list_containers_pagination(self, client, db_with_settings):
+    async def test_list_containers_pagination(self, authenticated_client, db_with_settings):
         """Test container listing with pagination parameters."""
         from app.dependencies.auth import get_current_user
 
@@ -237,10 +253,11 @@ class TestContainersList:
             return User(username="user", provider="test", is_admin=False)
 
         from app.main import app
+
         app.dependency_overrides[get_current_user] = override_get_current_user
 
         # Test with skip and limit
-        response = await client.get("/api/v1/containers?offset=0&limit=10")
+        response = await authenticated_client.get("/api/v1/containers?offset=0&limit=10")
 
         assert response.status_code == 200
         data = response.json()
@@ -254,13 +271,13 @@ class TestContainersList:
 class TestContainersGetById:
     """Tests for getting container by ID."""
 
-    async def test_get_container_allows_when_auth_disabled(self, client):
+    async def test_get_container_allows_when_auth_disabled(self, authenticated_client):
         """Ensure container detail is accessible when authentication is disabled."""
-        response = await client.get("/api/v1/containers/1")
+        response = await authenticated_client.get("/api/v1/containers/1")
 
         assert response.status_code in [200, 404]
 
-    async def test_get_nonexistent_container(self, client, db_with_settings):
+    async def test_get_nonexistent_container(self, authenticated_client, db_with_settings):
         """Test getting non-existent container returns 404."""
         from app.dependencies.auth import get_current_user
 
@@ -269,9 +286,10 @@ class TestContainersGetById:
             return User(username="user", provider="test", is_admin=False)
 
         from app.main import app
+
         app.dependency_overrides[get_current_user] = override_get_current_user
 
-        response = await client.get("/api/v1/containers/99999")
+        response = await authenticated_client.get("/api/v1/containers/99999")
 
         assert response.status_code == 404
 
@@ -281,7 +299,9 @@ class TestContainersGetById:
 class TestContainersSpecialCharacters:
     """Tests for containers with special characters in names."""
 
-    async def test_container_names_with_special_chars(self, client, db_with_settings, docker_service_mock):
+    async def test_container_names_with_special_chars(
+        self, authenticated_client, db_with_settings, docker_service_mock
+    ):
         """Test handling containers with special characters in names."""
         from app.dependencies.auth import get_current_user
 
@@ -311,9 +331,10 @@ class TestContainersSpecialCharacters:
         ]
 
         from app.main import app
+
         app.dependency_overrides[get_current_user] = override_get_current_user
 
-        response = await client.post("/api/v1/containers/discover")
+        response = await authenticated_client.post("/api/v1/containers/discover")
 
         # Should handle special characters without error
         assert response.status_code in [200, 201]
@@ -333,7 +354,7 @@ class TestContainersActivityLogging:
         self,
         mock_log,
         mock_create_or_update,
-        client,
+        authenticated_client,
         db_with_settings,
         docker_service_mock,
     ):
@@ -356,9 +377,10 @@ class TestContainersActivityLogging:
         mock_create_or_update.return_value = container_record
 
         from app.main import app
+
         app.dependency_overrides[get_current_user] = override_get_current_user
 
-        response = await client.post("/api/v1/containers/discover")
+        await authenticated_client.post("/api/v1/containers/discover")
 
         # Should log activity for the new container
         mock_log.assert_called()
@@ -369,7 +391,9 @@ class TestContainersActivityLogging:
 class TestContainersErrorHandling:
     """Tests for error handling in container operations."""
 
-    async def test_docker_permission_denied(self, client, db_with_settings, docker_service_mock):
+    async def test_docker_permission_denied(
+        self, authenticated_client, db_with_settings, docker_service_mock
+    ):
         """Test handling Docker permission denied errors."""
         from app.dependencies.auth import get_current_user
 
@@ -381,16 +405,19 @@ class TestContainersErrorHandling:
         docker_service_mock.list_containers.side_effect = PermissionError("Permission denied")
 
         from app.main import app
+
         app.dependency_overrides[get_current_user] = override_get_current_user
 
-        response = await client.post("/api/v1/containers/discover")
+        response = await authenticated_client.post("/api/v1/containers/discover")
 
         # Should return appropriate error
         assert response.status_code in [403, 500, 503]
 
         app.dependency_overrides.clear()
 
-    async def test_docker_connection_timeout(self, client, db_with_settings, docker_service_mock):
+    async def test_docker_connection_timeout(
+        self, authenticated_client, db_with_settings, docker_service_mock
+    ):
         """Test handling Docker connection timeout."""
         from app.dependencies.auth import get_current_user
 
@@ -399,13 +426,13 @@ class TestContainersErrorHandling:
             return User(username="admin", provider="test", is_admin=True)
 
         # Mock timeout
-        import asyncio
-        docker_service_mock.list_containers.side_effect = asyncio.TimeoutError("Connection timeout")
+        docker_service_mock.list_containers.side_effect = TimeoutError("Connection timeout")
 
         from app.main import app
+
         app.dependency_overrides[get_current_user] = override_get_current_user
 
-        response = await client.post("/api/v1/containers/discover")
+        response = await authenticated_client.post("/api/v1/containers/discover")
 
         # Should return timeout error
         assert response.status_code in [500, 503, 504]

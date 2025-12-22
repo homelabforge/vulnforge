@@ -1,5 +1,6 @@
 """VulnForge FastAPI application."""
 
+import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -14,6 +15,7 @@ from sqlalchemy import select
 
 from app.api import (
     activity,
+    api_keys,
     auth,
     compliance,
     containers,
@@ -23,13 +25,16 @@ from app.api import (
     notifications,
     scans,
     secrets,
-    settings as settings_api,
     system,
+    user_auth,
     vulnerabilities,
     widget,
 )
+from app.api import (
+    settings as settings_api,
+)
 from app.config import settings as app_settings
-from app.db import db_session, get_db, init_db
+from app.db import db_session, init_db
 from app.middleware.auth import AuthenticationMiddleware
 from app.models import Container
 from app.services.docker_client import DockerService
@@ -105,7 +110,9 @@ async def discover_containers_startup():
                     discovered.append(dc["name"])
 
             await db.commit()
-            logger.info(f"Auto-discovery complete: {len(docker_containers)} total, {len(discovered)} new containers")
+            logger.info(
+                f"Auto-discovery complete: {len(docker_containers)} total, {len(discovered)} new containers"
+            )
 
         docker_service.close()
     except Exception as e:
@@ -154,8 +161,12 @@ async def lifespan(app: FastAPI):
     # Get scan and compliance settings from database
     async with db_session() as db:
         settings_manager = SettingsManager(db)
-        scan_schedule = await settings_manager.get("scan_schedule", default=app_settings.scan_schedule)
-        compliance_enabled = await settings_manager.get_bool("compliance_scan_enabled", default=True)
+        scan_schedule = await settings_manager.get(
+            "scan_schedule", default=app_settings.scan_schedule
+        )
+        compliance_enabled = await settings_manager.get_bool(
+            "compliance_scan_enabled", default=True
+        )
         compliance_schedule = await settings_manager.get("compliance_scan_schedule", "0 3 * * 0")
         kev_enabled = await settings_manager.get_bool("kev_catalog_enabled", default=True)
 
@@ -163,7 +174,7 @@ async def lifespan(app: FastAPI):
         scheduler.start(
             scan_schedule=scan_schedule,
             compliance_schedule=compliance_schedule if compliance_enabled else None,
-            kev_enabled=kev_enabled
+            kev_enabled=kev_enabled,
         )
         logger.info(f"Scheduler started with vulnerability scan schedule: {scan_schedule}")
 
@@ -206,11 +217,14 @@ app.add_middleware(AuthenticationMiddleware)
 
 # CORS middleware - load allowed origins from settings
 # Default origins include production domain and localhost for development
-import json
 cors_origins_default = ["https://vulnforge.starett.net", "http://localhost:5173"]
 try:
     # Try to load from settings at startup (will use defaults if not found)
-    cors_origins = json.loads(app_settings.cors_origins) if hasattr(app_settings, 'cors_origins') else cors_origins_default
+    cors_origins = (
+        json.loads(app_settings.cors_origins)
+        if hasattr(app_settings, "cors_origins")
+        else cors_origins_default
+    )
 except (json.JSONDecodeError, AttributeError):
     cors_origins = cors_origins_default
 
@@ -225,6 +239,7 @@ app.add_middleware(
     max_age=600,  # Cache preflight requests for 10 minutes
 )
 
+
 # Health endpoint (must be before static files)
 @app.get("/health")
 async def health_check():
@@ -234,9 +249,13 @@ async def health_check():
 
 # Include routers
 app.include_router(activity.router, prefix="/api/v1/activity", tags=["Activity"])
+app.include_router(api_keys.router)  # Prefix already defined in router
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+app.include_router(user_auth.router, prefix="/api/v1", tags=["User Authentication"])
 app.include_router(compliance.router, prefix="/api/v1/compliance", tags=["Compliance"])
-app.include_router(image_compliance.router, prefix="/api/v1/image-compliance", tags=["Image Compliance"])
+app.include_router(
+    image_compliance.router, prefix="/api/v1/image-compliance", tags=["Image Compliance"]
+)
 app.include_router(containers.router, prefix="/api/v1/containers", tags=["Containers"])
 app.include_router(scans.router, prefix="/api/v1/scans", tags=["Scans"])
 app.include_router(
@@ -264,8 +283,16 @@ if static_dir.exists():
     from fastapi.responses import FileResponse
 
     @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
+    async def serve_spa(full_path: str, request: Request):
         """Serve index.html for all non-API routes (SPA fallback)."""
+        # Don't intercept API routes - let them 404 naturally if not found
+        if full_path.startswith("api/"):
+            # This should never happen if routes are properly defined
+            # Return 404 to signal the API endpoint doesn't exist
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=404, detail=f"API endpoint not found: /{full_path}")
+
         # Normalize and validate path to prevent directory traversal
         try:
             # Resolve to absolute path and check it's within static_dir

@@ -6,7 +6,6 @@ import io
 import json
 import logging
 import subprocess
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -19,9 +18,10 @@ from app.models import ImageComplianceFinding, ImageComplianceScan
 from app.models.user import User
 from app.repositories.dependencies import get_activity_logger
 from app.services.activity_logger import ActivityLogger
-from app.services.trivy_misconfig_service import TrivyMisconfigService
 from app.services.docker_client import DockerService
 from app.services.image_misconfig_state import image_misconfig_state
+from app.services.trivy_misconfig_service import TrivyMisconfigService
+from app.utils.log_redaction import sanitize_for_log
 from app.utils.timezone import get_now
 
 router = APIRouter()
@@ -156,10 +156,12 @@ async def perform_image_compliance_scan(
                     # Extract code snippet if available for alerts
                     alerts = []
                     if finding_data.get("code_snippet"):
-                        alerts.append({
-                            "code": finding_data["code_snippet"],
-                            "line": finding_data.get("start_line"),
-                        })
+                        alerts.append(
+                            {
+                                "code": finding_data["code_snippet"],
+                                "line": finding_data.get("start_line"),
+                            }
+                        )
 
                     finding = ImageComplianceFinding(
                         check_id=finding_data["check_id"],
@@ -187,19 +189,21 @@ async def perform_image_compliance_scan(
             success = True
 
         except subprocess.TimeoutExpired as e:
-            logger.error(f"Image scan timed out for {image_name}: {e}")
+            logger.error(f"Image scan timed out for {sanitize_for_log(image_name)}: {e}")
             scan.scan_status = "failed"
             scan.error_message = "Scan timed out - image may be too large"
             error_message = "Scan timed out"
             await db.commit()
         except subprocess.CalledProcessError as e:
-            logger.error(f"Trivy process failed for {image_name}: exit code {e.returncode}")
+            logger.error(
+                f"Trivy process failed for {sanitize_for_log(image_name)}: exit code {e.returncode}"
+            )
             scan.scan_status = "failed"
             scan.error_message = f"Trivy scan failed with exit code {e.returncode}"
             error_message = str(e)
             await db.commit()
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse Trivy output for {image_name}: {e}")
+            logger.error(f"Failed to parse Trivy output for {sanitize_for_log(image_name)}: {e}")
             scan.scan_status = "failed"
             scan.error_message = "Invalid scan output format"
             error_message = "Invalid output"
@@ -207,7 +211,10 @@ async def perform_image_compliance_scan(
         except Exception as e:
             # INTENTIONAL: Catch-all for unexpected scan errors.
             # We must update the scan record to prevent orphaned in_progress scans.
-            logger.error(f"Unexpected image scan error for {image_name}: {e}", exc_info=True)
+            logger.error(
+                f"Unexpected image scan error for {sanitize_for_log(image_name)}: {e}",
+                exc_info=True,
+            )
             scan.scan_status = "failed"
             scan.error_message = str(e)
             error_message = str(e)
@@ -340,7 +347,9 @@ async def trigger_image_scan(
 
     # Check if a scan (single or batch) is already in progress
     if _current_scan_task and not _current_scan_task.done():
-        raise HTTPException(status_code=409, detail="Image misconfiguration scan already in progress")
+        raise HTTPException(
+            status_code=409, detail="Image misconfiguration scan already in progress"
+        )
 
     # Reset completion poll count for new scan
     _completion_poll_count = 0
@@ -353,7 +362,9 @@ async def trigger_image_scan(
         name=f"trivy-misconfig-scan-{normalized_image}",
     )
 
-    logger.info("Triggered image misconfiguration scan for %s by %s", normalized_image, user.username)
+    logger.info(
+        "Triggered image misconfiguration scan for %s by %s", normalized_image, user.username
+    )
 
     return {"message": "Image misconfiguration scan started", "image_name": normalized_image}
 
@@ -371,7 +382,9 @@ async def trigger_image_scan_all(
     global _current_scan_task, _completion_poll_count
 
     if _current_scan_task and not _current_scan_task.done():
-        raise HTTPException(status_code=409, detail="Image misconfiguration scan already in progress")
+        raise HTTPException(
+            status_code=409, detail="Image misconfiguration scan already in progress"
+        )
 
     # Reset completion poll count for new scan
     _completion_poll_count = 0
@@ -406,12 +419,19 @@ async def get_current_image_scan_status():
     state_status = image_misconfig_state.get_status()
 
     # If scan just completed, include last_scan_id for result retrieval
-    if state_status["status"] == "idle" and _current_scan_task and _current_scan_task.done() and _last_scan_id:
+    if (
+        state_status["status"] == "idle"
+        and _current_scan_task
+        and _current_scan_task.done()
+        and _last_scan_id
+    ):
         # Allow frontend to poll for "completed" status a few times (3 seconds at 1s intervals)
         _completion_poll_count += 1
 
         if _completion_poll_count <= 3:
-            logger.info(f"DEBUG get_current_image_scan: Scan completed, returning last_scan_id={_last_scan_id} (poll {_completion_poll_count}/3)")
+            logger.info(
+                f"DEBUG get_current_image_scan: Scan completed, returning last_scan_id={_last_scan_id} (poll {_completion_poll_count}/3)"
+            )
             return {
                 "status": "completed",
                 "last_scan_id": _last_scan_id,
@@ -419,7 +439,9 @@ async def get_current_image_scan_status():
             }
         else:
             # Clear the task reference after frontend has had time to process
-            logger.info(f"DEBUG get_current_image_scan: Clearing task after {_completion_poll_count} polls")
+            logger.info(
+                f"DEBUG get_current_image_scan: Clearing task after {_completion_poll_count} polls"
+            )
             _current_scan_task = None
             _last_scan_id = None
             _completion_poll_count = 0
@@ -451,8 +473,7 @@ async def get_image_compliance_summary(db: AsyncSession = Depends(get_db)):
 
     # Get all latest scans
     result = await db.execute(
-        select(ImageComplianceScan)
-        .join(subquery, ImageComplianceScan.id == subquery.c.max_id)
+        select(ImageComplianceScan).join(subquery, ImageComplianceScan.id == subquery.c.max_id)
     )
     latest_scans = result.scalars().all()
 
@@ -466,7 +487,9 @@ async def get_image_compliance_summary(db: AsyncSession = Depends(get_db)):
 
     # Calculate aggregated metrics
     total_images = len(latest_scans)
-    total_compliance = sum(scan.compliance_score for scan in latest_scans if scan.compliance_score is not None)
+    total_compliance = sum(
+        scan.compliance_score for scan in latest_scans if scan.compliance_score is not None
+    )
     avg_compliance = total_compliance / total_images if total_images > 0 else 0
 
     # Sum up critical findings and active failures across all images
@@ -514,11 +537,10 @@ async def list_scanned_images(db: AsyncSession = Depends(get_db)):
     for scan in scans:
         # Get finding counts for this image
         result = await db.execute(
-            select(func.count(ImageComplianceFinding.id))
-            .where(
+            select(func.count(ImageComplianceFinding.id)).where(
                 ImageComplianceFinding.image_name == scan.image_name,
                 ImageComplianceFinding.status == "FAIL",
-                ImageComplianceFinding.is_ignored == False,
+                not ImageComplianceFinding.is_ignored,
             )
         )
         active_failures = result.scalar() or 0
@@ -529,20 +551,23 @@ async def list_scanned_images(db: AsyncSession = Depends(get_db)):
             try:
                 affected_containers = json.loads(scan.affected_containers)
             except json.JSONDecodeError:
-                pass
+                # Invalid JSON - keep empty list
+                affected_containers = []
 
-        images.append({
-            "image_name": scan.image_name,
-            "compliance_score": scan.compliance_score,
-            "total_checks": scan.total_checks,
-            "passed_checks": scan.passed_checks,
-            "failed_checks": scan.failed_checks,
-            "active_failures": active_failures,
-            "fatal_count": scan.fatal_count,
-            "warn_count": scan.warn_count,
-            "last_scan_date": scan.scan_date,
-            "affected_containers": affected_containers,
-        })
+        images.append(
+            {
+                "image_name": scan.image_name,
+                "compliance_score": scan.compliance_score,
+                "total_checks": scan.total_checks,
+                "passed_checks": scan.passed_checks,
+                "failed_checks": scan.failed_checks,
+                "active_failures": active_failures,
+                "fatal_count": scan.fatal_count,
+                "warn_count": scan.warn_count,
+                "last_scan_date": scan.scan_date,
+                "affected_containers": affected_containers,
+            }
+        )
 
     return images
 
@@ -566,22 +591,18 @@ async def get_image_findings(
     Returns:
         List of compliance findings
     """
-    query = select(ImageComplianceFinding).where(
-        ImageComplianceFinding.image_name == image_name
-    )
+    query = select(ImageComplianceFinding).where(ImageComplianceFinding.image_name == image_name)
 
     # Filter ignored
     if not include_ignored:
-        query = query.where(ImageComplianceFinding.is_ignored == False)
+        query = query.where(~ImageComplianceFinding.is_ignored)
 
     # Filter by status
     if status_filter:
         query = query.where(ImageComplianceFinding.status == status_filter.upper())
 
     # Order by severity and check_id
-    query = query.order_by(
-        ImageComplianceFinding.severity.desc(), ImageComplianceFinding.check_id
-    )
+    query = query.order_by(ImageComplianceFinding.severity.desc(), ImageComplianceFinding.check_id)
 
     result = await db.execute(query)
     findings = result.scalars().all()
@@ -594,24 +615,27 @@ async def get_image_findings(
             try:
                 alerts = json.loads(f.alerts)
             except json.JSONDecodeError:
-                pass
+                # Invalid JSON - keep empty list
+                alerts = []
 
-        findings_list.append({
-            "id": f.id,
-            "check_id": f.check_id,
-            "title": f.title,
-            "description": f.description,
-            "status": f.status,
-            "severity": f.severity,
-            "category": f.category,
-            "remediation": f.remediation,
-            "alerts": alerts,
-            "is_ignored": f.is_ignored,
-            "ignored_reason": f.ignored_reason,
-            "ignored_by": f.ignored_by,
-            "first_seen": f.first_seen,
-            "last_seen": f.last_seen,
-        })
+        findings_list.append(
+            {
+                "id": f.id,
+                "check_id": f.check_id,
+                "title": f.title,
+                "description": f.description,
+                "status": f.status,
+                "severity": f.severity,
+                "category": f.category,
+                "remediation": f.remediation,
+                "alerts": alerts,
+                "is_ignored": f.is_ignored,
+                "ignored_reason": f.ignored_reason,
+                "ignored_by": f.ignored_by,
+                "first_seen": f.first_seen,
+                "last_seen": f.last_seen,
+            }
+        )
 
     return findings_list
 
@@ -725,26 +749,26 @@ async def get_scan_history(limit: int = 10, db: AsyncSession = Depends(get_db)):
         List of image compliance scans
     """
     result = await db.execute(
-        select(ImageComplianceScan)
-        .order_by(ImageComplianceScan.scan_date.desc())
-        .limit(limit)
+        select(ImageComplianceScan).order_by(ImageComplianceScan.scan_date.desc()).limit(limit)
     )
     scans = result.scalars().all()
 
     scan_list = []
     for s in scans:
-        scan_list.append({
-            "id": s.id,
-            "scan_date": s.scan_date,
-            "scan_status": s.scan_status,
-            "image_name": s.image_name,
-            "compliance_score": s.compliance_score,
-            "total_checks": s.total_checks,
-            "passed_checks": s.passed_checks,
-            "failed_checks": s.failed_checks,
-            "scan_duration_seconds": s.scan_duration_seconds,
-            "error_message": s.error_message,
-        })
+        scan_list.append(
+            {
+                "id": s.id,
+                "scan_date": s.scan_date,
+                "scan_status": s.scan_status,
+                "image_name": s.image_name,
+                "compliance_score": s.compliance_score,
+                "total_checks": s.total_checks,
+                "passed_checks": s.passed_checks,
+                "failed_checks": s.failed_checks,
+                "scan_duration_seconds": s.scan_duration_seconds,
+                "error_message": s.error_message,
+            }
+        )
 
     return scan_list
 
@@ -773,11 +797,9 @@ async def export_image_compliance_csv(
         query = query.where(ImageComplianceFinding.image_name == image_name)
 
     if not include_ignored:
-        query = query.where(ImageComplianceFinding.is_ignored == False)
+        query = query.where(~ImageComplianceFinding.is_ignored)
 
-    query = query.order_by(
-        ImageComplianceFinding.severity.desc(), ImageComplianceFinding.check_id
-    )
+    query = query.order_by(ImageComplianceFinding.severity.desc(), ImageComplianceFinding.check_id)
 
     result = await db.execute(query)
     findings = result.scalars().all()
@@ -787,39 +809,43 @@ async def export_image_compliance_csv(
     writer = csv.writer(output)
 
     # Write header
-    writer.writerow([
-        "Check ID",
-        "Image Name",
-        "Title",
-        "Status",
-        "Severity",
-        "Category",
-        "Description",
-        "Remediation",
-        "First Seen",
-        "Last Seen",
-        "Is Ignored",
-        "Ignored Reason",
-        "Ignored By",
-    ])
+    writer.writerow(
+        [
+            "Check ID",
+            "Image Name",
+            "Title",
+            "Status",
+            "Severity",
+            "Category",
+            "Description",
+            "Remediation",
+            "First Seen",
+            "Last Seen",
+            "Is Ignored",
+            "Ignored Reason",
+            "Ignored By",
+        ]
+    )
 
     # Write findings
     for finding in findings:
-        writer.writerow([
-            finding.check_id,
-            finding.image_name,
-            finding.title,
-            finding.status,
-            finding.severity,
-            finding.category,
-            finding.description or "",
-            finding.remediation or "",
-            finding.first_seen.isoformat() if finding.first_seen else "",
-            finding.last_seen.isoformat() if finding.last_seen else "",
-            "Yes" if finding.is_ignored else "No",
-            finding.ignored_reason or "",
-            finding.ignored_by or "",
-        ])
+        writer.writerow(
+            [
+                finding.check_id,
+                finding.image_name,
+                finding.title,
+                finding.status,
+                finding.severity,
+                finding.category,
+                finding.description or "",
+                finding.remediation or "",
+                finding.first_seen.isoformat() if finding.first_seen else "",
+                finding.last_seen.isoformat() if finding.last_seen else "",
+                "Yes" if finding.is_ignored else "No",
+                finding.ignored_reason or "",
+                finding.ignored_by or "",
+            ]
+        )
 
     # Reset stream position
     output.seek(0)

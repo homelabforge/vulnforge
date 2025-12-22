@@ -19,7 +19,9 @@ class ComplianceScan(Base):
     # Scan metadata
     scan_date: Mapped[datetime] = mapped_column(DateTime, default=get_now, index=True)
     scan_duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
-    scan_status: Mapped[str] = mapped_column(String(50), default="in_progress")  # in_progress, completed, failed
+    scan_status: Mapped[str] = mapped_column(
+        String(50), default="in_progress"
+    )  # in_progress, completed, failed
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Scan trigger
@@ -37,7 +39,9 @@ class ComplianceScan(Base):
     compliance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Category breakdown (stored as JSON-like string for simplicity)
-    category_scores: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: {"Host": 85.5, "Daemon": 90.0, ...}
+    category_scores: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # JSON: {"Host": 85.5, "Daemon": 90.0, ...}
 
     def __repr__(self) -> str:
         """String representation."""

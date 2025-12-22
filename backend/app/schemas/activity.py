@@ -1,7 +1,7 @@
 """Pydantic schemas for Activity API."""
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
@@ -18,7 +18,7 @@ class ActivityLog(BaseModel):
     container_name: str | None
     title: str
     description: str | None
-    event_metadata: Dict[str, Any] | None
+    event_metadata: dict[str, Any] | None
     timestamp: datetime
     created_at: datetime
 
@@ -26,9 +26,9 @@ class ActivityLog(BaseModel):
 class ActivityList(BaseModel):
     """Paginated activity list response."""
 
-    activities: List[ActivityLog]
+    activities: list[ActivityLog]
     total: int
-    event_type_counts: Dict[str, int]
+    event_type_counts: dict[str, int]
 
 
 class ActivityTypeCount(BaseModel):
@@ -42,4 +42,4 @@ class ActivityTypeCount(BaseModel):
 class ActivityTypesResponse(BaseModel):
     """Response for activity types endpoint."""
 
-    types: List[ActivityTypeCount]
+    types: list[ActivityTypeCount]

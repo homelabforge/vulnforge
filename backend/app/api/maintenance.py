@@ -1,7 +1,6 @@
 """Maintenance API endpoints."""
 
 import json
-import os
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -22,16 +21,14 @@ from app.services.cache_manager import get_cache
 from app.services.cleanup_service import CleanupService
 from app.services.kev import get_kev_service
 from app.services.settings_manager import SettingsManager
+from app.utils.path_normalization import normalize_path
 from app.utils.timezone import get_now
 
 router = APIRouter()
 
 
 @router.post("/cleanup")
-async def trigger_cleanup(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_admin)
-):
+async def trigger_cleanup(db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)):
     """Manually trigger cleanup of old scan history."""
     result = await CleanupService.cleanup_old_scans(db)
     return {
@@ -42,8 +39,7 @@ async def trigger_cleanup(
 
 @router.get("/cleanup/stats")
 async def get_cleanup_stats(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_admin)
+    db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)
 ):
     """Get statistics about cleanable data."""
     stats = await CleanupService.get_cleanup_stats(db)
@@ -78,8 +74,7 @@ async def create_backup(user: User = Depends(require_admin)):
         db_url = settings.database_url
         if not db_url.startswith("sqlite"):
             raise HTTPException(
-                status_code=400,
-                detail="Backups are only supported for SQLite databases"
+                status_code=400, detail="Backups are only supported for SQLite databases"
             )
 
         # Extract database file path
@@ -141,13 +136,15 @@ async def list_backups(user: User = Depends(require_admin)):
         backups = []
         for backup_file in sorted(backup_dir.glob("vulnforge_backup_*.db"), reverse=True):
             stat = backup_file.stat()
-            backups.append({
-                "filename": backup_file.name,
-                "path": str(backup_file),
-                "size_bytes": stat.st_size,
-                "size_mb": round(stat.st_size / 1024 / 1024, 2),
-                "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
-            })
+            backups.append(
+                {
+                    "filename": backup_file.name,
+                    "path": str(backup_file),
+                    "size_bytes": stat.st_size,
+                    "size_mb": round(stat.st_size / 1024 / 1024, 2),
+                    "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                }
+            )
 
         return {"backups": backups, "total": len(backups)}
     except PermissionError as e:
@@ -168,23 +165,22 @@ async def download_backup(filename: str, user: User = Depends(require_admin)):
         File download response
     """
     try:
-        # Validate filename to prevent path traversal
-        if ".." in filename or "/" in filename:
-            raise HTTPException(status_code=400, detail="Invalid filename")
-
-        # Get backup file path
+        # Get backup directory
         db_url = settings.database_url
         db_path = db_url.replace("sqlite+aiosqlite://", "")
         db_file = Path(db_path)
         backup_dir = db_file.parent / "backups"
-        backup_file = backup_dir / filename
+
+        # Normalize and validate path to prevent directory traversal
+        safe_filename = normalize_path(filename, backup_dir)
+        backup_file = backup_dir / safe_filename
 
         if not backup_file.exists():
             raise HTTPException(status_code=404, detail="Backup file not found")
 
         return FileResponse(
             path=str(backup_file),
-            filename=filename,
+            filename=safe_filename,
             media_type="application/x-sqlite3",
         )
     except HTTPException:
@@ -207,16 +203,15 @@ async def delete_backup(filename: str, user: User = Depends(require_admin)):
         Deletion confirmation
     """
     try:
-        # Validate filename
-        if ".." in filename or "/" in filename:
-            raise HTTPException(status_code=400, detail="Invalid filename")
-
         # Get backup file path
         db_url = settings.database_url
         db_path = db_url.replace("sqlite+aiosqlite://", "")
         db_file = Path(db_path)
         backup_dir = db_file.parent / "backups"
-        backup_file = backup_dir / filename
+
+        # Normalize and validate path to prevent directory traversal
+        safe_filename = normalize_path(filename, backup_dir)
+        backup_file = backup_dir / safe_filename
 
         if not backup_file.exists():
             raise HTTPException(status_code=404, detail="Backup file not found")
@@ -251,16 +246,15 @@ async def restore_backup(filename: str, user: User = Depends(require_admin)):
         Restoration status and instructions
     """
     try:
-        # Validate filename
-        if ".." in filename or "/" in filename:
-            raise HTTPException(status_code=400, detail="Invalid filename")
-
         # Get paths
         db_url = settings.database_url
         db_path = db_url.replace("sqlite+aiosqlite://", "")
         db_file = Path(db_path)
         backup_dir = db_file.parent / "backups"
-        backup_file = backup_dir / filename
+
+        # Normalize and validate path to prevent directory traversal
+        safe_filename = normalize_path(filename, backup_dir)
+        backup_file = backup_dir / safe_filename
 
         if not backup_file.exists():
             raise HTTPException(status_code=404, detail="Backup file not found")
@@ -273,13 +267,11 @@ async def restore_backup(filename: str, user: User = Depends(require_admin)):
             shutil.copy2(db_file, safety_backup)
         except PermissionError as e:
             raise HTTPException(
-                status_code=403,
-                detail=f"Permission denied creating safety backup: {e}"
+                status_code=403, detail=f"Permission denied creating safety backup: {e}"
             )
         except OSError as e:
             raise HTTPException(
-                status_code=500,
-                detail=f"File system error creating safety backup: {e}"
+                status_code=500, detail=f"File system error creating safety backup: {e}"
             )
 
         # Perform the restore
@@ -299,26 +291,24 @@ async def restore_backup(filename: str, user: User = Depends(require_admin)):
             try:
                 shutil.copy2(safety_backup, db_file)
                 raise HTTPException(
-                    status_code=403,
-                    detail=f"Permission denied during restore (rolled back): {e}"
+                    status_code=403, detail=f"Permission denied during restore (rolled back): {e}"
                 )
-            except OSError as rollback_error:
+            except OSError:
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Restore failed and rollback also failed. Safety backup at: {safety_backup.name}"
+                    detail=f"Restore failed and rollback also failed. Safety backup at: {safety_backup.name}",
                 )
         except OSError as e:
             # If restore fails, try to restore the safety backup
             try:
                 shutil.copy2(safety_backup, db_file)
                 raise HTTPException(
-                    status_code=500,
-                    detail=f"File system error during restore (rolled back): {e}"
+                    status_code=500, detail=f"File system error during restore (rolled back): {e}"
                 )
-            except OSError as rollback_error:
+            except OSError:
                 raise HTTPException(
                     status_code=500,
-                    detail=f"Restore failed and rollback also failed. Safety backup at: {safety_backup.name}"
+                    detail=f"Restore failed and rollback also failed. Safety backup at: {safety_backup.name}",
                 )
     except HTTPException:
         raise
@@ -341,15 +331,13 @@ async def upload_backup(file: bytes = None):
     # This endpoint would handle file upload
     # For now, we'll focus on restoring from existing backups
     raise HTTPException(
-        status_code=501,
-        detail="Upload restore not yet implemented. Use existing backups for now."
+        status_code=501, detail="Upload restore not yet implemented. Use existing backups for now."
     )
 
 
 @router.post("/kev/refresh")
 async def refresh_kev_catalog(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_admin)
+    db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)
 ):
     """
     Manually refresh KEV (Known Exploited Vulnerabilities) catalog from CISA.
@@ -365,16 +353,13 @@ async def refresh_kev_catalog(
         # Fetch latest KEV catalog
         success = await kev_service.fetch_kev_catalog()
         if not success:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to fetch KEV catalog from CISA"
-            )
+            raise HTTPException(status_code=500, detail="Failed to fetch KEV catalog from CISA")
 
         # Update last refresh timestamp in settings
         settings_manager = SettingsManager(db)
         await settings_manager.set(
             "kev_last_refresh",
-            kev_service.get_last_refresh().isoformat() if kev_service.get_last_refresh() else ""
+            kev_service.get_last_refresh().isoformat() if kev_service.get_last_refresh() else "",
         )
 
         # Re-check all existing vulnerabilities against updated KEV catalog
@@ -411,7 +396,9 @@ async def refresh_kev_catalog(
             "status": "success",
             "message": "KEV catalog refreshed successfully",
             "kev_catalog_size": kev_service.get_catalog_size(),
-            "last_refresh": kev_service.get_last_refresh().isoformat() if kev_service.get_last_refresh() else None,
+            "last_refresh": kev_service.get_last_refresh().isoformat()
+            if kev_service.get_last_refresh()
+            else None,
             "vulnerabilities_checked": len(vulnerabilities),
             "vulnerabilities_updated": updated_count,
             "newly_flagged_as_kev": newly_flagged,
@@ -420,21 +407,22 @@ async def refresh_kev_catalog(
 
     except HTTPException:
         raise
-    except httpx.TimeoutException as e:
-        raise HTTPException(status_code=504, detail="KEV catalog fetch timed out - CISA may be slow")
-    except httpx.ConnectError as e:
-        raise HTTPException(status_code=503, detail="Cannot connect to CISA - check network connectivity")
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=504, detail="KEV catalog fetch timed out - CISA may be slow"
+        )
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=503, detail="Cannot connect to CISA - check network connectivity"
+        )
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail=f"CISA returned error: {e}")
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Invalid KEV catalog format received from CISA")
 
 
 @router.get("/kev/status")
-async def get_kev_status(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_admin)
-):
+async def get_kev_status(db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)):
     """
     Get KEV catalog status and statistics.
 
@@ -450,7 +438,7 @@ async def get_kev_status(
         last_refresh_str = await settings_manager.get("kev_last_refresh", default="")
 
         # Get KEV stats from database
-        result = await db.execute(select(func.count(Vulnerability.id)).where(Vulnerability.is_kev == True))
+        result = await db.execute(select(func.count(Vulnerability.id)).where(Vulnerability.is_kev))
         kev_vuln_count = result.scalar_one()
 
         return {
@@ -462,7 +450,7 @@ async def get_kev_status(
             "cache_hours": await settings_manager.get_int("kev_cache_hours", default=12),
         }
 
-    except sqlalchemy.exc.OperationalError as e:
+    except sqlalchemy.exc.OperationalError:
         raise HTTPException(status_code=503, detail="Database temporarily unavailable")
     except sqlalchemy.exc.SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail=f"Database error: {e}")

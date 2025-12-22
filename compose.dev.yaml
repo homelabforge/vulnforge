@@ -49,7 +49,7 @@ services:
       - ./frontend:/app
       - frontend-bun-cache:/root/.bun/install/cache
     ports:
-      - "12349:5173"
+      - "14502:5173"
     environment:
       # Vite will proxy /api requests to backend container
       - VITE_API_URL=http://backend:8787

@@ -1,7 +1,6 @@
 """Discord notification service."""
 
 import logging
-from typing import Optional
 
 import httpx
 
@@ -11,11 +10,11 @@ logger = logging.getLogger(__name__)
 
 # Color mapping for Discord embeds (decimal format)
 COLOR_MAP = {
-    "urgent": 0xDC2626,   # Red
-    "high": 0xF97316,     # Orange
+    "urgent": 0xDC2626,  # Red
+    "high": 0xF97316,  # Orange
     "default": 0x3B82F6,  # Blue
-    "low": 0x10B981,      # Green
-    "min": 0x6B7280,      # Gray
+    "low": 0x10B981,  # Green
+    "min": 0x6B7280,  # Gray
 }
 
 
@@ -37,8 +36,8 @@ class DiscordNotificationService(NotificationService):
         title: str,
         message: str,
         priority: str = "default",
-        tags: Optional[list[str]] = None,
-        url: Optional[str] = None,
+        tags: list[str] | None = None,
+        url: str | None = None,
     ) -> bool:
         try:
             # Build Discord embed
@@ -57,9 +56,7 @@ class DiscordNotificationService(NotificationService):
             # Add tags as a field
             if tags:
                 tag_text = " ".join(f"`{tag}`" for tag in tags)
-                embed["fields"] = [
-                    {"name": "Tags", "value": tag_text, "inline": True}
-                ]
+                embed["fields"] = [{"name": "Tags", "value": tag_text, "inline": True}]
 
             payload = {
                 "embeds": [embed],

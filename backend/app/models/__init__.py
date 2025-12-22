@@ -1,6 +1,7 @@
 """Database models for VulnForge."""
 
 from app.models.activity_log import ActivityLog
+from app.models.api_key import APIKey
 from app.models.compliance_finding import ComplianceFinding
 from app.models.compliance_scan import ComplianceScan
 from app.models.container import Container
@@ -20,6 +21,7 @@ ScanResult = Scan
 
 __all__ = [
     "ActivityLog",
+    "APIKey",
     "ComplianceFinding",
     "ComplianceScan",
     "Container",

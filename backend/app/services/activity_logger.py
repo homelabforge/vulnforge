@@ -1,12 +1,11 @@
 """Activity logger service for centralized activity logging."""
 
 import logging
-from datetime import datetime
-from typing import Any, Dict, List
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.activity_log_repository import ActivityLogRepository
+from app.utils.log_redaction import sanitize_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +85,7 @@ class ActivityLogger:
                 metadata=metadata,
             )
 
-            logger.debug(f"Logged scan completion for {container_name}")
+            logger.debug(f"Logged scan completion for {sanitize_for_log(container_name)}")
 
         except Exception as e:
             logger.error(f"Failed to log scan completion: {e}", exc_info=True)
@@ -125,7 +124,7 @@ class ActivityLogger:
                 metadata=metadata,
             )
 
-            logger.debug(f"Logged scan failure for {container_name}")
+            logger.debug(f"Logged scan failure for {sanitize_for_log(container_name)}")
 
         except Exception as e:
             logger.error(f"Failed to log scan failure: {e}", exc_info=True)
@@ -138,7 +137,7 @@ class ActivityLogger:
         total_secrets: int,
         critical_count: int,
         high_count: int,
-        categories: List[str],
+        categories: list[str],
     ):
         """
         Log secret detection event.
@@ -158,8 +157,7 @@ class ActivityLogger:
 
             title = f"Secrets detected: {container_name}"
             description = (
-                f"Found {total_secrets} secrets "
-                f"({critical_count} critical, {high_count} high)"
+                f"Found {total_secrets} secrets ({critical_count} critical, {high_count} high)"
             )
 
             metadata = {
@@ -180,7 +178,7 @@ class ActivityLogger:
                 metadata=metadata,
             )
 
-            logger.debug(f"Logged secret detection for {container_name}")
+            logger.debug(f"Logged secret detection for {sanitize_for_log(container_name)}")
 
         except Exception as e:
             logger.error(f"Failed to log secret detection: {e}", exc_info=True)
@@ -205,7 +203,9 @@ class ActivityLogger:
         """
         try:
             title = f"High-severity vulnerabilities: {container_name}"
-            description = f"Found {critical_count} critical and {high_count} high severity vulnerabilities"
+            description = (
+                f"Found {critical_count} critical and {high_count} high severity vulnerabilities"
+            )
 
             metadata = {
                 "scan_id": scan_id,
@@ -223,7 +223,9 @@ class ActivityLogger:
                 metadata=metadata,
             )
 
-            logger.debug(f"Logged high-severity vulnerabilities for {container_name}")
+            logger.debug(
+                f"Logged high-severity vulnerabilities for {sanitize_for_log(container_name)}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to log high-severity vulnerabilities: {e}", exc_info=True)
@@ -248,7 +250,9 @@ class ActivityLogger:
         """
         try:
             title = f"Container discovered: {container_name}"
-            description = f"Image: {image}:{image_tag}, Status: {'running' if is_running else 'stopped'}"
+            description = (
+                f"Image: {image}:{image_tag}, Status: {'running' if is_running else 'stopped'}"
+            )
 
             metadata = {
                 "image": image,
@@ -266,7 +270,7 @@ class ActivityLogger:
                 metadata=metadata,
             )
 
-            logger.debug(f"Logged container discovery: {container_name}")
+            logger.debug(f"Logged container discovery: {sanitize_for_log(container_name)}")
 
         except Exception as e:
             logger.error(f"Failed to log container discovery: {e}", exc_info=True)
@@ -352,7 +356,9 @@ class ActivityLogger:
                 metadata=metadata,
             )
 
-            logger.debug(f"Logged status change for {container_name}: {old_status} → {new_status}")
+            logger.debug(
+                f"Logged status change for {sanitize_for_log(container_name)}: {sanitize_for_log(old_status)} → {sanitize_for_log(new_status)}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to log container status change: {e}", exc_info=True)
@@ -402,7 +408,7 @@ class ActivityLogger:
                 metadata=metadata,
             )
 
-            logger.info(f"Logged false positive pattern creation by {username}")
+            logger.info(f"Logged false positive pattern creation by {sanitize_for_log(username)}")
 
         except Exception as e:
             logger.error(f"Failed to log false positive creation: {e}", exc_info=True)
@@ -448,7 +454,9 @@ class ActivityLogger:
                 metadata=metadata,
             )
 
-            logger.info(f"Logged compliance finding ignore by {username}: {check_id}")
+            logger.info(
+                f"Logged compliance finding ignore by {sanitize_for_log(username)}: {sanitize_for_log(check_id)}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to log compliance finding ignore: {e}", exc_info=True)
@@ -491,7 +499,9 @@ class ActivityLogger:
                 metadata=metadata,
             )
 
-            logger.info(f"Logged compliance finding unignore by {username}: {check_id}")
+            logger.info(
+                f"Logged compliance finding unignore by {sanitize_for_log(username)}: {sanitize_for_log(check_id)}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to log compliance finding unignore: {e}", exc_info=True)
@@ -544,7 +554,9 @@ class ActivityLogger:
                 metadata=metadata,
             )
 
-            logger.info(f"Logged secret status change by {username}: {old_status} → {new_status}")
+            logger.info(
+                f"Logged secret status change by {sanitize_for_log(username)}: {sanitize_for_log(old_status)} → {sanitize_for_log(new_status)}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to log secret status change: {e}", exc_info=True)
@@ -600,7 +612,9 @@ class ActivityLogger:
                 metadata=metadata,
             )
 
-            logger.info(f"Logged vulnerability status change by {username}: {cve_id}")
+            logger.info(
+                f"Logged vulnerability status change by {sanitize_for_log(username)}: {sanitize_for_log(cve_id)}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to log vulnerability status change: {e}", exc_info=True)
@@ -648,7 +662,9 @@ class ActivityLogger:
                 metadata=metadata,
             )
 
-            logger.info(f"Logged bulk vulnerability status change by {username}: {len(vuln_ids)} vulnerabilities")
+            logger.info(
+                f"Logged bulk vulnerability status change by {username}: {len(vuln_ids)} vulnerabilities"
+            )
 
         except Exception as e:
             logger.error(f"Failed to log bulk vulnerability status change: {e}", exc_info=True)

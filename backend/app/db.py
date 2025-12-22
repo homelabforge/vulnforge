@@ -2,10 +2,11 @@
 
 import logging
 import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from pathlib import Path
 
-from sqlalchemy import event, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -58,7 +59,7 @@ class Base(DeclarativeBase):
 
 
 @asynccontextmanager
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
+async def db_session() -> AsyncGenerator[AsyncSession]:
     """
     Async context manager that yields a database session and ensures it closes.
     """
@@ -80,13 +81,20 @@ async def init_db():
             await conn.execute(text("PRAGMA busy_timeout=30000"))  # 30 second busy timeout
             await conn.commit()
 
-    # Run migrations
-    await _run_migrations()
+    # Run migrations using the migration runner
+    try:
+        from app.migrations.runner import run_migrations
+
+        migrations_dir = Path(__file__).parent / "migrations"
+        await run_migrations(engine, migrations_dir)
+    except Exception as e:
+        logger.error(f"Migration error: {e}", exc_info=True)
+        # Don't fail startup - log error and continue
 
     logger.info("Database initialized successfully")
 
 
-async def _run_migrations():
+async def _run_migrations_legacy():
     """Run database migrations for schema updates.
 
     Tracks migration status and can fail strictly (raise) or gracefully (log)
@@ -117,15 +125,17 @@ async def _run_migrations():
             # Add is_sensitive column
             if "is_sensitive" not in columns:
                 logger.info("Running migration: Adding is_sensitive column to settings table")
-                await conn.execute(text("ALTER TABLE settings ADD COLUMN is_sensitive BOOLEAN DEFAULT 0"))
+                await conn.execute(
+                    text("ALTER TABLE settings ADD COLUMN is_sensitive BOOLEAN DEFAULT 0")
+                )
 
                 # Update existing token/password fields to be marked as sensitive
                 # Use parameterized query for better security
-                sensitive_patterns = ['%token%', '%password%', '%secret%', '%key%', '%apikey%']
+                sensitive_patterns = ["%token%", "%password%", "%secret%", "%key%", "%apikey%"]
                 for i, pattern in enumerate(sensitive_patterns):
                     await conn.execute(
                         text(f"UPDATE settings SET is_sensitive = 1 WHERE key LIKE :pattern{i}"),
-                        {f"pattern{i}": pattern}
+                        {f"pattern{i}": pattern},
                     )
                 await conn.commit()
                 migrations_applied.append("settings.is_sensitive")
@@ -135,9 +145,7 @@ async def _run_migrations():
             if "category" not in columns:
                 logger.info("Running migration: Adding category column to settings table")
                 await conn.execute(
-                    text(
-                        "ALTER TABLE settings ADD COLUMN category TEXT NOT NULL DEFAULT 'general'"
-                    )
+                    text("ALTER TABLE settings ADD COLUMN category TEXT NOT NULL DEFAULT 'general'")
                 )
                 await conn.commit()
                 migrations_applied.append("settings.category")
@@ -177,7 +185,9 @@ async def _run_migrations():
 
             if "is_my_project" not in columns:
                 logger.info("Running migration: Adding is_my_project column to containers table")
-                await conn.execute(text("ALTER TABLE containers ADD COLUMN is_my_project BOOLEAN DEFAULT 0"))
+                await conn.execute(
+                    text("ALTER TABLE containers ADD COLUMN is_my_project BOOLEAN DEFAULT 0")
+                )
                 await conn.commit()
                 migrations_applied.append("containers.is_my_project")
                 logger.info("✓ Migration completed: is_my_project column added")
@@ -234,7 +244,7 @@ def _log_migration_summary(applied: list[str], failed: list[str]):
         logger.warning(f"Migrations failed: {', '.join(failed)}")
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     """
     Dependency for getting database sessions.
 

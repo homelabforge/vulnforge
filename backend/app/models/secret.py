@@ -1,12 +1,18 @@
 """Secret model for storing detected secrets from Trivy scans."""
 
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from app.db import Base
 from app.utils.timezone import get_now
+
+if TYPE_CHECKING:
+    from app.models.scan import Scan
 
 
 class Secret(Base):
@@ -35,7 +41,9 @@ class Secret(Base):
     code_snippet: Mapped[str | None] = mapped_column(Text, nullable=True)  # Code context (redacted)
 
     # False positive management
-    status: Mapped[str] = mapped_column(String(20), default="to_review")  # to_review, false_positive, confirmed, accepted_risk
+    status: Mapped[str] = mapped_column(
+        String(20), default="to_review"
+    )  # to_review, false_positive, confirmed, accepted_risk
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)  # User notes
 
     # Metadata
@@ -43,4 +51,4 @@ class Secret(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, onupdate=get_now)
 
     # Relationships
-    scan: Mapped["Scan"] = relationship("Scan", back_populates="secrets")
+    scan: Mapped[Scan] = relationship("Scan", back_populates="secrets")

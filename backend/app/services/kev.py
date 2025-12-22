@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
+
 from app.utils.timezone import get_now
 
 logger = logging.getLogger(__name__)
@@ -13,7 +14,9 @@ logger = logging.getLogger(__name__)
 class KEVService:
     """Service for managing CISA KEV (Known Exploited Vulnerabilities) catalog."""
 
-    CISA_KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+    CISA_KEV_URL = (
+        "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+    )
     DEFAULT_CACHE_HOURS = 12
 
     def __init__(self):

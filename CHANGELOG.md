@@ -7,6 +7,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2025-12-22
+
+### Added
+- **User Authentication System** - 
+  - Single-user model with admin account
+  - Local authentication (username/password with Argon2id hashing)
+  - OIDC/SSO authentication (Authentik integration via OAuth2 authorization code flow)
+  - JWT session management (httpOnly cookies, 24-hour expiry)
+  - Auto-migration system for database schema updates
+  - Protected routes with auth guards
+  - Setup page for initial account creation
+  - Login page with local and SSO options
+  - User profile management (edit email, full name)
+  - Password change with real-time validation (8 char min, uppercase, lowercase, number, special char)
+  - OIDC configuration UI with connection testing
+  - Logout functionality in navigation
+  - Security features: CSRF protection, SSRF prevention, nonce validation
+- **Backend Test Coverage** - Comprehensive test suite for APIs and services
+  - 116 new passing tests across 6 major modules
+  - Image Compliance API tests (37 tests covering 10 endpoints)
+  - Notifications API tests (45 tests covering 18 endpoints)
+  - Trivy Misconfiguration Service tests (16 tests)
+  - Docker Client Service tests (10 tests)
+  - KEV Service tests (10 tests)
+  - Enhanced Notifier Service tests (6 tests)
+  - Total project tests: 489 → 605 tests (+24%)
+  - 100% pass rate on all new tests
+
+### Changed
+- **API Authentication Simplified** - Complete refactor from complex multi-provider system to simple API key management
+  - **Removed:** Authentik ForwardAuth, Custom Headers, Basic Auth providers (855 lines → 110 lines in auth middleware)
+  - **New:** Database-backed API keys with secure generation, hashing, and revocation
+  - API keys use `vf_` prefix + 32 bytes URL-safe base64 (~48 chars total)
+  - SHA256 hashing for storage (never store plaintext)
+  - Clean UI with create/list/revoke operations
+  - Keys shown only once on creation with copy-to-clipboard
+  - Includes key prefix display, last used timestamp, and soft delete (revocation)
+  - Migration 005 automatically creates `api_keys` table and disables old auth providers
+- **Authentication Architecture** - Separated user auth from API auth
+  - User authentication for browser sessions (JWT cookies)
+  - API authentication for external integrations (ForwardAuth, API keys)
+  - `/api/v1/user-auth/*` endpoints exempt from API auth middleware
+  - Settings organized by `user_auth_*` vs `auth_*` prefixes
+- **Settings UI** - Refactored user authentication settings
+  - Removed inline OIDC configuration fields (18+ props)
+  - Clean TideWatch-style user profile display
+  - Action button grid (Edit Profile, Change Password, OIDC/SSO, Disable Auth)
+  - Three fully functional modals (Edit Profile, Change Password, OIDC Config)
+  - Self-contained component with no prop drilling
+- **Settings Security Tab** - Replaced complex API auth card with simple API Keys manager
+  - Old: 265-line card with 4 auth providers, 12 state variables, JSON editing
+  - New: Clean ApiKeysCard component with UI for generate/list/revoke
+  - Removed API Authentication toggle and provider selection (no longer needed)
+- **Test Infrastructure** - Improved test reliability
+  - Fixed `make_notification_rule()` fixture in conftest.py
+  - Updated Pydantic models to V2 ConfigDict pattern
+  - Migrated `datetime.utcnow()` to `datetime.now(UTC)` (Python 3.13+)
+  - Fixed httpx mock patterns (synchronous `raise_for_status`)
+
+### Fixed
+- **Critical SQL Query Bug** - Fixed ignored findings filter in Image Compliance API
+  - Lines 591, 792 in `app/api/image_compliance.py`
+  - Changed `not ImageComplianceFinding.is_ignored` to `ImageComplianceFinding.is_ignored == False`
+  - Bug was filtering out ALL non-ignored findings instead of showing them
+- **Settings Auto-Save Race Condition** - Fixed spurious save on initial Settings page load
+  - Race condition: `hasInitializedRef` set before `lastPayloadRef`, allowing auto-save to trigger
+  - Changed setTimeout from 0ms to 100ms to ensure state updates complete
+  - Moved `hasInitializedRef.current = true` inside setTimeout with payload initialization
+  - Settings now only save when user makes actual changes, not on first load
+- **SPA Routing** - Fixed catch-all route intercepting API endpoints
+  - Added check in catch-all to skip routes starting with `api/`
+  - Prevents `/api/v1/user-auth/oidc/login` from returning HTML
+- **Test Warnings** - Eliminated all test suite warnings (56 → 0)
+  - Fixed 3 Pydantic V2 deprecation warnings (`class Config` → `model_config`)
+  - Fixed 18 datetime deprecation warnings (`utcnow()` → `now(UTC)`)
+  - Fixed 6 RuntimeWarnings (unawaited coroutines in httpx mocks)
+
+### Security
+- **Password Security** - Argon2id hashing (time_cost=2, memory_cost=102400, parallelism=8)
+- **JWT Security** - HS256 algorithm, 256-bit secret, httpOnly + SameSite=Lax cookies
+- **CSRF Protection** - 256-bit state tokens with 10-minute TTL (OIDC flow)
+- **SSRF Protection** - Blocks private IPs, localhost, link-local, cloud metadata endpoints
+- **Nonce Validation** - Prevents replay attacks on ID tokens
+- **CodeQL Security Improvements** - 53% reduction in security warnings (119 → 56)
+  - Log injection prevention with `sanitize_for_log()` utility
+  - Stack trace exposure fixes (generic error messages to users, details in logs only)
+  - Path traversal protection with `normalize_path()` utility
+  - Empty exception handler documentation and explicit behavior
+  - 100% test pass rate maintained throughout security fixes
+
 ## [3.3.0] - 2025-11-28
 
 ### Added
@@ -203,8 +293,9 @@ Previous release with dual-scanner (Trivy + Grype) support.
 - Responsive dashboard
 - Secret scanning with triage workflow
 
-[Unreleased]: https://github.com/oaniach/vulnforge/compare/v3.3.0...HEAD
-[3.3.0]: https://github.com/oaniach/vulnforge/compare/v3.2.0...v3.3.0
+[Unreleased]: https://github.com/homelabforge/vulnforge/compare/v4.0.0...HEAD
+[4.0.0]: https://github.com/homelabforge/vulnforge/compare/v3.3.0...v4.0.0
+[3.3.0]: https://github.com/homelabforge/vulnforge/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/oaniach/vulnforge/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/oaniach/vulnforge/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/oaniach/vulnforge/compare/v2.7.0...v3.0.0

@@ -1,7 +1,6 @@
 """Notification dispatcher for routing events to enabled services."""
 
 import logging
-from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -61,13 +60,13 @@ class NotificationDispatcher:
     # Service-specific retry delay multipliers
     # (some services like Discord are more sensitive to rapid retries)
     SERVICE_RETRY_MULTIPLIERS = {
-        "discord": 1.5,   # Discord rate limits - slightly longer delay
-        "slack": 1.2,     # Slack can be sensitive too
+        "discord": 1.5,  # Discord rate limits - slightly longer delay
+        "slack": 1.2,  # Slack can be sensitive too
         "telegram": 1.0,  # Telegram is robust
-        "ntfy": 1.0,      # Self-hosted, usually fast
-        "gotify": 1.0,    # Self-hosted
+        "ntfy": 1.0,  # Self-hosted, usually fast
+        "gotify": 1.0,  # Self-hosted
         "pushover": 1.0,  # Cloud service, robust
-        "email": 2.0,     # SMTP can be slow, longer delays
+        "email": 2.0,  # SMTP can be slow, longer delays
     }
 
     def __init__(self, db: AsyncSession):
@@ -93,13 +92,13 @@ class NotificationDispatcher:
     async def _get_enabled_services(self) -> list[NotificationService]:
         """Get list of enabled and configured notification services."""
         # Import here to avoid circular imports
-        from app.services.notifications.ntfy import NtfyNotificationService
+        from app.services.notifications.discord import DiscordNotificationService
+        from app.services.notifications.email import EmailNotificationService
         from app.services.notifications.gotify import GotifyNotificationService
+        from app.services.notifications.ntfy import NtfyNotificationService
         from app.services.notifications.pushover import PushoverNotificationService
         from app.services.notifications.slack import SlackNotificationService
-        from app.services.notifications.discord import DiscordNotificationService
         from app.services.notifications.telegram import TelegramNotificationService
-        from app.services.notifications.email import EmailNotificationService
 
         services: list[NotificationService] = []
 
@@ -154,10 +153,17 @@ class NotificationDispatcher:
             to_address = await self.settings.get("email_to")
             use_tls = await self.settings.get_bool("email_smtp_tls", default=True)
             if smtp_host and smtp_user and smtp_password and from_address and to_address:
-                services.append(EmailNotificationService(
-                    smtp_host, smtp_port, smtp_user, smtp_password,
-                    from_address, to_address, use_tls
-                ))
+                services.append(
+                    EmailNotificationService(
+                        smtp_host,
+                        smtp_port,
+                        smtp_user,
+                        smtp_password,
+                        from_address,
+                        to_address,
+                        use_tls,
+                    )
+                )
 
         return services
 
@@ -166,9 +172,9 @@ class NotificationDispatcher:
         event_type: str,
         title: str,
         message: str,
-        priority: Optional[str] = None,
-        tags: Optional[list[str]] = None,
-        url: Optional[str] = None,
+        priority: str | None = None,
+        tags: list[str] | None = None,
+        url: str | None = None,
     ) -> dict[str, bool]:
         """
         Dispatch a notification to all enabled services.
@@ -253,7 +259,7 @@ class NotificationDispatcher:
         self,
         container_name: str,
         kev_count: int,
-        url: Optional[str] = None,
+        url: str | None = None,
     ) -> dict[str, bool]:
         """Send notification when Known Exploited Vulnerabilities are detected."""
         return await self.dispatch(
@@ -271,7 +277,7 @@ class NotificationDispatcher:
         container_name: str,
         critical_count: int,
         fixable_count: int,
-        url: Optional[str] = None,
+        url: str | None = None,
     ) -> dict[str, bool]:
         """Send notification about critical vulnerabilities."""
         return await self.dispatch(
@@ -291,7 +297,7 @@ class NotificationDispatcher:
         critical_count: int,
         high_count: int,
         categories: list[str],
-        url: Optional[str] = None,
+        url: str | None = None,
     ) -> dict[str, bool]:
         """Send notification when secrets are detected in a container."""
         severity_parts = []
@@ -325,7 +331,7 @@ class NotificationDispatcher:
         high: int,
         fixable_critical: int,
         fixable_high: int,
-        url: Optional[str] = None,
+        url: str | None = None,
     ) -> dict[str, bool]:
         """Send notification when scan completes."""
         return await self.dispatch(
@@ -343,7 +349,7 @@ class NotificationDispatcher:
         self,
         container_name: str,
         error: str,
-        url: Optional[str] = None,
+        url: str | None = None,
     ) -> dict[str, bool]:
         """Send notification when scan fails."""
         return await self.dispatch(
@@ -358,15 +364,14 @@ class NotificationDispatcher:
         total_checks: int,
         passed: int,
         failed: int,
-        url: Optional[str] = None,
+        url: str | None = None,
     ) -> dict[str, bool]:
         """Send notification when compliance scan completes."""
         return await self.dispatch(
             event_type="compliance_scan_complete",
             title="VulnForge: Compliance Scan Complete",
             message=(
-                f"Compliance scan finished: {passed}/{total_checks} checks passed, "
-                f"{failed} failed"
+                f"Compliance scan finished: {passed}/{total_checks} checks passed, {failed} failed"
             ),
             url=url,
         )
@@ -375,7 +380,7 @@ class NotificationDispatcher:
         self,
         failed_count: int,
         categories: list[str],
-        url: Optional[str] = None,
+        url: str | None = None,
     ) -> dict[str, bool]:
         """Send notification about compliance failures."""
         category_text = ", ".join(categories[:3])

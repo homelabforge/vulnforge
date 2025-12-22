@@ -1,7 +1,7 @@
 """Activity log repository for centralized activity queries."""
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +30,7 @@ class ActivityLogRepository:
         description: str | None = None,
         container_id: int | None = None,
         container_name: str | None = None,
-        metadata: Dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
         timestamp: datetime | None = None,
     ) -> ActivityLog:
         """
@@ -75,7 +75,7 @@ class ActivityLogRepository:
         event_type_filter: str | None = None,
         severity_filter: str | None = None,
         container_id_filter: int | None = None,
-    ) -> tuple[List[ActivityLog], int]:
+    ) -> tuple[list[ActivityLog], int]:
         """
         Get recent activity logs with pagination and filtering.
 
@@ -124,7 +124,7 @@ class ActivityLogRepository:
 
         return activities, total
 
-    async def get_by_container(self, container_id: int, limit: int = 50) -> List[ActivityLog]:
+    async def get_by_container(self, container_id: int, limit: int = 50) -> list[ActivityLog]:
         """
         Get activities for a specific container.
 
@@ -155,7 +155,7 @@ class ActivityLogRepository:
         result = await self.db.execute(select(func.count(ActivityLog.id)))
         return result.scalar() or 0
 
-    async def count_by_type(self) -> Dict[str, int]:
+    async def count_by_type(self) -> dict[str, int]:
         """
         Count activities grouped by event type.
 

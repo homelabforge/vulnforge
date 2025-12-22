@@ -1,7 +1,5 @@
 """Repository for managing persistent false positive patterns."""
 
-from datetime import datetime
-
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -134,7 +132,9 @@ class FalsePositivePatternRepository:
         await self.db.commit()
         return result.rowcount > 0
 
-    async def matches_pattern(self, secret: Secret, container_name: str) -> FalsePositivePattern | None:
+    async def matches_pattern(
+        self, secret: Secret, container_name: str
+    ) -> FalsePositivePattern | None:
         """
         Check if a secret matches any false positive pattern.
 

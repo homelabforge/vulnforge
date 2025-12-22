@@ -4,7 +4,6 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +24,8 @@ class ConnectivityCheck:
     status: ConnectivityStatus
     reachable_hosts: list[str]
     unreachable_hosts: list[str]
-    latency_ms: Optional[float]
-    error: Optional[str]
+    latency_ms: float | None
+    error: str | None
 
     @property
     def is_online(self) -> bool:
@@ -58,7 +57,7 @@ class NetworkConnectivityChecker:
         "github.com",  # GitHub (general connectivity)
     ]
 
-    def __init__(self, test_hosts: Optional[list[str]] = None, timeout: float = 5.0):
+    def __init__(self, test_hosts: list[str] | None = None, timeout: float = 5.0):
         """
         Initialize network connectivity checker.
 
@@ -128,7 +127,7 @@ class NetworkConnectivityChecker:
                 error=str(e),
             )
 
-    async def _check_host(self, host: str) -> tuple[bool, Optional[float]]:
+    async def _check_host(self, host: str) -> tuple[bool, float | None]:
         """
         Check if a specific host is reachable.
 
@@ -145,22 +144,18 @@ class NetworkConnectivityChecker:
 
             # Try to open TCP connection to port 443 (HTTPS)
             try:
-                await asyncio.wait_for(
-                    asyncio.open_connection(host, 443), timeout=self.timeout
-                )
+                await asyncio.wait_for(asyncio.open_connection(host, 443), timeout=self.timeout)
                 latency = (time.time() - start) * 1000  # Convert to ms
                 logger.debug(f"Host {host} reachable (latency: {latency:.2f}ms)")
                 return True, latency
-            except (asyncio.TimeoutError, OSError, ConnectionRefusedError):
+            except (TimeoutError, OSError, ConnectionRefusedError):
                 # Try port 80 (HTTP) as fallback
                 try:
-                    await asyncio.wait_for(
-                        asyncio.open_connection(host, 80), timeout=self.timeout
-                    )
+                    await asyncio.wait_for(asyncio.open_connection(host, 80), timeout=self.timeout)
                     latency = (time.time() - start) * 1000
                     logger.debug(f"Host {host} reachable on port 80 (latency: {latency:.2f}ms)")
                     return True, latency
-                except (asyncio.TimeoutError, OSError, ConnectionRefusedError):
+                except (TimeoutError, OSError, ConnectionRefusedError):
                     logger.debug(f"Host {host} unreachable")
                     return False, None
 
@@ -184,7 +179,7 @@ class NetworkConnectivityChecker:
 
 
 # Singleton instance
-_connectivity_checker: Optional[NetworkConnectivityChecker] = None
+_connectivity_checker: NetworkConnectivityChecker | None = None
 
 
 def get_connectivity_checker() -> NetworkConnectivityChecker:

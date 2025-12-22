@@ -25,7 +25,9 @@ class Settings(BaseSettings):
     # Docker (can be overridden by DOCKER_HOST or database setting)
     docker_socket_proxy: str = "unix:///var/run/docker.sock"
     trivy_container_name: str = "trivy"
-    trivy_server: str | None = None  # Optional: Trivy server URL for client mode (e.g., http://trivy:8080)
+    trivy_server: str | None = (
+        None  # Optional: Trivy server URL for client mode (e.g., http://trivy:8080)
+    )
     dive_container_name: str = "dive"
 
     # Scanner configuration
@@ -53,7 +55,7 @@ class Settings(BaseSettings):
     notify_on_scan_complete: bool = True
     notify_on_critical: bool = True
     notify_threshold_critical: int = 1  # Alert if X or more critical CVEs found
-    notify_threshold_high: int = 10     # Alert if X or more high CVEs found
+    notify_threshold_high: int = 10  # Alert if X or more high CVEs found
 
     # Data retention
     keep_scan_history_days: int = 90

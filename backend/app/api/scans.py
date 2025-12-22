@@ -2,29 +2,33 @@
 
 import asyncio
 import json
+import logging
 import subprocess
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models import Container, Scan, Vulnerability
-from app.schemas import Scan as ScanSchema, ScanRequest, ScanSummary
+from app.schemas import Scan as ScanSchema
+from app.schemas import ScanRequest
 from app.services.docker_client import DockerService
 from app.services.kev import get_kev_service
 from app.services.notifications import NotificationDispatcher
+from app.services.scan_errors import get_error_classifier
+from app.services.scan_events import scan_events
 from app.services.scan_queue import ScanPriority, get_scan_queue
 from app.services.scan_state import scan_state
+from app.services.scan_trends import build_scan_trends
 from app.services.settings_manager import SettingsManager
 from app.services.trivy_scanner import TrivyScanner
 from app.utils.timezone import get_now
-from app.services.scan_events import scan_events
-from app.services.scan_trends import build_scan_trends
-from app.services.scan_errors import get_error_classifier
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -37,9 +41,7 @@ def _format_sse(payload: dict, event: str = "scan-status") -> str:
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
 
-async def perform_scan(
-    container_id: int, db: AsyncSession, docker_service: DockerService
-):
+async def perform_scan(container_id: int, db: AsyncSession, docker_service: DockerService):
     """Perform a single container scan."""
     # Get container
     result = await db.execute(select(Container).where(Container.id == container_id))
@@ -160,7 +162,9 @@ async def perform_scan(
         scan.error_message = "Scan timed out"
         await db.commit()
         dispatcher = NotificationDispatcher(db)
-        await dispatcher.notify_scan_failed(container.name, "Scan timed out - try increasing timeout in settings")
+        await dispatcher.notify_scan_failed(
+            container.name, "Scan timed out - try increasing timeout in settings"
+        )
     except subprocess.CalledProcessError as e:
         logger.error(f"Scanner process failed for {container.name}: exit code {e.returncode}")
         error_classifier = get_error_classifier()
@@ -228,9 +232,7 @@ async def run_scans_sequentially(container_ids: list[int], db: AsyncSession):
 @router.post("/scan", response_model=dict)
 @limiter.limit("10/minute")
 async def scan_containers(
-    scan_request: ScanRequest,
-    request: Request,
-    db: AsyncSession = Depends(get_db)
+    scan_request: ScanRequest, request: Request, db: AsyncSession = Depends(get_db)
 ):
     """
     Trigger a scan of containers using the scan queue.
@@ -281,7 +283,9 @@ async def scan_containers(
 
 @router.get("/history/{container_id}", response_model=list[ScanSchema])
 @limiter.limit("60/minute")
-async def get_scan_history(container_id: int, limit: int = 10, request: Request = None, db: AsyncSession = Depends(get_db)):
+async def get_scan_history(
+    container_id: int, limit: int = 10, request: Request = None, db: AsyncSession = Depends(get_db)
+):
     """Get scan history for a container."""
     result = await db.execute(
         select(Scan)
@@ -292,7 +296,6 @@ async def get_scan_history(container_id: int, limit: int = 10, request: Request 
     scans = result.scalars().all()
 
     return [ScanSchema.model_validate(s) for s in scans]
-
 
 
 @router.get("/current")
@@ -327,7 +330,7 @@ async def stream_scan_status(request: Request):
                 try:
                     event = await asyncio.wait_for(subscriber_queue.get(), timeout=15)
                     yield _format_sse(event)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Heartbeat to keep connection alive behind proxies
                     yield ": heartbeat\n\n"
         except asyncio.CancelledError:
@@ -345,7 +348,11 @@ async def stream_scan_status(request: Request):
 
 @router.get("/trends")
 @limiter.limit("30/minute")
-async def get_scan_trends(window_days: int = Query(30, ge=1, le=90), request: Request = None, db: AsyncSession = Depends(get_db)):
+async def get_scan_trends(
+    window_days: int = Query(30, ge=1, le=90),
+    request: Request = None,
+    db: AsyncSession = Depends(get_db),
+):
     """Return aggregated scan trends for dashboards."""
     return await build_scan_trends(db, window_days=window_days)
 
@@ -457,15 +464,15 @@ async def retry_scan(scan_id: int, request: Request = None, db: AsyncSession = D
             "container": container.name,
         }
     else:
-        raise HTTPException(
-            status_code=409, detail="Container is already being scanned"
-        )
+        raise HTTPException(status_code=409, detail="Container is already being scanned")
 
 
 @router.get("/cve-delta")
 async def get_cve_delta(
     db: AsyncSession = Depends(get_db),
-    since_hours: int = Query(default=24, ge=1, le=720, description="Hours to look back for scan deltas"),
+    since_hours: int = Query(
+        default=24, ge=1, le=720, description="Hours to look back for scan deltas"
+    ),
     container_name: str | None = Query(default=None, description="Filter by container name"),
 ):
     """
@@ -523,17 +530,19 @@ async def get_cve_delta(
         total_fixed += len(cves_fixed)
         total_introduced += len(cves_introduced)
 
-        deltas.append({
-            "scan_id": row.id,
-            "scan_date": row.scan_date.isoformat(),
-            "container_name": row.container_name,
-            "image": f"{row.image}:{row.image_tag}",
-            "total_vulns": row.total_vulns,
-            "cves_fixed": cves_fixed,
-            "cves_fixed_count": len(cves_fixed),
-            "cves_introduced": cves_introduced,
-            "cves_introduced_count": len(cves_introduced),
-        })
+        deltas.append(
+            {
+                "scan_id": row.id,
+                "scan_date": row.scan_date.isoformat(),
+                "container_name": row.container_name,
+                "image": f"{row.image}:{row.image_tag}",
+                "total_vulns": row.total_vulns,
+                "cves_fixed": cves_fixed,
+                "cves_fixed_count": len(cves_fixed),
+                "cves_introduced": cves_introduced,
+                "cves_introduced_count": len(cves_introduced),
+            }
+        )
 
     return {
         "since_hours": since_hours,

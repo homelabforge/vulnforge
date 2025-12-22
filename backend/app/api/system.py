@@ -4,7 +4,6 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.config import settings
-from app.services.dive_service import DiveService
 from app.services.docker_bench_service import DockerBenchService
 from app.services.docker_client import DockerService
 from app.services.docker_hub import get_docker_hub_client
@@ -93,12 +92,16 @@ async def get_scanners_info():
                 trivy_info.latest_version = latest_version
                 # Compare versions if both are available
                 if trivy_info.version and latest_version:
-                    trivy_info.update_available = _compare_versions(trivy_info.version, latest_version)
+                    trivy_info.update_available = _compare_versions(
+                        trivy_info.version, latest_version
+                    )
 
             # Get database info
             db_info = await trivy_scanner.get_database_info()
             if db_info:
-                trivy_info.db_version = str(db_info.get("db_version")) if db_info.get("db_version") else None
+                trivy_info.db_version = (
+                    str(db_info.get("db_version")) if db_info.get("db_version") else None
+                )
                 trivy_info.db_updated_at = db_info.get("updated_at")
 
                 # Calculate DB age
@@ -106,12 +109,16 @@ async def get_scanners_info():
                 trivy_info.db_age_hours = age_hours
 
                 # Check for database updates from GHCR
-                db_latest_version = await docker_hub.get_latest_tag("aquasecurity/trivy-db", registry="ghcr.io")
+                db_latest_version = await docker_hub.get_latest_tag(
+                    "aquasecurity/trivy-db", registry="ghcr.io"
+                )
                 if db_latest_version:
                     trivy_info.db_latest_version = db_latest_version
                     # Compare database versions if both are available
                     if trivy_info.db_version and db_latest_version:
-                        trivy_info.db_update_available = _compare_versions(trivy_info.db_version, db_latest_version)
+                        trivy_info.db_update_available = _compare_versions(
+                            trivy_info.db_version, db_latest_version
+                        )
 
         scanners.append(trivy_info)
 
@@ -124,7 +131,9 @@ async def get_scanners_info():
             docker_service.client.images.get("docker/docker-bench-security:latest")
             bench_available = True
         except Exception:
-            bench_available = False  # INTENTIONAL: Image not found or Docker error means unavailable.
+            bench_available = (
+                False  # INTENTIONAL: Image not found or Docker error means unavailable.
+            )
 
         bench_info = ScannerInfo(
             name="Docker Bench",
@@ -145,12 +154,16 @@ async def get_scanners_info():
             bench_info.version = await docker_bench_service.get_scanner_version()
 
             # Check for latest release from GitHub
-            latest_version = await docker_hub.get_github_release_version("docker/docker-bench-security")
+            latest_version = await docker_hub.get_github_release_version(
+                "docker/docker-bench-security"
+            )
             if latest_version:
                 bench_info.latest_version = latest_version
                 # Compare versions if both are available
                 if bench_info.version and latest_version:
-                    bench_info.update_available = _compare_versions(bench_info.version, latest_version)
+                    bench_info.update_available = _compare_versions(
+                        bench_info.version, latest_version
+                    )
 
         scanners.append(bench_info)
 
@@ -160,7 +173,9 @@ async def get_scanners_info():
             docker_service.client.containers.get(settings.dive_container_name)
             dive_available = True
         except Exception:
-            dive_available = False  # INTENTIONAL: Container not found or Docker error means unavailable.
+            dive_available = (
+                False  # INTENTIONAL: Container not found or Docker error means unavailable.
+            )
 
         dive_info = ScannerInfo(
             name="Dive",

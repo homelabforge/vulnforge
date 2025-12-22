@@ -19,7 +19,9 @@ class ImageComplianceScan(Base):
     # Scan metadata
     scan_date: Mapped[datetime] = mapped_column(DateTime, default=get_now, index=True)
     scan_duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
-    scan_status: Mapped[str] = mapped_column(String(50), default="in_progress")  # in_progress, completed, failed
+    scan_status: Mapped[str] = mapped_column(
+        String(50), default="in_progress"
+    )  # in_progress, completed, failed
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Image information
@@ -27,7 +29,9 @@ class ImageComplianceScan(Base):
     image_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
 
     # Scan trigger
-    trigger_type: Mapped[str] = mapped_column(String(20), default="manual")  # manual, scheduled, post-vulnerability-scan
+    trigger_type: Mapped[str] = mapped_column(
+        String(20), default="manual"
+    )  # manual, scheduled, post-vulnerability-scan
 
     # Overall results
     total_checks: Mapped[int] = mapped_column(Integer, default=0)
@@ -40,14 +44,18 @@ class ImageComplianceScan(Base):
     compliance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Category breakdown (stored as JSON string for simplicity)
-    category_scores: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: {"CIS Benchmarks": 85.5, ...}
+    category_scores: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # JSON: {"CIS Benchmarks": 85.5, ...}
 
     # Severity breakdown
     fatal_count: Mapped[int] = mapped_column(Integer, default=0)
     warn_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # Affected containers (JSON array of container names using this image)
-    affected_containers: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: ["container1", "container2"]
+    affected_containers: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # JSON: ["container1", "container2"]
 
     def __repr__(self) -> str:
         """String representation."""

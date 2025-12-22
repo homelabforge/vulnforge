@@ -1,0 +1,48 @@
+# Frontend
+frontend/node_modules
+frontend/.vite
+frontend/dist
+frontend/.cache
+
+# Backend
+backend/__pycache__
+backend/**/__pycache__
+backend/.pytest_cache
+backend/**/.pytest_cache
+backend/.ruff_cache
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.egg-info
+
+# Development
+.git
+.gitignore
+.env
+.env.*
+*.log
+
+# Data directories
+data/
+data-dev/
+data-rust/
+
+# Documentation
+docs/
+*.md
+README.md
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose*.yml
+compose*.yaml
+Dockerfile*

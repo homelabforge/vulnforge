@@ -1,10 +1,9 @@
 """Tests for authentication dependency injection functions."""
 
 import pytest
-from fastapi import HTTPException, Request
-from starlette.datastructures import Headers
+from fastapi import HTTPException
 
-from app.dependencies.auth import require_auth, require_admin, get_current_user
+from app.dependencies.auth import get_current_user, require_admin, require_auth
 from app.models.user import User
 
 
@@ -188,7 +187,7 @@ class TestAuthDependencyChaining:
             email="test@example.com",
             groups=["users", "developers"],
             provider="authentik",
-            is_admin=False
+            is_admin=False,
         )
         request = MockRequest(user=user)
 

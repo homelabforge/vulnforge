@@ -4,7 +4,6 @@ import logging
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +104,7 @@ class ScanErrorClassifier:
     ]
 
     def classify_error(
-        self, scanner_name: str, error_message: str, db_age_hours: Optional[int] = None
+        self, scanner_name: str, error_message: str, db_age_hours: int | None = None
     ) -> ScanError:
         """
         Classify a scanner error and provide suggestions.
@@ -261,7 +260,7 @@ class ScanErrorClassifier:
 
 
 # Singleton instance
-_error_classifier: Optional[ScanErrorClassifier] = None
+_error_classifier: ScanErrorClassifier | None = None
 
 
 def get_error_classifier() -> ScanErrorClassifier:

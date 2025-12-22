@@ -1,7 +1,8 @@
 """Tests for notification service."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch
 
 
 @pytest.mark.asyncio
@@ -15,13 +16,13 @@ class TestNotificationSending:
 
         mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.raise_for_status.return_value = None
+        mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
 
         settings = {
             "ntfy_enabled": "true",
             "ntfy_url": "https://ntfy:443",
-            "ntfy_topic": "vulnforge"
+            "ntfy_topic": "vulnforge",
         }
 
         notifier = Notifier(settings)
@@ -33,15 +34,16 @@ class TestNotificationSending:
     @patch("httpx.AsyncClient.post")
     async def test_send_notification_network_error(self, mock_post):
         """Test handling network errors when sending notifications."""
-        from app.services.notifier import Notifier
         import httpx
+
+        from app.services.notifier import Notifier
 
         mock_post.side_effect = httpx.NetworkError("Connection failed")
 
         settings = {
             "ntfy_enabled": "true",
             "ntfy_url": "https://ntfy:443",
-            "ntfy_topic": "vulnforge"
+            "ntfy_topic": "vulnforge",
         }
 
         notifier = Notifier(settings)
@@ -77,7 +79,7 @@ class TestNotificationRules:
 
         mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.raise_for_status.return_value = None
+        mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
 
         settings = {
@@ -85,18 +87,14 @@ class TestNotificationRules:
             "notify_on_critical": "true",
             "notify_threshold_critical": "1",
             "ntfy_url": "https://ntfy:443",
-            "ntfy_topic": "vulnforge"
+            "ntfy_topic": "vulnforge",
         }
 
         notifier = Notifier(settings)
 
         # Notify about critical finding
         await notifier.notify_scan_complete(
-            container_name="test",
-            critical=5,
-            high=10,
-            medium=20,
-            low=30
+            container_name="test", critical=5, high=10, medium=20, low=30
         )
 
         # Should send notification
@@ -112,18 +110,14 @@ class TestNotificationRules:
             "notify_on_critical": "true",
             "notify_threshold_critical": "10",  # Threshold: 10
             "ntfy_url": "https://ntfy:443",
-            "ntfy_topic": "vulnforge"
+            "ntfy_topic": "vulnforge",
         }
 
         notifier = Notifier(settings)
 
         # Only 5 critical (below threshold of 10)
         await notifier.notify_scan_complete(
-            container_name="test",
-            critical=5,
-            high=0,
-            medium=0,
-            low=0
+            container_name="test", critical=5, high=0, medium=0, low=0
         )
 
         # Should not send notification
@@ -141,23 +135,19 @@ class TestNotificationPriority:
 
         mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.raise_for_status.return_value = None
+        mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
 
         settings = {
             "ntfy_enabled": "true",
             "notify_on_critical": "true",
             "ntfy_url": "https://ntfy:443",
-            "ntfy_topic": "vulnforge"
+            "ntfy_topic": "vulnforge",
         }
 
         notifier = Notifier(settings)
         await notifier.notify_scan_complete(
-            container_name="test",
-            critical=10,
-            high=0,
-            medium=0,
-            low=0
+            container_name="test", critical=10, high=0, medium=0, low=0
         )
 
         # Check that high priority was used
@@ -181,18 +171,18 @@ class TestNotificationRetry:
         # First call fails, second succeeds
         mock_response_fail = AsyncMock()
         mock_response_fail.status_code = 500
-        mock_response_fail.raise_for_status.side_effect = Exception("failure")
+        mock_response_fail.raise_for_status = MagicMock(side_effect=Exception("failure"))
 
         mock_response_success = AsyncMock()
         mock_response_success.status_code = 200
-        mock_response_success.raise_for_status.return_value = None
+        mock_response_success.raise_for_status = MagicMock()
 
         mock_post.side_effect = [mock_response_fail, mock_response_success]
 
         settings = {
             "ntfy_enabled": "true",
             "ntfy_url": "https://ntfy:443",
-            "ntfy_topic": "vulnforge"
+            "ntfy_topic": "vulnforge",
         }
 
         notifier = Notifier(settings)
@@ -216,14 +206,14 @@ class TestNotificationAuthentication:
 
         mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.raise_for_status.return_value = None
+        mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
 
         settings = {
             "ntfy_enabled": "true",
             "ntfy_url": "https://ntfy:443",
             "ntfy_topic": "vulnforge",
-            "ntfy_token": "secret_token_123"
+            "ntfy_token": "secret_token_123",
         }
 
         notifier = Notifier(settings)
@@ -248,13 +238,13 @@ class TestNotificationRateLimiting:
 
         mock_response = AsyncMock()
         mock_response.status_code = 429  # Too Many Requests
-        mock_response.raise_for_status.side_effect = Exception("rate limit")
+        mock_response.raise_for_status = MagicMock(side_effect=Exception("rate limit"))
         mock_post.return_value = mock_response
 
         settings = {
             "ntfy_enabled": "true",
             "ntfy_url": "https://ntfy:443",
-            "ntfy_topic": "vulnforge"
+            "ntfy_topic": "vulnforge",
         }
 
         notifier = Notifier(settings)

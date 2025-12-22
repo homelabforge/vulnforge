@@ -1,6 +1,5 @@
 """Service for executing Trivy misconfiguration scans."""
 
-import asyncio
 import json
 import logging
 from typing import Any
@@ -28,7 +27,9 @@ class TrivyMisconfigService:
         self.docker_service = docker_service or DockerService()
         self.trivy_scanner = TrivyScanner(docker_service=self.docker_service)
 
-    async def run_misconfig_scan(self, image: str, timeout: int | None = None) -> dict[str, Any] | None:
+    async def run_misconfig_scan(
+        self, image: str, timeout: int | None = None
+    ) -> dict[str, Any] | None:
         """
         Run a Trivy misconfiguration scan for the given image.
 
@@ -41,6 +42,10 @@ class TrivyMisconfigService:
         """
         if timeout is None:
             timeout = settings.scan_timeout
+
+        # TODO: Implement timeout functionality for Trivy misconfiguration scans
+        # Currently timeout parameter is accepted but not enforced
+        _ = timeout  # Acknowledge parameter to suppress unused warning
 
         logger.info(f"Starting Trivy misconfiguration scan: image={image}")
 
@@ -56,18 +61,25 @@ class TrivyMisconfigService:
             # Use server mode if configured, otherwise use exec mode
             if self.trivy_scanner.use_server_mode:
                 cmd = [
-                    "trivy", "image",
-                    "--server", self.trivy_scanner.server_url,
-                    "--scanners", "misconfig",
-                    "--format", "json",
+                    "trivy",
+                    "image",
+                    "--server",
+                    self.trivy_scanner.server_url,
+                    "--scanners",
+                    "misconfig",
+                    "--format",
+                    "json",
                     "--quiet",
                     image,
                 ]
             else:
                 cmd = [
-                    "trivy", "image",
-                    "--scanners", "misconfig",
-                    "--format", "json",
+                    "trivy",
+                    "image",
+                    "--scanners",
+                    "misconfig",
+                    "--format",
+                    "json",
                     "--quiet",
                     image,
                 ]
@@ -233,8 +245,7 @@ class TrivyMisconfigService:
         }
 
         total_deductions = sum(
-            weights.get(finding.get("severity", "UNKNOWN"), 0)
-            for finding in findings
+            weights.get(finding.get("severity", "UNKNOWN"), 0) for finding in findings
         )
 
         # Start at 100 and subtract deductions

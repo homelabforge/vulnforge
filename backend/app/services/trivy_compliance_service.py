@@ -15,7 +15,9 @@ class TrivyComplianceService:
         """Initialize Trivy compliance service."""
         self.trivy_scanner = trivy_scanner
 
-    async def run_compliance_scan(self, target: str, profile: str = "docker-cis-1.6.0") -> dict[str, Any] | None:
+    async def run_compliance_scan(
+        self, target: str, profile: str = "docker-cis-1.6.0"
+    ) -> dict[str, Any] | None:
         """
         Run a Trivy compliance scan for the given target.
 

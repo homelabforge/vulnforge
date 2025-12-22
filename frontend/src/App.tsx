@@ -4,13 +4,15 @@
 
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
-import { Shield, Home, Container, Key, Settings as SettingsIcon, Activity as ActivityIcon, FileCheck } from "lucide-react";
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import { Shield, Home, Container, Key, Settings as SettingsIcon, Activity as ActivityIcon, FileCheck, LogOut, User } from "lucide-react";
 import { Toaster } from "sonner";
 import { PageSkeleton } from "@/components/LoadingSkeleton";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider, useTheme } from "@/contexts/ThemeContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Lazy load page components for code splitting
 const Dashboard = lazy(() => import("@/pages/Dashboard").then(m => ({ default: m.Dashboard })));
@@ -21,6 +23,8 @@ const Compliance = lazy(() => import("@/pages/Compliance").then(m => ({ default:
 const Activity = lazy(() => import("@/pages/Activity").then(m => ({ default: m.Activity })));
 const Settings = lazy(() => import("@/pages/Settings").then(m => ({ default: m.Settings })));
 const About = lazy(() => import("@/pages/About").then(m => ({ default: m.About })));
+const Login = lazy(() => import("@/pages/Login"));
+const Setup = lazy(() => import("@/pages/Setup"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,7 +40,9 @@ const queryClient = new QueryClient({
 
 function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { theme } = useTheme();
+  const { isAuthenticated, authMode, user, logout } = useAuth();
 
   const navigation = [
     { name: "Dashboard", path: "/", icon: Home },
@@ -46,6 +52,11 @@ function Layout({ children }: { children: React.ReactNode }) {
     { name: "Activity", path: "/activity", icon: ActivityIcon },
     { name: "Settings", path: "/settings", icon: SettingsIcon },
   ];
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
 
   return (
     <div className="min-h-screen bg-vuln-bg">
@@ -62,7 +73,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Navigation */}
-            <nav className="flex gap-2">
+            <nav className="flex gap-2 items-center">
               {navigation.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
@@ -81,6 +92,23 @@ function Layout({ children }: { children: React.ReactNode }) {
                   </Link>
                 );
               })}
+
+              {/* Logout Button - Only show when authenticated */}
+              {isAuthenticated && authMode !== 'none' && (
+                <div className="flex items-center gap-2 ml-4 pl-4 border-l border-vuln-border">
+                  <div className="flex items-center gap-2 px-3 py-2 text-sm text-vuln-text-muted">
+                    <User size={16} />
+                    <span>{user?.username}</span>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-vuln-text-muted hover:bg-vuln-surface-light hover:text-vuln-text transition-colors"
+                  >
+                    <LogOut size={16} />
+                    Logout
+                  </button>
+                </div>
+              )}
             </nav>
           </div>
         </div>
@@ -105,20 +133,36 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <SettingsProvider>
           <ThemeProvider>
-            <BrowserRouter>
-              <Layout>
+            <AuthProvider>
+              <BrowserRouter>
                 <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/containers" element={<Containers />} />
-                  <Route path="/containers/:id" element={<ContainerDetail />} />
-                  <Route path="/secrets" element={<Secrets />} />
-                  <Route path="/compliance" element={<Compliance />} />
-                  <Route path="/activity" element={<Activity />} />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/about" element={<About />} />
+                  {/* Public routes */}
+                  <Route path="/login" element={<Suspense fallback={<PageSkeleton />}><Login /></Suspense>} />
+                  <Route path="/setup" element={<Suspense fallback={<PageSkeleton />}><Setup /></Suspense>} />
+
+                  {/* Protected routes */}
+                  <Route
+                    path="/*"
+                    element={
+                      <ProtectedRoute>
+                        <Layout>
+                          <Routes>
+                            <Route path="/" element={<Dashboard />} />
+                            <Route path="/containers" element={<Containers />} />
+                            <Route path="/containers/:id" element={<ContainerDetail />} />
+                            <Route path="/secrets" element={<Secrets />} />
+                            <Route path="/compliance" element={<Compliance />} />
+                            <Route path="/activity" element={<Activity />} />
+                            <Route path="/settings" element={<Settings />} />
+                            <Route path="/about" element={<About />} />
+                          </Routes>
+                        </Layout>
+                      </ProtectedRoute>
+                    }
+                  />
                 </Routes>
-              </Layout>
-            </BrowserRouter>
+              </BrowserRouter>
+            </AuthProvider>
           </ThemeProvider>
         </SettingsProvider>
       </QueryClientProvider>

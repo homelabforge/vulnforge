@@ -1,62 +1,61 @@
 """Tests for vulnerabilities API endpoints."""
 
-import pytest
 from fastapi import HTTPException
-
-from app.models.user import User
 
 
 class TestVulnerabilitiesList:
     """Tests for vulnerability listing endpoint."""
 
-    async def test_list_requires_auth(self, client):
-        """Listing vulnerabilities is available without authentication in the new model."""
-        response = await client.get("/api/v1/vulnerabilities")
+    async def test_list_requires_auth(self, authenticated_client):
+        """Listing vulnerabilities requires authentication."""
+        response = await authenticated_client.get("/api/v1/vulnerabilities")
         assert response.status_code == 200
 
-    async def test_list_vulnerabilities_success(self, client, db_with_settings):
+    async def test_list_vulnerabilities_success(self, authenticated_client, db_with_settings):
         """Test successful vulnerability listing."""
-        response = await client.get("/api/v1/vulnerabilities")
+        response = await authenticated_client.get("/api/v1/vulnerabilities")
 
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, dict)
         assert "vulnerabilities" in data
 
-    async def test_filter_by_severity(self, client, db_with_settings):
+    async def test_filter_by_severity(self, authenticated_client, db_with_settings):
         """Test filtering vulnerabilities by severity."""
         severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
 
         for severity in severities:
-            response = await client.get(f"/api/v1/vulnerabilities?severity={severity}")
+            response = await authenticated_client.get(
+                f"/api/v1/vulnerabilities?severity={severity}"
+            )
 
             assert response.status_code == 200
             data = response.json()
             assert isinstance(data, dict)
 
-    async def test_filter_fixable_only(self, client, db_with_settings):
+    async def test_filter_fixable_only(self, authenticated_client, db_with_settings):
         """Test filtering for fixable vulnerabilities only."""
-        response = await client.get("/api/v1/vulnerabilities?fixable_only=true")
+        response = await authenticated_client.get("/api/v1/vulnerabilities?fixable_only=true")
         assert response.status_code == 200
 
-    async def test_filter_kev_only(self, client, db_with_settings):
+    async def test_filter_kev_only(self, authenticated_client, db_with_settings):
         """Test filtering for KEV (Known Exploited Vulnerabilities) only."""
-        response = await client.get("/api/v1/vulnerabilities?kev_only=true")
+        response = await authenticated_client.get("/api/v1/vulnerabilities?kev_only=true")
         assert response.status_code == 200
 
-    async def test_filter_by_status(self, client, db_with_settings):
+    async def test_filter_by_status(self, authenticated_client, db_with_settings):
         """Test filtering by vulnerability status."""
         statuses = ["active", "ignored", "resolved", "false_positive"]
 
         for status in statuses:
-            response = await client.get(f"/api/v1/vulnerabilities?status={status}")
+            response = await authenticated_client.get(f"/api/v1/vulnerabilities?status={status}")
             assert response.status_code == 200
 
 
 class TestVulnerabilitiesSQLInjection:
     """Tests for SQL injection prevention in vulnerability filters."""
 
-    async def test_sql_injection_in_severity_filter(self, client, db_with_settings):
+    async def test_sql_injection_in_severity_filter(self, authenticated_client, db_with_settings):
         """Test that SQL injection attempts in severity filter are blocked."""
         # SQL injection attempts
         injection_attempts = [
@@ -66,7 +65,9 @@ class TestVulnerabilitiesSQLInjection:
         ]
 
         for injection in injection_attempts:
-            response = await client.get(f"/api/v1/vulnerabilities?severity={injection}")
+            response = await authenticated_client.get(
+                f"/api/v1/vulnerabilities?severity={injection}"
+            )
 
             # Should reject or treat as invalid, not execute SQL
             assert response.status_code in [200, 400, 422]
@@ -74,11 +75,11 @@ class TestVulnerabilitiesSQLInjection:
             # Should not return all vulnerabilities (injection success indicator)
             if response.status_code == 200:
                 # Verify no SQL injection occurred
-                data = response.json()
+                response.json()
                 # Response should be empty or only contain matching severity
                 # Not all vulnerabilities from database
 
-    async def test_sql_injection_in_package_name(self, client, db_with_settings):
+    async def test_sql_injection_in_package_name(self, authenticated_client, db_with_settings):
         """Test SQL injection prevention in package name filter."""
         injection_attempts = [
             "openssl' OR 1=1--",
@@ -86,7 +87,9 @@ class TestVulnerabilitiesSQLInjection:
         ]
 
         for injection in injection_attempts:
-            response = await client.get(f"/api/v1/vulnerabilities?package_name={injection}")
+            response = await authenticated_client.get(
+                f"/api/v1/vulnerabilities?package_name={injection}"
+            )
 
             # Should handle safely
             assert response.status_code in [200, 400, 422]
@@ -95,7 +98,7 @@ class TestVulnerabilitiesSQLInjection:
 class TestVulnerabilitiesBulkUpdate:
     """Tests for bulk vulnerability update endpoint."""
 
-    async def test_bulk_update_requires_auth(self, client):
+    async def test_bulk_update_requires_auth(self, authenticated_client):
         """Test that bulk update requires admin privileges."""
         from app.dependencies.auth import require_admin
         from app.main import app
@@ -105,7 +108,7 @@ class TestVulnerabilitiesBulkUpdate:
 
         app.dependency_overrides[require_admin] = override_require_admin
 
-        response = await client.post(
+        response = await authenticated_client.post(
             "/api/v1/vulnerabilities/bulk-update",
             json={
                 "vuln_ids": [1, 2],
@@ -117,17 +120,13 @@ class TestVulnerabilitiesBulkUpdate:
 
         app.dependency_overrides.clear()
 
-    async def test_bulk_update_success(self, client, db_with_settings):
+    async def test_bulk_update_success(self, authenticated_client, db_with_settings):
         """Test successful bulk update."""
-        from app.dependencies.auth import require_admin
+        from app.main import app
         from app.repositories.dependencies import (
             get_activity_logger,
             get_vulnerability_repository,
         )
-        from app.main import app
-
-        async def override_require_admin(request=None):
-            return User(username="admin", provider="test", is_admin=True)
 
         class DummyVulnRepo:
             async def bulk_update_status(self, vuln_ids, status, notes=None):
@@ -139,11 +138,10 @@ class TestVulnerabilitiesBulkUpdate:
             ):
                 return None
 
-        app.dependency_overrides[require_admin] = override_require_admin
         app.dependency_overrides[get_vulnerability_repository] = lambda: DummyVulnRepo()
         app.dependency_overrides[get_activity_logger] = lambda: DummyActivityLogger()
 
-        response = await client.post(
+        response = await authenticated_client.post(
             "/api/v1/vulnerabilities/bulk-update",
             json={
                 "vuln_ids": [1, 2, 3],
@@ -151,7 +149,7 @@ class TestVulnerabilitiesBulkUpdate:
                     "status": "ignored",
                     "notes": "False positive",
                 },
-            }
+            },
         )
 
         assert response.status_code == 200
@@ -160,42 +158,32 @@ class TestVulnerabilitiesBulkUpdate:
 
         app.dependency_overrides.clear()
 
-    async def test_bulk_update_invalid_status(self, client, db_with_settings):
+    async def test_bulk_update_invalid_status(self, authenticated_client, db_with_settings):
         """Test bulk update with invalid status value."""
-        from app.dependencies.auth import require_admin
-        from app.main import app
-
-        async def override_require_admin(request=None):
-            return User(username="admin", provider="test", is_admin=True)
-
-        app.dependency_overrides[require_admin] = override_require_admin
-
-        response = await client.post(
+        response = await authenticated_client.post(
             "/api/v1/vulnerabilities/bulk-update",
             json={
                 "vuln_ids": [1],
                 "update": {"status": "invalid_status"},
-            }
+            },
         )
 
         # Should reject invalid status or indicate no rows updated
         assert response.status_code in [400, 404, 422]
 
-        app.dependency_overrides.clear()
-
 
 class TestVulnerabilitiesRemediationGroups:
     """Tests for vulnerability remediation groups endpoint."""
 
-    async def test_remediation_groups_requires_auth(self, client):
+    async def test_remediation_groups_requires_auth(self, authenticated_client):
         """Remediation groups endpoint is public in current model."""
-        response = await client.get("/api/v1/vulnerabilities/remediation-groups")
+        response = await authenticated_client.get("/api/v1/vulnerabilities/remediation-groups")
         assert response.status_code == 200
 
-    async def test_remediation_groups_success(self, client, db_with_settings):
+    async def test_remediation_groups_success(self, authenticated_client, db_with_settings):
         """Test successful remediation groups retrieval."""
-        from app.repositories.dependencies import get_vulnerability_repository
         from app.main import app
+        from app.repositories.dependencies import get_vulnerability_repository
 
         class DummyVulnRepo:
             async def get_remediation_groups(self, container_id=None):
@@ -214,7 +202,7 @@ class TestVulnerabilitiesRemediationGroups:
 
         app.dependency_overrides[get_vulnerability_repository] = lambda: DummyVulnRepo()
 
-        response = await client.get("/api/v1/vulnerabilities/remediation-groups")
+        response = await authenticated_client.get("/api/v1/vulnerabilities/remediation-groups")
 
         assert response.status_code == 200
         data = response.json()
@@ -228,15 +216,15 @@ class TestVulnerabilitiesRemediationGroups:
 class TestVulnerabilitiesExport:
     """Tests for vulnerability export functionality."""
 
-    async def test_export_csv_requires_auth(self, client):
+    async def test_export_csv_requires_auth(self, authenticated_client):
         """CSV export is publicly accessible in the new workflow."""
-        response = await client.get("/api/v1/vulnerabilities/export?format=csv")
+        response = await authenticated_client.get("/api/v1/vulnerabilities/export?format=csv")
         assert response.status_code in [200, 204, 404]
 
-    async def test_export_csv_success(self, client, db_with_settings):
+    async def test_export_csv_success(self, authenticated_client, db_with_settings):
         """Test successful CSV export."""
-        from app.repositories.dependencies import get_vulnerability_repository
         from app.main import app
+        from app.repositories.dependencies import get_vulnerability_repository
 
         class DummyVulnRepo:
             async def get_for_export(self, **kwargs):
@@ -257,7 +245,7 @@ class TestVulnerabilitiesExport:
 
         app.dependency_overrides[get_vulnerability_repository] = lambda: DummyVulnRepo()
 
-        response = await client.get("/api/v1/vulnerabilities/export?format=csv")
+        response = await authenticated_client.get("/api/v1/vulnerabilities/export?format=csv")
 
         assert response.status_code == 200
         assert "text/csv" in response.headers.get("content-type", "").lower()
@@ -265,10 +253,10 @@ class TestVulnerabilitiesExport:
 
         app.dependency_overrides.clear()
 
-    async def test_export_json_success(self, client, db_with_settings):
+    async def test_export_json_success(self, authenticated_client, db_with_settings):
         """Test successful JSON export."""
-        from app.repositories.dependencies import get_vulnerability_repository
         from app.main import app
+        from app.repositories.dependencies import get_vulnerability_repository
 
         class DummyVulnRepo:
             async def get_for_export(self, **kwargs):
@@ -289,7 +277,7 @@ class TestVulnerabilitiesExport:
 
         app.dependency_overrides[get_vulnerability_repository] = lambda: DummyVulnRepo()
 
-        response = await client.get("/api/v1/vulnerabilities/export?format=json")
+        response = await authenticated_client.get("/api/v1/vulnerabilities/export?format=json")
 
         assert response.status_code == 200
         data = response.json()
@@ -302,21 +290,21 @@ class TestVulnerabilitiesExport:
 class TestVulnerabilitiesPagination:
     """Tests for vulnerability pagination."""
 
-    async def test_pagination_parameters(self, client, db_with_settings):
+    async def test_pagination_parameters(self, authenticated_client, db_with_settings):
         """Test pagination with skip and limit parameters."""
         # Test various pagination parameters
-        response = await client.get("/api/v1/vulnerabilities?offset=0&limit=10")
+        response = await authenticated_client.get("/api/v1/vulnerabilities?offset=0&limit=10")
         assert response.status_code == 200
 
-        response = await client.get("/api/v1/vulnerabilities?offset=10&limit=20")
+        response = await authenticated_client.get("/api/v1/vulnerabilities?offset=10&limit=20")
         assert response.status_code == 200
 
-    async def test_pagination_negative_values(self, client, db_with_settings):
+    async def test_pagination_negative_values(self, authenticated_client, db_with_settings):
         """Test that negative pagination values are rejected."""
         # Negative offset
-        response = await client.get("/api/v1/vulnerabilities?offset=-1&limit=10")
+        response = await authenticated_client.get("/api/v1/vulnerabilities?offset=-1&limit=10")
         assert response.status_code in [200, 400, 422]
 
         # Negative limit
-        response = await client.get("/api/v1/vulnerabilities?offset=0&limit=-1")
+        response = await authenticated_client.get("/api/v1/vulnerabilities?offset=0&limit=-1")
         assert response.status_code in [200, 400, 422]

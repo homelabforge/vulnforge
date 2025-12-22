@@ -46,9 +46,7 @@ class CleanupService:
             logger.info(f"Starting scan history cleanup (retention: {retention_days} days)")
 
             # Find scans older than retention period
-            old_scans_result = await db.execute(
-                select(Scan.id).where(Scan.scan_date < cutoff_date)
-            )
+            old_scans_result = await db.execute(select(Scan.id).where(Scan.scan_date < cutoff_date))
             old_scan_ids = [row[0] for row in old_scans_result.fetchall()]
 
             if not old_scan_ids:
@@ -66,9 +64,7 @@ class CleanupService:
             vuln_count = len(vuln_count_result.scalars().all())
 
             # Delete vulnerabilities first (foreign key dependency)
-            await db.execute(
-                delete(Vulnerability).where(Vulnerability.scan_id.in_(old_scan_ids))
-            )
+            await db.execute(delete(Vulnerability).where(Vulnerability.scan_id.in_(old_scan_ids)))
 
             # Delete old scans
             await db.execute(delete(Scan).where(Scan.id.in_(old_scan_ids)))
@@ -117,9 +113,7 @@ class CleanupService:
         cutoff_date = get_now() - timedelta(days=retention_days)
 
         # Count old scans
-        old_scans_result = await db.execute(
-            select(Scan).where(Scan.scan_date < cutoff_date)
-        )
+        old_scans_result = await db.execute(select(Scan).where(Scan.scan_date < cutoff_date))
         old_scans_count = len(old_scans_result.scalars().all())
 
         # Count total scans

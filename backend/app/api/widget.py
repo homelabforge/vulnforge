@@ -2,12 +2,12 @@
 
 from fastapi import APIRouter, Depends
 
+from app.repositories.container_repository import ContainerRepository
 from app.repositories.dependencies import (
     get_container_repository,
     get_secret_repository,
     get_vulnerability_repository,
 )
-from app.repositories.container_repository import ContainerRepository
 from app.repositories.secret_repository import SecretRepository
 from app.repositories.vulnerability_repository import VulnerabilityRepository
 from app.schemas import (

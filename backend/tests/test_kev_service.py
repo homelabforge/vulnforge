@@ -1,8 +1,9 @@
 """Tests for KEV (Known Exploited Vulnerabilities) service."""
 
+from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime, timedelta, timezone
 
 
 @pytest.mark.asyncio
@@ -24,10 +25,10 @@ class TestKEVCatalogFetching:
                     "product": "Test Product",
                     "vulnerabilityName": "Test Vuln",
                     "dateAdded": "2024-01-01",
-                    "shortDescription": "Test description"
+                    "shortDescription": "Test description",
                 }
             ],
-            "dateReleased": "2024-01-01"
+            "dateReleased": "2024-01-01",
         }
         mock_response.status_code = 200
         mock_response.raise_for_status.return_value = None
@@ -44,8 +45,9 @@ class TestKEVCatalogFetching:
     @patch("httpx.AsyncClient.get")
     async def test_fetch_catalog_network_error(self, mock_get):
         """Test handling network errors during catalog fetch."""
-        from app.services.kev_service import KEVService
         import httpx
+
+        from app.services.kev_service import KEVService
 
         mock_get.side_effect = httpx.NetworkError("Connection failed")
 
@@ -87,7 +89,7 @@ class TestKEVLookup:
                 "cve_id": "CVE-2024-0001",
                 "vendor_project": "Test",
                 "product": "Product",
-                "date_added": datetime(2024, 1, 1, tzinfo=timezone.utc),
+                "date_added": datetime(2024, 1, 1, tzinfo=UTC),
             }
         }
 
@@ -120,7 +122,7 @@ class TestKEVCatalogFreshness:
         service.set_cache_hours(12)
 
         # Set recent fetch time
-        service._last_refresh = datetime.now(timezone.utc)
+        service._last_refresh = datetime.now(UTC)
 
         assert service.needs_refresh() is False
 
@@ -132,7 +134,7 @@ class TestKEVCatalogFreshness:
         service.set_cache_hours(12)
 
         # Set old fetch time
-        service._last_refresh = datetime.now(timezone.utc) - timedelta(hours=24)
+        service._last_refresh = datetime.now(UTC) - timedelta(hours=24)
 
         assert service.needs_refresh() is True
 

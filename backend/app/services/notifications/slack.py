@@ -1,7 +1,6 @@
 """Slack notification service."""
 
 import logging
-from typing import Optional
 
 import httpx
 
@@ -11,11 +10,11 @@ logger = logging.getLogger(__name__)
 
 # Color mapping for Slack attachments
 COLOR_MAP = {
-    "urgent": "#dc2626",   # Red
-    "high": "#f97316",     # Orange
+    "urgent": "#dc2626",  # Red
+    "high": "#f97316",  # Orange
     "default": "#3b82f6",  # Blue
-    "low": "#10b981",      # Green
-    "min": "#6b7280",      # Gray
+    "low": "#10b981",  # Green
+    "min": "#6b7280",  # Gray
 }
 
 
@@ -37,8 +36,8 @@ class SlackNotificationService(NotificationService):
         title: str,
         message: str,
         priority: str = "default",
-        tags: Optional[list[str]] = None,
-        url: Optional[str] = None,
+        tags: list[str] | None = None,
+        url: str | None = None,
     ) -> bool:
         try:
             # Build Slack message with attachment for color
@@ -58,9 +57,7 @@ class SlackNotificationService(NotificationService):
             }
 
             if tag_text:
-                attachment["fields"] = [
-                    {"title": "Tags", "value": tag_text, "short": True}
-                ]
+                attachment["fields"] = [{"title": "Tags", "value": tag_text, "short": True}]
 
             if url:
                 attachment["title_link"] = url

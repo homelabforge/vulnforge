@@ -1,7 +1,5 @@
 """Activity API endpoints."""
 
-from typing import Dict
-
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +10,7 @@ from app.schemas import ActivityList, ActivityLog, ActivityTypeCount, ActivityTy
 router = APIRouter()
 
 # Event type labels for frontend display
-EVENT_TYPE_LABELS: Dict[str, str] = {
+EVENT_TYPE_LABELS: dict[str, str] = {
     "scan_completed": "Scan Completed",
     "scan_failed": "Scan Failed",
     "secret_detected": "Secret Detected",
@@ -60,9 +58,7 @@ async def get_activities(
     # Get event type counts (for filter chips)
     event_type_counts = await repository.count_by_type()
 
-    return ActivityList(
-        activities=activities, total=total, event_type_counts=event_type_counts
-    )
+    return ActivityList(activities=activities, total=total, event_type_counts=event_type_counts)
 
 
 @router.get("/types", response_model=ActivityTypesResponse)
@@ -80,7 +76,9 @@ async def get_activity_types(db: AsyncSession = Depends(get_db)):
     counts = await repository.count_by_type()
 
     types = [
-        ActivityTypeCount(type=event_type, count=count, label=EVENT_TYPE_LABELS.get(event_type, event_type))
+        ActivityTypeCount(
+            type=event_type, count=count, label=EVENT_TYPE_LABELS.get(event_type, event_type)
+        )
         for event_type, count in counts.items()
     ]
 

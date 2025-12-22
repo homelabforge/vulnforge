@@ -6,7 +6,6 @@ import io
 import json
 import logging
 import subprocess
-from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -20,21 +19,23 @@ from app.models.user import User
 from app.repositories.dependencies import get_activity_logger
 from app.schemas.compliance import (
     ComplianceCurrentScan,
-    ComplianceFinding as ComplianceFindingSchema,
     ComplianceFindingIgnoreRequest,
     ComplianceFindingUnignoreRequest,
-    ComplianceScan as ComplianceScanSchema,
     ComplianceSummary,
     ComplianceTriggerRequest,
 )
+from app.schemas.compliance import (
+    ComplianceFinding as ComplianceFindingSchema,
+)
+from app.schemas.compliance import (
+    ComplianceScan as ComplianceScanSchema,
+)
 from app.services.activity_logger import ActivityLogger
+from app.services.compliance_state import compliance_state
 from app.services.docker_bench_service import DockerBenchService
 from app.services.docker_client import DockerService
-from app.services.trivy_scanner import TrivyScanner
-from app.services.trivy_compliance_service import TrivyComplianceService
 from app.services.enhanced_notifier import get_enhanced_notifier
 from app.services.settings_manager import SettingsManager
-from app.services.compliance_state import compliance_state
 from app.utils.timezone import get_now
 
 router = APIRouter()
@@ -74,6 +75,7 @@ async def perform_compliance_scan(docker_service: DockerService, trigger_type: s
         try:
             # Track scan start time for duration calculation
             import time
+
             scan_start_time = time.time()
 
             # Run Docker Bench Security scan for Docker host compliance.
@@ -170,8 +172,12 @@ async def perform_compliance_scan(docker_service: DockerService, trigger_type: s
             # Send notifications if enabled
             try:
                 settings_manager = SettingsManager(db)
-                notify_on_scan = await settings_manager.get_bool("compliance_notify_on_scan", default=True)
-                notify_on_failures = await settings_manager.get_bool("compliance_notify_on_failures", default=True)
+                notify_on_scan = await settings_manager.get_bool(
+                    "compliance_notify_on_scan", default=True
+                )
+                notify_on_failures = await settings_manager.get_bool(
+                    "compliance_notify_on_failures", default=True
+                )
 
                 notifier = get_enhanced_notifier()
 
@@ -281,7 +287,9 @@ async def trigger_compliance_scan(
         perform_compliance_scan(docker_service, request.trigger_type)
     )
 
-    logger.debug(f"trigger_scan: Created task {_current_scan_task}, done={_current_scan_task.done()}")
+    logger.debug(
+        f"trigger_scan: Created task {_current_scan_task}, done={_current_scan_task.done()}"
+    )
 
     return {
         "message": "Compliance scan started (Trivy compliance with Docker Bench legacy validation)",
@@ -305,7 +313,9 @@ async def get_current_scan():
     # Log task state for debugging
     task_exists = _current_scan_task is not None
     task_done = _current_scan_task.done() if _current_scan_task else None
-    logger.debug(f"get_current_scan: task_exists={task_exists}, task_done={task_done}, scan_id={_current_scan_id}, last_scan_id={_last_scan_id}, poll_count={_completion_poll_count}")
+    logger.debug(
+        f"get_current_scan: task_exists={task_exists}, task_done={task_done}, scan_id={_current_scan_id}, last_scan_id={_last_scan_id}, poll_count={_completion_poll_count}"
+    )
 
     if _current_scan_task and not _current_scan_task.done():
         # Scan in progress - get real-time progress from compliance_state
@@ -356,7 +366,9 @@ async def get_current_scan():
         _completion_poll_count += 1
 
         if _completion_poll_count <= 3:
-            logger.debug(f"get_current_scan: Scan completed, returning last_scan_id={_last_scan_id} (poll {_completion_poll_count}/3)")
+            logger.debug(
+                f"get_current_scan: Scan completed, returning last_scan_id={_last_scan_id} (poll {_completion_poll_count}/3)"
+            )
             return ComplianceCurrentScan(
                 status="completed",
                 scan_id=_last_scan_id,
@@ -412,20 +424,16 @@ async def get_compliance_summary(db: AsyncSession = Depends(get_db)):
 
     # Get severity breakdown for failures
     result = await db.execute(
-        select(
-            ComplianceFinding.severity,
-            func.count(ComplianceFinding.id).label("count")
-        )
+        select(ComplianceFinding.severity, func.count(ComplianceFinding.id).label("count"))
         .where(ComplianceFinding.status == "FAIL")
-        .where(ComplianceFinding.is_ignored == False)
+        .where(not ComplianceFinding.is_ignored)
         .group_by(ComplianceFinding.severity)
     )
     severity_counts = {row.severity: row.count for row in result}
 
     # Get ignored findings count
     result = await db.execute(
-        select(func.count(ComplianceFinding.id))
-        .where(ComplianceFinding.is_ignored == True)
+        select(func.count(ComplianceFinding.id)).where(ComplianceFinding.is_ignored)
     )
     ignored_count = result.scalar() or 0
 
@@ -435,7 +443,8 @@ async def get_compliance_summary(db: AsyncSession = Depends(get_db)):
         try:
             category_breakdown = json.loads(latest_scan.category_scores)
         except json.JSONDecodeError:
-            pass
+            # Invalid JSON in database - gracefully degrade to None
+            category_breakdown = None
 
     return ComplianceSummary(
         last_scan_date=latest_scan.scan_date,
@@ -478,7 +487,7 @@ async def get_compliance_findings(
 
     # Filter ignored
     if not include_ignored:
-        query = query.where(ComplianceFinding.is_ignored == False)
+        query = query.where(not ComplianceFinding.is_ignored)
 
     # Filter by status
     if status_filter:
@@ -489,10 +498,7 @@ async def get_compliance_findings(
         query = query.where(ComplianceFinding.category == category_filter)
 
     # Order by severity and check_id
-    query = query.order_by(
-        ComplianceFinding.severity.desc(),
-        ComplianceFinding.check_id
-    )
+    query = query.order_by(ComplianceFinding.severity.desc(), ComplianceFinding.check_id)
 
     result = await db.execute(query)
     findings = result.scalars().all()
@@ -544,7 +550,9 @@ async def ignore_compliance_finding(
         reason=request.reason,
     )
 
-    logger.info(f"Marked compliance finding {finding.check_id} as ignored by {user.username}: {request.reason}")
+    logger.info(
+        f"Marked compliance finding {finding.check_id} as ignored by {user.username}: {request.reason}"
+    )
 
     return ComplianceFindingSchema.model_validate(finding)
 
@@ -610,9 +618,7 @@ async def get_scan_history(limit: int = 10, db: AsyncSession = Depends(get_db)):
         List of compliance scans
     """
     result = await db.execute(
-        select(ComplianceScan)
-        .order_by(ComplianceScan.scan_date.desc())
-        .limit(limit)
+        select(ComplianceScan).order_by(ComplianceScan.scan_date.desc()).limit(limit)
     )
     scans = result.scalars().all()
 
@@ -649,15 +655,17 @@ async def get_compliance_trend(days: int = 30, db: AsyncSession = Depends(get_db
     trend_data = []
     for scan in scans:
         category_scores = json.loads(scan.category_scores) if scan.category_scores else {}
-        trend_data.append({
-            "date": scan.scan_date.isoformat(),
-            "compliance_score": scan.compliance_score,
-            "passed_checks": scan.passed_checks,
-            "warned_checks": scan.warned_checks,
-            "failed_checks": scan.failed_checks,
-            "total_checks": scan.total_checks,
-            "category_scores": category_scores,
-        })
+        trend_data.append(
+            {
+                "date": scan.scan_date.isoformat(),
+                "compliance_score": scan.compliance_score,
+                "passed_checks": scan.passed_checks,
+                "warned_checks": scan.warned_checks,
+                "failed_checks": scan.failed_checks,
+                "total_checks": scan.total_checks,
+                "category_scores": category_scores,
+            }
+        )
 
     return trend_data
 
@@ -685,7 +693,7 @@ async def export_compliance_csv(
     query = select(ComplianceFinding)
 
     if not include_ignored:
-        query = query.where(ComplianceFinding.is_ignored == False)
+        query = query.where(not ComplianceFinding.is_ignored)
 
     if status_filter:
         query = query.where(ComplianceFinding.status == status_filter.upper())
@@ -693,10 +701,7 @@ async def export_compliance_csv(
     if category_filter:
         query = query.where(ComplianceFinding.category == category_filter)
 
-    query = query.order_by(
-        ComplianceFinding.severity.desc(),
-        ComplianceFinding.check_id
-    )
+    query = query.order_by(ComplianceFinding.severity.desc(), ComplianceFinding.check_id)
 
     result = await db.execute(query)
     findings = result.scalars().all()
@@ -706,45 +711,49 @@ async def export_compliance_csv(
     writer = csv.writer(output)
 
     # Write header
-    writer.writerow([
-        "Check ID",
-        "Check Number",
-        "Title",
-        "Status",
-        "Severity",
-        "Category",
-        "Description",
-        "Remediation",
-        "Actual Value",
-        "Expected Value",
-        "First Seen",
-        "Last Seen",
-        "Is Ignored",
-        "Ignored Reason",
-        "Ignored By",
-        "Ignored At",
-    ])
+    writer.writerow(
+        [
+            "Check ID",
+            "Check Number",
+            "Title",
+            "Status",
+            "Severity",
+            "Category",
+            "Description",
+            "Remediation",
+            "Actual Value",
+            "Expected Value",
+            "First Seen",
+            "Last Seen",
+            "Is Ignored",
+            "Ignored Reason",
+            "Ignored By",
+            "Ignored At",
+        ]
+    )
 
     # Write findings
     for finding in findings:
-        writer.writerow([
-            finding.check_id,
-            finding.check_number or "",
-            finding.title,
-            finding.status,
-            finding.severity,
-            finding.category,
-            finding.description or "",
-            finding.remediation or "",
-            finding.actual_value or "",
-            finding.expected_value or "",
-            finding.first_seen.isoformat() if finding.first_seen else "",
-            finding.last_seen.isoformat() if finding.last_seen else "",
-            "Yes" if finding.is_ignored else "No",
-            finding.ignored_reason or "",
-            finding.ignored_by or "",
-            finding.ignored_at.isoformat() if finding.ignored_at else "",
-        ])
+        writer.writerow(
+            [
+                finding.check_id,
+                finding.check_number or "",
+                finding.title,
+                finding.status,
+                finding.severity,
+                finding.category,
+                finding.description or "",
+                finding.remediation or "",
+                finding.actual_value or "",
+                finding.expected_value or "",
+                finding.first_seen.isoformat() if finding.first_seen else "",
+                finding.last_seen.isoformat() if finding.last_seen else "",
+                "Yes" if finding.is_ignored else "No",
+                finding.ignored_reason or "",
+                finding.ignored_by or "",
+                finding.ignored_at.isoformat() if finding.ignored_at else "",
+            ]
+        )
 
     # Reset stream position
     output.seek(0)
@@ -757,5 +766,5 @@ async def export_compliance_csv(
     return StreamingResponse(
         io.BytesIO(output.getvalue().encode("utf-8")),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )

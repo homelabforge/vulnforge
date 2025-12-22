@@ -1,14 +1,11 @@
 """Enhanced notification service with templates and rules."""
 
 import logging
-from datetime import datetime
 from string import Template
 from typing import Any
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.db import db_session
 from app.models import NotificationLog, NotificationRule
 from app.services.notifications import NotificationDispatcher
@@ -192,7 +189,7 @@ class EnhancedNotificationService:
             result = await db.execute(
                 select(NotificationRule).where(
                     NotificationRule.event_type == event_type,
-                    NotificationRule.enabled == True,
+                    NotificationRule.enabled,
                 )
             )
             rules = result.scalars().all()

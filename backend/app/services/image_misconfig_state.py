@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from app.utils.timezone import get_now
 
@@ -17,11 +17,11 @@ class ImageMisconfigState:
         self._is_scanning: bool = False
         self._mode: str = "single"
         self._targets: list[str] = []
-        self._current_image: Optional[str] = None
+        self._current_image: str | None = None
         self._progress_current: int = 0
         self._progress_total: int = 0
         self._started_at = None
-        self._last_result: Optional[dict] = None
+        self._last_result: dict | None = None
 
     def start_scan(self, *, total_images: int, mode: str, targets: Sequence[str]):
         """Initialize scan state before launching Trivy misconfiguration jobs."""
@@ -46,7 +46,7 @@ class ImageMisconfigState:
             self.start_scan(total_images=1, mode="single", targets=[image_name])
         self._current_image = image_name
 
-    def record_result(self, *, image_name: str, success: bool, error_message: Optional[str]):
+    def record_result(self, *, image_name: str, success: bool, error_message: str | None):
         """Store the result for the image that just finished."""
         if self._progress_current < self._progress_total:
             self._progress_current += 1

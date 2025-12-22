@@ -10,7 +10,8 @@ from app.db import get_db
 from app.dependencies.auth import require_admin
 from app.models import Setting
 from app.models.user import User
-from app.schemas import Setting as SettingSchema, SettingUpdate
+from app.schemas import Setting as SettingSchema
+from app.schemas import SettingUpdate
 
 router = APIRouter()
 
@@ -30,10 +31,7 @@ class TestConnectionResult(BaseModel):
 
 
 @router.get("/", response_model=list[SettingSchema])
-async def list_settings(
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_admin)
-):
+async def list_settings(db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)):
     """List all settings. Requires admin privileges."""
     result = await db.execute(select(Setting))
     settings = result.scalars().all()
@@ -42,9 +40,7 @@ async def list_settings(
 
 @router.get("/{key}", response_model=SettingSchema)
 async def get_setting(
-    key: str,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_admin)
+    key: str, db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)
 ):
     """Get setting by key. Requires admin privileges."""
     result = await db.execute(select(Setting).where(Setting.key == key))
@@ -61,7 +57,7 @@ async def update_setting(
     key: str,
     update: SettingUpdate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_admin)
+    user: User = Depends(require_admin),
 ):
     """Update setting value with validation. Requires admin privileges."""
     from app.services.settings_manager import SettingsManager
@@ -82,7 +78,7 @@ async def update_setting(
 async def bulk_update_settings(
     bulk_update: BulkSettingsUpdate,
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_admin)
+    user: User = Depends(require_admin),
 ):
     """
     Bulk update multiple settings at once with validation.
@@ -118,14 +114,19 @@ async def test_docker_connection(
         Success flag, message, and basic details about the connection.
     """
     import os
+    from urllib.parse import urlparse
+
     from docker import DockerClient
     from docker.errors import DockerException
-    from urllib.parse import urlparse
 
     from app.config import settings as app_settings
 
     # Use DOCKER_HOST env variable (from compose) with fallbacks
-    socket_value = os.getenv("DOCKER_HOST") or app_settings.docker_socket_proxy or "unix:///var/run/docker.sock"
+    socket_value = (
+        os.getenv("DOCKER_HOST")
+        or app_settings.docker_socket_proxy
+        or "unix:///var/run/docker.sock"
+    )
 
     # Normalize plain paths to unix:// URLs for docker-py
     parsed = urlparse(socket_value)

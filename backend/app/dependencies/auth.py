@@ -26,7 +26,7 @@ async def require_auth(request: Request) -> User:
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required but user not attached to request"
+            detail="Authentication required but user not attached to request",
         )
 
     # Check if user is actually authenticated (not anonymous)
@@ -68,7 +68,7 @@ async def require_admin(request: Request) -> User:
     if not user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Admin privileges required. User '{user.username}' is not an admin."
+            detail=f"Admin privileges required. User '{user.username}' is not an admin.",
         )
 
     # User is authenticated and has admin privileges

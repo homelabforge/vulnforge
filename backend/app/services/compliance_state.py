@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Optional
+
 from app.utils.timezone import get_now
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ _current_check: str = ""
 _current_check_id: str = ""
 _progress_current: int = 0
 _progress_total: int = 0
-_started_at: Optional[datetime] = None
+_started_at: datetime | None = None
 
 
 class ComplianceState:
@@ -26,7 +26,13 @@ class ComplianceState:
 
     def start_scan(self, total_checks: int = 150):
         """Start a new compliance scan."""
-        global _is_scanning, _progress_current, _progress_total, _current_check, _current_check_id, _started_at
+        global \
+            _is_scanning, \
+            _progress_current, \
+            _progress_total, \
+            _current_check, \
+            _current_check_id, \
+            _started_at
         _is_scanning = True
         _progress_current = 0
         _progress_total = total_checks
@@ -44,7 +50,13 @@ class ComplianceState:
 
     def finish_scan(self):
         """Mark scan as finished."""
-        global _is_scanning, _current_check, _current_check_id, _progress_current, _progress_total, _started_at
+        global \
+            _is_scanning, \
+            _current_check, \
+            _current_check_id, \
+            _progress_current, \
+            _progress_total, \
+            _started_at
         _is_scanning = False
         _current_check = ""
         _current_check_id = ""
@@ -54,10 +66,18 @@ class ComplianceState:
 
     def get_status(self) -> dict:
         """Get current compliance scan status."""
-        global _is_scanning, _current_check, _current_check_id, _progress_current, _progress_total, _started_at
+        global \
+            _is_scanning, \
+            _current_check, \
+            _current_check_id, \
+            _progress_current, \
+            _progress_total, \
+            _started_at
 
         # DEBUG: Log the actual global variable values
-        logger.info(f"DEBUG get_status: _is_scanning={_is_scanning}, progress={_progress_current}/{_progress_total}, check_id={_current_check_id}")
+        logger.info(
+            f"DEBUG get_status: _is_scanning={_is_scanning}, progress={_progress_current}/{_progress_total}, check_id={_current_check_id}"
+        )
 
         if not _is_scanning:
             return {"status": "idle"}

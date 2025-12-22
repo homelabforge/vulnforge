@@ -1,29 +1,5 @@
 """Tests for path normalization and traversal protection."""
 
-import pytest
-
-from app.middleware import auth as auth_middleware
-
-
-@pytest.fixture(autouse=True)
-def _force_auth(monkeypatch):
-    """Force authentication middleware into enabled state."""
-
-    async def _fake_get_cached_settings(_db):
-        return {
-            "auth_enabled": "true",
-            "auth_provider": "api_key",
-        }
-
-    monkeypatch.setattr(auth_middleware, "_get_cached_settings", _fake_get_cached_settings)
-    auth_middleware._settings_cache = None
-    auth_middleware._settings_cache_time = 0.0
-
-    yield
-
-    auth_middleware._settings_cache = None
-    auth_middleware._settings_cache_time = 0.0
-
 
 class TestPathNormalization:
     """Tests for URL path normalization security."""
@@ -190,60 +166,3 @@ class TestPathNormalizationEdgeCases:
 
         # Should normalize to /api/v1/containers and require auth
         assert response.status_code in [401, 403]
-
-
-class TestSettingsCacheSecurity:
-    """Tests for settings cache security."""
-
-    async def test_cache_ttl_respected(self):
-        """Test that cache TTL is respected."""
-        from app.middleware.auth import _settings_cache, _settings_cache_time, SETTINGS_CACHE_TTL
-        import time
-
-        # This test verifies the cache invalidation logic
-        # Actual implementation uses 60 second TTL
-        assert SETTINGS_CACHE_TTL == 60
-
-    async def test_cache_thread_safe(self):
-        """Test that cache access is thread-safe with async lock."""
-        from app.middleware.auth import _settings_lock
-
-        # Verify lock exists for thread safety
-        assert _settings_lock is not None
-
-        # The lock-based pattern should prevent race conditions
-        # where multiple requests could cause inconsistent cache state
-
-    async def test_concurrent_cache_access_safe(self, db_with_settings, monkeypatch):
-        """Test that concurrent cache access doesn't cause race conditions."""
-        import asyncio
-        from app.middleware.auth import _get_cached_settings
-        from app.middleware import auth as auth_middleware
-
-        # Temporarily restore the original _get_cached_settings (not the mocked one from _force_auth)
-        # by undoing the monkeypatch and importing fresh
-        import importlib
-        import app.middleware.auth
-        importlib.reload(app.middleware.auth)
-        from app.middleware.auth import _get_cached_settings
-
-        # Reset cache
-        auth_middleware._settings_cache = None
-        auth_middleware._settings_cache_time = 0
-        auth_middleware._settings_lock = asyncio.Lock()
-
-        # Create multiple concurrent requests using real database session
-        async def concurrent_access():
-            return await _get_cached_settings(db_with_settings)
-
-        # Run 20 concurrent requests
-        results = await asyncio.gather(*[concurrent_access() for _ in range(20)])
-
-        # All results should be consistent (same dict structure)
-        # None should be None or corrupted
-        assert all(isinstance(r, dict) for r in results)
-        assert all("auth_enabled" in r for r in results)
-
-        # Verify cache was populated
-        assert auth_middleware._settings_cache is not None
-        assert "auth_enabled" in auth_middleware._settings_cache

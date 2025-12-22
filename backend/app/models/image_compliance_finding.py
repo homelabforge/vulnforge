@@ -17,19 +17,27 @@ class ImageComplianceFinding(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
 
     # Check identification
-    check_id: Mapped[str] = mapped_column(String(50), index=True)  # e.g., "CIS-DI-0001", "DKL-DI-0002"
+    check_id: Mapped[str] = mapped_column(
+        String(50), index=True
+    )  # e.g., "CIS-DI-0001", "DKL-DI-0002"
     check_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
     title: Mapped[str] = mapped_column(String(500))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Image information
     image_name: Mapped[str] = mapped_column(String(500), index=True)  # Image name or ID
-    image_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)  # Docker image ID
+    image_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True
+    )  # Docker image ID
 
     # Status and severity
     status: Mapped[str] = mapped_column(String(20), index=True)  # PASS, FAIL, INFO, SKIP
-    severity: Mapped[str] = mapped_column(String(20), index=True)  # CRITICAL, HIGH, MEDIUM, LOW, INFO
-    category: Mapped[str] = mapped_column(String(100), index=True)  # "CIS Benchmarks", "Dockle Best Practices"
+    severity: Mapped[str] = mapped_column(
+        String(20), index=True
+    )  # CRITICAL, HIGH, MEDIUM, LOW, INFO
+    category: Mapped[str] = mapped_column(
+        String(100), index=True
+    )  # "CIS Benchmarks", "Dockle Best Practices"
 
     # Remediation
     remediation: Mapped[str | None] = mapped_column(Text, nullable=True)

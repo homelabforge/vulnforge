@@ -122,14 +122,14 @@ def validate_log_level(log_level: str) -> str:
 
     log_level_upper = log_level.upper()
     if log_level_upper not in valid_levels:
-        raise ValidationError(
-            f"Invalid log level. Must be one of: {', '.join(valid_levels)}"
-        )
+        raise ValidationError(f"Invalid log level. Must be one of: {', '.join(valid_levels)}")
 
     return log_level_upper
 
 
-def validate_positive_integer(value: Any, name: str, min_value: int = 1, max_value: int | None = None) -> int:
+def validate_positive_integer(
+    value: Any, name: str, min_value: int = 1, max_value: int | None = None
+) -> int:
     """
     Validate that a value is a positive integer within range.
 

@@ -1,13 +1,21 @@
 """Scan model."""
 
+from __future__ import annotations
+
 from datetime import datetime
-from typing import List
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from app.db import Base
 from app.utils.timezone import get_now
+
+if TYPE_CHECKING:
+    from app.models.container import Container
+    from app.models.notification_log import NotificationLog
+    from app.models.secret import Secret
+    from app.models.vulnerability import Vulnerability
 
 
 class Scan(Base):
@@ -50,14 +58,14 @@ class Scan(Base):
     cves_introduced: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array
 
     # Relationships
-    container: Mapped["Container"] = relationship("Container", back_populates="scans")
-    vulnerabilities: Mapped[List["Vulnerability"]] = relationship(
+    container: Mapped[Container] = relationship("Container", back_populates="scans")
+    vulnerabilities: Mapped[list[Vulnerability]] = relationship(
         "Vulnerability", back_populates="scan", cascade="all, delete-orphan"
     )
-    secrets: Mapped[List["Secret"]] = relationship(
+    secrets: Mapped[list[Secret]] = relationship(
         "Secret", back_populates="scan", cascade="all, delete-orphan"
     )
-    notification_logs: Mapped[List["NotificationLog"]] = relationship(
+    notification_logs: Mapped[list[NotificationLog]] = relationship(
         "NotificationLog", back_populates="scan", cascade="all, delete-orphan"
     )
 

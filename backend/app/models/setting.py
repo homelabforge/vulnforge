@@ -20,6 +20,4 @@ class Setting(Base):
     category: Mapped[str] = mapped_column(String(50), nullable=False, default="general")
     is_sensitive: Mapped[bool] = mapped_column(Boolean, default=False)  # For tokens/passwords
 
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=get_now, onupdate=get_now
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=get_now, onupdate=get_now)

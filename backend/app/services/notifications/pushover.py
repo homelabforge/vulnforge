@@ -1,7 +1,6 @@
 """Pushover notification service."""
 
 import logging
-from typing import Optional
 
 import httpx
 
@@ -12,11 +11,11 @@ logger = logging.getLogger(__name__)
 # Priority mapping from standard names to Pushover values (-2 to 2)
 # Note: 2 (emergency) requires retry/expire params
 PRIORITY_MAP = {
-    "urgent": 1,   # High priority (bypass quiet hours)
+    "urgent": 1,  # High priority (bypass quiet hours)
     "high": 1,
     "default": 0,  # Normal priority
-    "low": -1,     # Low priority (no sound/vibration)
-    "min": -2,     # Lowest priority (no notification)
+    "low": -1,  # Low priority (no sound/vibration)
+    "min": -2,  # Lowest priority (no notification)
 }
 
 PUSHOVER_API_URL = "https://api.pushover.net/1/messages.json"
@@ -45,8 +44,8 @@ class PushoverNotificationService(NotificationService):
         title: str,
         message: str,
         priority: str = "default",
-        tags: Optional[list[str]] = None,
-        url: Optional[str] = None,
+        tags: list[str] | None = None,
+        url: str | None = None,
     ) -> bool:
         try:
             # Build message with tags if present

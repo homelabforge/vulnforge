@@ -47,7 +47,9 @@ async def scheduled_scan_task():
                     discovered.append(dc["name"])
 
             await db.commit()
-            logger.info(f"Pre-scan discovery: {len(docker_containers)} total, {len(discovered)} new")
+            logger.info(
+                f"Pre-scan discovery: {len(docker_containers)} total, {len(discovered)} new"
+            )
 
         docker_service.close()
     except Exception as e:
@@ -84,8 +86,8 @@ async def scheduled_scan_task():
 
 async def scheduled_compliance_scan_task():
     """Execute scheduled Docker Bench compliance scan."""
-    from app.services.docker_client import DockerService
     from app.api.compliance import perform_compliance_scan
+    from app.services.docker_client import DockerService
 
     logger.info("Starting scheduled compliance scan...")
 
@@ -122,7 +124,9 @@ async def scheduled_kev_refresh_task():
             settings_manager = SettingsManager(db)
             await settings_manager.set(
                 "kev_last_refresh",
-                kev_service.get_last_refresh().isoformat() if kev_service.get_last_refresh() else ""
+                kev_service.get_last_refresh().isoformat()
+                if kev_service.get_last_refresh()
+                else "",
             )
 
         # Re-check all existing vulnerabilities against updated KEV catalog
@@ -168,7 +172,12 @@ class ScanScheduler:
         self.compliance_job_id = "automated_compliance_scan"
         self.kev_refresh_job_id = "automated_kev_refresh"
 
-    def start(self, scan_schedule: str | None = None, compliance_schedule: str | None = None, kev_enabled: bool = True):
+    def start(
+        self,
+        scan_schedule: str | None = None,
+        compliance_schedule: str | None = None,
+        kev_enabled: bool = True,
+    ):
         """
         Start the scheduler.
 

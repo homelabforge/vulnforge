@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any, Dict, Iterable, List
+from typing import Any
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +17,7 @@ from app.utils.timezone import get_now
 @dataclass(frozen=True)
 class _TrendPoint:
     day: date
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
 def _percent_change(previous: float | int | None, current: float | int | None) -> float | None:
@@ -28,7 +29,7 @@ def _percent_change(previous: float | int | None, current: float | int | None) -
     return ((current - previous) / previous) * 100.0
 
 
-def _sum_period(points: Iterable[_TrendPoint], start: date, end: date) -> Dict[str, Any]:
+def _sum_period(points: Iterable[_TrendPoint], start: date, end: date) -> dict[str, Any]:
     """Aggregate point metrics between two dates (inclusive)."""
     totals = {
         "completed_scans": 0,
@@ -50,7 +51,7 @@ def _sum_period(points: Iterable[_TrendPoint], start: date, end: date) -> Dict[s
     return totals
 
 
-async def build_scan_trends(db: AsyncSession, *, window_days: int = 30) -> Dict[str, Any]:
+async def build_scan_trends(db: AsyncSession, *, window_days: int = 30) -> dict[str, Any]:
     """Return aggregated scan trends for the requested time window."""
     window_days = max(1, min(window_days, 90))
     now = get_now()
@@ -81,8 +82,8 @@ async def build_scan_trends(db: AsyncSession, *, window_days: int = 30) -> Dict[
     result = await db.execute(stmt)
     rows = result.all()
 
-    trend_points: List[_TrendPoint] = []
-    public_series: List[Dict[str, Any]] = []
+    trend_points: list[_TrendPoint] = []
+    public_series: list[dict[str, Any]] = []
 
     summary = {
         "total_scans": 0,
@@ -106,9 +107,7 @@ async def build_scan_trends(db: AsyncSession, *, window_days: int = 30) -> Dict[
 
         duration_total = float(row.duration_total or 0.0)
         duration_samples = int(row.duration_samples or 0)
-        avg_duration = (
-            duration_total / duration_samples if duration_samples > 0 else None
-        )
+        avg_duration = duration_total / duration_samples if duration_samples > 0 else None
 
         payload = {
             "date": day_obj.isoformat(),
@@ -125,7 +124,13 @@ async def build_scan_trends(db: AsyncSession, *, window_days: int = 30) -> Dict[
         }
 
         trend_points.append(_TrendPoint(day=day_obj, payload=payload))
-        public_series.append({k: v for k, v in payload.items() if k not in {"duration_seconds_total", "duration_samples"}})
+        public_series.append(
+            {
+                k: v
+                for k, v in payload.items()
+                if k not in {"duration_seconds_total", "duration_samples"}
+            }
+        )
 
         summary["total_scans"] += payload["total_scans"]
         summary["completed_scans"] += payload["completed_scans"]

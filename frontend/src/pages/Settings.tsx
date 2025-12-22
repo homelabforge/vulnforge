@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Settings as SettingsIcon, RefreshCw, Bell, Clock, Shield, Database, Info, Lock, AlertCircle, Key, Users, Sun, Moon } from "lucide-react";
+import { Settings as SettingsIcon, RefreshCw, Bell, Clock, Shield, Database, Info, Lock, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
 import { handleApiError } from "@/lib/errorHandler";
 import { useSettings, useBulkUpdateSettings, useScanStatus } from "@/hooks/useVulnForge";
 import { DatabaseBackupSection } from "@/components/DatabaseBackupSection";
 import { ScannerManagementCard } from "@/components/ScannerManagementCard";
+import { UserAuthenticationCard } from "@/components/UserAuthenticationCard";
+import { ApiKeysCard } from "@/components/ApiKeysCard";
 import { HelpTooltip } from "@/components/HelpTooltip";
 import { parseSettingInt } from "@/schemas/settings";
 import { settingsApi } from "@/lib/api";
@@ -138,24 +140,8 @@ export function Settings() {
   const [scannerAllowStaleDb, setScannerAllowStaleDb] = useState(true);
   const [scannerStaleDbWarningHours, setScannerStaleDbWarningHours] = useState(72);
 
-  // Authentication Settings
-  const [authEnabled, setAuthEnabled] = useState(false);
-  const [authProvider, setAuthProvider] = useState("none");
-  // Authentik settings
-  const [authAuthentikHeaderUsername, setAuthAuthentikHeaderUsername] = useState("X-Authentik-Username");
-  const [authAuthentikHeaderEmail, setAuthAuthentikHeaderEmail] = useState("X-Authentik-Email");
-  const [authAuthentikHeaderGroups, setAuthAuthentikHeaderGroups] = useState("X-Authentik-Groups");
-  // Custom headers settings
-  const [authCustomHeaderUsername, setAuthCustomHeaderUsername] = useState("X-Remote-User");
-  const [authCustomHeaderEmail, setAuthCustomHeaderEmail] = useState("X-Remote-Email");
-  const [authCustomHeaderGroups, setAuthCustomHeaderGroups] = useState("X-Remote-Groups");
-  // API keys (JSON array)
-  const [authApiKeys, setAuthApiKeys] = useState("[]");
-  // Basic auth users (JSON array)
-  const [authBasicUsers, setAuthBasicUsers] = useState("[]");
-  // Admin configuration
-  const [authAdminGroup, setAuthAdminGroup] = useState("vulnforge-admins");
-  const [authAdminUsernames, setAuthAdminUsernames] = useState("[]");
+  // API Authentication Settings removed - now managed by ApiKeysCard component
+  // User Authentication Settings removed - now managed by UserAuthenticationCard component
 
   // Auto-save state (status tracked for potential UI indicator, currently unused)
   const [_autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -241,19 +227,8 @@ export function Settings() {
       scanner_skip_db_update_when_fresh: scannerSkipDbUpdateWhenFresh.toString(),
       scanner_allow_stale_db: scannerAllowStaleDb.toString(),
       scanner_stale_db_warning_hours: scannerStaleDbWarningHours.toString(),
-      // Authentication settings
-      auth_enabled: authEnabled.toString(),
-      auth_provider: authProvider,
-      auth_authentik_header_username: authAuthentikHeaderUsername,
-      auth_authentik_header_email: authAuthentikHeaderEmail,
-      auth_authentik_header_groups: authAuthentikHeaderGroups,
-      auth_custom_header_username: authCustomHeaderUsername,
-      auth_custom_header_email: authCustomHeaderEmail,
-      auth_custom_header_groups: authCustomHeaderGroups,
-      auth_api_keys: authApiKeys,
-      auth_basic_users: authBasicUsers,
-      auth_admin_group: authAdminGroup,
-      auth_admin_usernames: authAdminUsernames,
+      // API Authentication settings removed - now managed by ApiKeysCard component
+      // User Authentication settings removed - now managed by UserAuthenticationCard component
     };
   };
 
@@ -399,34 +374,17 @@ export function Settings() {
       if (settingsMap.scanner_stale_db_warning_hours)
         setScannerStaleDbWarningHours(parseSettingInt(settingsMap.scanner_stale_db_warning_hours, 72));
 
-      // Authentication settings
-      if (settingsMap.auth_enabled !== undefined)
-        setAuthEnabled(settingsMap.auth_enabled === "true");
-      if (settingsMap.auth_provider) setAuthProvider(settingsMap.auth_provider);
-      if (settingsMap.auth_authentik_header_username)
-        setAuthAuthentikHeaderUsername(settingsMap.auth_authentik_header_username);
-      if (settingsMap.auth_authentik_header_email)
-        setAuthAuthentikHeaderEmail(settingsMap.auth_authentik_header_email);
-      if (settingsMap.auth_authentik_header_groups)
-        setAuthAuthentikHeaderGroups(settingsMap.auth_authentik_header_groups);
-      if (settingsMap.auth_custom_header_username)
-        setAuthCustomHeaderUsername(settingsMap.auth_custom_header_username);
-      if (settingsMap.auth_custom_header_email)
-        setAuthCustomHeaderEmail(settingsMap.auth_custom_header_email);
-      if (settingsMap.auth_custom_header_groups)
-        setAuthCustomHeaderGroups(settingsMap.auth_custom_header_groups);
-      if (settingsMap.auth_api_keys) setAuthApiKeys(settingsMap.auth_api_keys);
-      if (settingsMap.auth_basic_users) setAuthBasicUsers(settingsMap.auth_basic_users);
-      if (settingsMap.auth_admin_group) setAuthAdminGroup(settingsMap.auth_admin_group);
-      if (settingsMap.auth_admin_usernames) setAuthAdminUsernames(settingsMap.auth_admin_usernames);
-
-      hasInitializedRef.current = true;
+      // API Authentication settings loading removed - now managed by ApiKeysCard component
+      // User Authentication settings loading removed - now managed by UserAuthenticationCard component
 
       // Set initial payload to prevent auto-save on first load
+      // IMPORTANT: Set both hasInitializedRef and lastPayloadRef together to prevent race condition
+      // Use a small delay to ensure all state updates have completed
       setTimeout(() => {
         const initialPayload = buildSettingsPayload();
         lastPayloadRef.current = JSON.stringify(initialPayload);
-      }, 0);
+        hasInitializedRef.current = true;
+      }, 100);
     }
   }, [settings]); // eslint-disable-line react-hooks/exhaustive-deps -- Only run when settings load
 
@@ -493,18 +451,7 @@ export function Settings() {
     scannerSkipDbUpdateWhenFresh,
     scannerAllowStaleDb,
     scannerStaleDbWarningHours,
-    authEnabled,
-    authProvider,
-    authAuthentikHeaderUsername,
-    authAuthentikHeaderEmail,
-    authAuthentikHeaderGroups,
-    authCustomHeaderUsername,
-    authCustomHeaderEmail,
-    authCustomHeaderGroups,
-    authApiKeys,
-    authBasicUsers,
-    authAdminGroup,
-    authAdminUsernames,
+    // API authentication settings removed - now managed by ApiKeysCard component
     // Multi-service notification settings
     gotifyEnabled,
     gotifyServer,
@@ -540,6 +487,7 @@ export function Settings() {
     notifySystemEnabled,
     notifySystemKevRefresh,
     notifySystemBackup,
+    // User authentication settings removed - now managed by UserAuthenticationCard component
   ]);
 
 
@@ -1297,274 +1245,14 @@ export function Settings() {
 
       {activeTab === "security" && (
         <>
-          <div className="columns-1 md:columns-2 gap-4 space-y-4">
-            {/* Authentication Settings */}
-            <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 break-inside-avoid">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <Lock className="w-6 h-6 text-purple-500" />
-                  <div>
-                    <h2 className="text-xl font-semibold text-vuln-text">Authentication</h2>
-                    <p className="text-sm text-vuln-text-muted mt-0.5">
-                      Configure access control and authentication providers
-                    </p>
-                  </div>
-                </div>
-                <HelpTooltip content="Secure VulnForge with authentication. Authentication Providers: Choose based on your infrastructure - Authentik/Custom Headers for SSO, API Keys for automation, Basic Auth for simple deployments. Security Note: Admin users can access maintenance endpoints (backup/restore, cache clear, KEV refresh). Regular users have read-only access to vulnerability data." />
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Left Column */}
+            <div className="space-y-4">
+              {/* API Keys Card */}
+              <ApiKeysCard />
 
-              {/* Production Warning Banner - shown when auth is disabled */}
-              {!authEnabled && (
-                <div className="mb-6 p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium text-amber-400">Authentication Disabled</p>
-                    <p className="text-xs text-amber-300/70 mt-1">
-                      VulnForge is currently accessible without authentication. Enable authentication for production deployments to secure access to vulnerability data and administrative functions.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                {/* Master Toggle */}
-                <div>
-                  <label className="flex items-center justify-between cursor-pointer group">
-                    <div>
-                      <span className="text-sm font-medium text-vuln-text group-hover:text-vuln-text transition-colors">
-                        Enable Authentication
-                      </span>
-                      <p className="text-xs text-vuln-text-disabled mt-1">
-                        Require users to authenticate before accessing VulnForge
-                      </p>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        checked={authEnabled}
-                        onChange={(e) => setAuthEnabled(e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Provider Selection */}
-                {authEnabled && (
-                  <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-vuln-text mb-2">
-                Authentication Provider
-              </label>
-              <select
-                value={authProvider}
-                onChange={(e) => setAuthProvider(e.target.value)}
-                className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="none">None (Disable)</option>
-                <option value="authentik">Authentik (Forward Auth)</option>
-                <option value="custom_headers">Custom Headers (Authelia/nginx)</option>
-                <option value="api_key">API Keys</option>
-                <option value="basic_auth">Basic Authentication</option>
-              </select>
-              <p className="text-xs text-vuln-text-disabled mt-1">
-                Select how users will authenticate to VulnForge
-              </p>
-            </div>
-
-            {/* Authentik Provider Settings */}
-            {authProvider === "authentik" && (
-              <div className="p-4 bg-vuln-surface-light border border-vuln-border rounded-lg space-y-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Shield className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-sm font-semibold text-vuln-text">Authentik Configuration</h3>
-                </div>
-                <p className="text-xs text-vuln-text-disabled mb-4">
-                  Configure HTTP headers sent by Authentik forward auth proxy
-                </p>
-
-                <div>
-                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">Username Header</label>
-                  <input
-                    type="text"
-                    value={authAuthentikHeaderUsername}
-                    onChange={(e) => setAuthAuthentikHeaderUsername(e.target.value)}
-                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">Email Header</label>
-                  <input
-                    type="text"
-                    value={authAuthentikHeaderEmail}
-                    onChange={(e) => setAuthAuthentikHeaderEmail(e.target.value)}
-                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">Groups Header</label>
-                  <input
-                    type="text"
-                    value={authAuthentikHeaderGroups}
-                    onChange={(e) => setAuthAuthentikHeaderGroups(e.target.value)}
-                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Custom Headers Provider Settings */}
-            {authProvider === "custom_headers" && (
-              <div className="p-4 bg-vuln-surface-light border border-vuln-border rounded-lg space-y-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Shield className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-sm font-semibold text-vuln-text">Custom Headers Configuration</h3>
-                </div>
-                <p className="text-xs text-vuln-text-disabled mb-4">
-                  Configure HTTP headers sent by your reverse proxy (Authelia, nginx, etc.)
-                </p>
-
-                <div>
-                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">Username Header</label>
-                  <input
-                    type="text"
-                    value={authCustomHeaderUsername}
-                    onChange={(e) => setAuthCustomHeaderUsername(e.target.value)}
-                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">Email Header</label>
-                  <input
-                    type="text"
-                    value={authCustomHeaderEmail}
-                    onChange={(e) => setAuthCustomHeaderEmail(e.target.value)}
-                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">Groups Header</label>
-                  <input
-                    type="text"
-                    value={authCustomHeaderGroups}
-                    onChange={(e) => setAuthCustomHeaderGroups(e.target.value)}
-                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* API Keys Provider Settings */}
-            {authProvider === "api_key" && (
-              <div className="p-4 bg-vuln-surface-light border border-vuln-border rounded-lg">
-                <div className="flex items-center gap-2 mb-3">
-                  <Key className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-sm font-semibold text-vuln-text">API Keys Configuration</h3>
-                </div>
-                <p className="text-xs text-vuln-text-disabled mb-4">
-                  Manage API keys for programmatic access. Format: JSON array
-                </p>
-
-                <div>
-                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">
-                    API Keys (JSON)
-                  </label>
-                  <textarea
-                    value={authApiKeys}
-                    onChange={(e) => setAuthApiKeys(e.target.value)}
-                    rows={4}
-                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-xs font-mono text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder='[{"key": "abc123...", "name": "my-script", "admin": true}]'
-                  />
-                  <p className="text-xs text-vuln-text-disabled mt-1">
-                    Example: {`[{"key": "secret_key_here", "name": "automation-script", "admin": false}]`}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Basic Auth Provider Settings */}
-            {authProvider === "basic_auth" && (
-              <div className="p-4 bg-vuln-surface-light border border-vuln-border rounded-lg">
-                <div className="flex items-center gap-2 mb-3">
-                  <Users className="w-4 h-4 text-purple-400" />
-                  <h3 className="text-sm font-semibold text-vuln-text">Basic Authentication Configuration</h3>
-                </div>
-                <p className="text-xs text-vuln-text-disabled mb-4">
-                  Manage users with bcrypt-hashed passwords. Format: JSON array
-                </p>
-
-                <div>
-                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">
-                    Users (JSON)
-                  </label>
-                  <textarea
-                    value={authBasicUsers}
-                    onChange={(e) => setAuthBasicUsers(e.target.value)}
-                    rows={4}
-                    className="w-full px-3 py-2 bg-vuln-surface border border-vuln-border rounded text-xs font-mono text-vuln-text focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    placeholder='[{"username": "admin", "password_hash": "$2b$12$...", "admin": true}]'
-                  />
-                  <p className="text-xs text-vuln-text-disabled mt-1">
-                    Password hashes must be bcrypt format. Use a tool like <code className="text-purple-400">htpasswd -bnBC 12 "" password</code>
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Admin Configuration - shown for all providers except none */}
-            {authProvider !== "none" && (
-              <div className="p-4 bg-blue-900/10 border border-blue-500/20 rounded-lg space-y-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Shield className="w-4 h-4 text-blue-400" />
-                  <h3 className="text-sm font-semibold text-vuln-text">Admin Configuration</h3>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">
-                    Admin Group Name
-                  </label>
-                  <input
-                    type="text"
-                    value={authAdminGroup}
-                    onChange={(e) => setAuthAdminGroup(e.target.value)}
-                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded text-sm text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-xs text-vuln-text-disabled mt-1">
-                    Users in this group will have admin privileges (for header-based auth)
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-vuln-text-muted mb-2">
-                    Admin Usernames (JSON array)
-                  </label>
-                  <textarea
-                    value={authAdminUsernames}
-                    onChange={(e) => setAuthAdminUsernames(e.target.value)}
-                    rows={2}
-                    className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded text-xs font-mono text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder='["admin", "john@example.com"]'
-                  />
-                  <p className="text-xs text-vuln-text-disabled mt-1">
-                    Fallback admin list when group-based admin detection is unavailable
-                  </p>
-                </div>
-              </div>
-                  )}
-                </div>
-              )}
-
-              </div>
-            </div>
-
-            {/* KEV Settings */}
-            <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 break-inside-avoid">
+              {/* KEV Settings */}
+              <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <Shield className="w-6 h-6 text-red-500" />
@@ -1633,6 +1321,13 @@ export function Settings() {
                   </div>
                 )}
               </div>
+              </div>
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-4">
+              {/* User Authentication Card */}
+              <UserAuthenticationCard />
             </div>
           </div>
         </>

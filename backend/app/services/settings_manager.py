@@ -339,9 +339,19 @@ class SettingsManager:
             validated_value = validate_url(value, allowed_schemes=["http", "https"])
         elif key == "ntfy_topic":
             validated_value = validate_topic_name(value)
-        elif key in ("scan_timeout", "parallel_scans", "keep_scan_history_days",
-                    "notify_threshold_critical", "notify_threshold_high", "notify_threshold_medium"):
-            validated_value = str(validate_positive_integer(value, key, min_value=1, max_value=3600 if "timeout" in key else None))
+        elif key in (
+            "scan_timeout",
+            "parallel_scans",
+            "keep_scan_history_days",
+            "notify_threshold_critical",
+            "notify_threshold_high",
+            "notify_threshold_medium",
+        ):
+            validated_value = str(
+                validate_positive_integer(
+                    value, key, min_value=1, max_value=3600 if "timeout" in key else None
+                )
+            )
 
         result = await self.db.execute(select(Setting).where(Setting.key == key))
         setting = result.scalar_one_or_none()

@@ -1,7 +1,6 @@
 """Telegram notification service."""
 
 import logging
-from typing import Optional
 
 import httpx
 
@@ -35,8 +34,8 @@ class TelegramNotificationService(NotificationService):
         title: str,
         message: str,
         priority: str = "default",
-        tags: Optional[list[str]] = None,
-        url: Optional[str] = None,
+        tags: list[str] | None = None,
+        url: str | None = None,
     ) -> bool:
         try:
             endpoint = f"{TELEGRAM_API_BASE}/bot{self.bot_token}/sendMessage"
@@ -44,11 +43,11 @@ class TelegramNotificationService(NotificationService):
             # Build HTML formatted message
             # Priority emoji
             priority_emoji = {
-                "urgent": "\u26a0\ufe0f",    # Warning sign
-                "high": "\u2757",            # Exclamation mark
-                "default": "\u2139\ufe0f",   # Info
-                "low": "\u2705",             # Check mark
-                "min": "\u25aa\ufe0f",       # Small square
+                "urgent": "\u26a0\ufe0f",  # Warning sign
+                "high": "\u2757",  # Exclamation mark
+                "default": "\u2139\ufe0f",  # Info
+                "low": "\u2705",  # Check mark
+                "min": "\u25aa\ufe0f",  # Small square
             }.get(priority, "\u2139\ufe0f")
 
             # Format message with HTML
@@ -69,9 +68,7 @@ class TelegramNotificationService(NotificationService):
             # Add inline button for URL
             if url:
                 payload["reply_markup"] = {
-                    "inline_keyboard": [
-                        [{"text": "View Details", "url": url}]
-                    ]
+                    "inline_keyboard": [[{"text": "View Details", "url": url}]]
                 }
 
             response = await self.client.post(endpoint, json=payload)

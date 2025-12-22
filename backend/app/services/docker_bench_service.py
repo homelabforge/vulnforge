@@ -1,7 +1,6 @@
 """Service for executing Docker Bench for Security compliance checks."""
 
 import asyncio
-import json
 import logging
 import os
 import re
@@ -9,8 +8,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 from app.config import settings
-from app.services.docker_client import DockerService
 from app.services.compliance_state import compliance_state
+from app.services.docker_client import DockerService
 from app.utils.timezone import get_now
 
 logger = logging.getLogger(__name__)
@@ -40,7 +39,11 @@ class DockerBenchService:
             # Resolve Docker host for Docker Bench from environment variable or settings.
             # Environment variable (DOCKER_HOST) takes precedence, matching Docker CLI behavior.
             # Falls back to settings or local Unix socket for first-run setups.
-            docker_host = os.getenv("DOCKER_HOST") or settings.docker_socket_proxy or "unix:///var/run/docker.sock"
+            docker_host = (
+                os.getenv("DOCKER_HOST")
+                or settings.docker_socket_proxy
+                or "unix:///var/run/docker.sock"
+            )
 
             parsed = urlparse(docker_host)
             if parsed.scheme == "unix":
@@ -64,14 +67,20 @@ class DockerBenchService:
             current_container_id = os.getenv("HOSTNAME")
             if current_container_id:
                 try:
-                    current_container = self.docker_service.client.containers.get(current_container_id)
-                    networks = current_container.attrs.get("NetworkSettings", {}).get("Networks") or {}
+                    current_container = self.docker_service.client.containers.get(
+                        current_container_id
+                    )
+                    networks = (
+                        current_container.attrs.get("NetworkSettings", {}).get("Networks") or {}
+                    )
                     if networks:
                         # Use the first attached network (matches compose order)
                         network_name = next(iter(networks.keys()))
                         logger.info(f"Using Docker Bench network: {network_name}")
                 except Exception as exc:  # pragma: no cover - defensive logging
-                    logger.warning(f"Failed to determine current container network for Docker Bench: {exc}")
+                    logger.warning(
+                        f"Failed to determine current container network for Docker Bench: {exc}"
+                    )
 
             # Run Docker Bench in DETACHED mode for log streaming
             volumes = {
@@ -84,7 +93,10 @@ class DockerBenchService:
 
             # Only mount docker.sock if using unix socket (not TCP socket proxy)
             if parsed.scheme == "unix":
-                volumes["/var/run/docker.sock"] = {"bind": "/host/var/run/docker.sock", "mode": "ro"}
+                volumes["/var/run/docker.sock"] = {
+                    "bind": "/host/var/run/docker.sock",
+                    "mode": "ro",
+                }
 
             run_kwargs: dict[str, Any] = {
                 "image": "vulnforge/docker-bench:latest",  # Custom image with updated Docker client for API compatibility
@@ -123,10 +135,12 @@ class DockerBenchService:
 
                         compliance_state.update_progress(
                             check_id=f"~{current_progress}",
-                            check_title=f"Running Docker Bench security checks...",
-                            completed=current_progress
+                            check_title="Running Docker Bench security checks...",
+                            completed=current_progress,
                         )
-                        logger.info(f"Progress estimate: {current_progress}/150 (time: {time_estimate}, actual: {completed_checks})")
+                        logger.info(
+                            f"Progress estimate: {current_progress}/150 (time: {time_estimate}, actual: {completed_checks})"
+                        )
                     except asyncio.CancelledError:
                         break
                     except Exception as e:
@@ -145,7 +159,7 @@ class DockerBenchService:
                 try:
                     for log_line in container.logs(stream=True, follow=True):
                         # Decode log line
-                        line = log_line.decode('utf-8') if isinstance(log_line, bytes) else log_line
+                        line = log_line.decode("utf-8") if isinstance(log_line, bytes) else log_line
                         full_output += line
 
                         # Parse line for check results in real-time
@@ -158,10 +172,12 @@ class DockerBenchService:
                             compliance_state.update_progress(
                                 check_id=finding["check_id"],
                                 check_title=finding["title"],
-                                completed=completed_checks
+                                completed=completed_checks,
                             )
 
-                            logger.info(f"Progress: Completed check {completed_checks}: {finding['check_id']} - {finding['title']}")
+                            logger.info(
+                                f"Progress: Completed check {completed_checks}: {finding['check_id']} - {finding['title']}"
+                            )
                 finally:
                     scan_finished = True
 
@@ -173,6 +189,7 @@ class DockerBenchService:
             try:
                 await progress_task
             except asyncio.CancelledError:
+                # Task cancelled successfully - expected behavior
                 pass
 
             # Wait for container to finish and get exit code
@@ -187,10 +204,14 @@ class DockerBenchService:
             # DON'T finish progress tracking here - let the calling function do it after DB save
             # compliance_state.finish_scan() - MOVED to perform_compliance_scan()
 
-            logger.info(f"Docker Bench scan completed in {scan_duration:.2f}s with {len(findings)} findings (exit code: {exit_code})")
+            logger.info(
+                f"Docker Bench scan completed in {scan_duration:.2f}s with {len(findings)} findings (exit code: {exit_code})"
+            )
 
             if not findings:
-                logger.warning(f"Docker Bench scan produced no findings. Output length: {len(full_output)} chars")
+                logger.warning(
+                    f"Docker Bench scan produced no findings. Output length: {len(full_output)} chars"
+                )
                 logger.warning(f"Output preview: {full_output[:500]}")
                 return None
 
@@ -216,11 +237,11 @@ class DockerBenchService:
             Finding dictionary if line contains a check result, None otherwise
         """
         # Strip ANSI color codes
-        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-        line_clean = ansi_escape.sub('', line)
+        ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+        line_clean = ansi_escape.sub("", line)
 
         # Match check pattern: [STATUS] check_id - title
-        pattern = r'\[(PASS|WARN|FAIL|INFO|NOTE)\]\s+([\d\.]+)\s*-?\s*(.+?)(?:\n|$)'
+        pattern = r"\[(PASS|WARN|FAIL|INFO|NOTE)\]\s+([\d\.]+)\s*-?\s*(.+?)(?:\n|$)"
         match = re.match(pattern, line_clean)
 
         if not match:
@@ -263,12 +284,12 @@ class DockerBenchService:
         findings = []
 
         # Strip ANSI color codes first
-        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-        output_clean = ansi_escape.sub('', output)
+        ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+        output_clean = ansi_escape.sub("", output)
 
         # Updated regex to handle various formats
         # Matches: [STATUS] check_id - title
-        pattern = r'\[(PASS|WARN|FAIL|INFO|NOTE)\]\s+([\d\.]+)\s*-?\s*(.+?)(?:\n|$)'
+        pattern = r"\[(PASS|WARN|FAIL|INFO|NOTE)\]\s+([\d\.]+)\s*-?\s*(.+?)(?:\n|$)"
 
         matches = re.finditer(pattern, output_clean, re.MULTILINE)
 
@@ -435,19 +456,23 @@ class DockerBenchService:
             image = self.docker_service.client.images.get("docker/docker-bench-security:latest")
 
             # Check if image has version labels
-            if hasattr(image, 'labels') and image.labels:
+            if hasattr(image, "labels") and image.labels:
                 # Try common version label keys
-                for label_key in ['version', 'org.opencontainers.image.version', 'DOCKER_BENCH_VERSION']:
+                for label_key in [
+                    "version",
+                    "org.opencontainers.image.version",
+                    "DOCKER_BENCH_VERSION",
+                ]:
                     if label_key in image.labels:
-                        return image.labels[label_key].lstrip('v')
+                        return image.labels[label_key].lstrip("v")
 
             # If no labels, try to extract from image tags
-            if hasattr(image, 'tags') and image.tags:
+            if hasattr(image, "tags") and image.tags:
                 for tag in image.tags:
-                    if ':' in tag:
-                        version = tag.split(':')[1]
-                        if version != 'latest':
-                            return version.lstrip('v')
+                    if ":" in tag:
+                        version = tag.split(":")[1]
+                        if version != "latest":
+                            return version.lstrip("v")
 
             # Fallback: Docker Bench doesn't always have version info in the image
             # Return None to indicate unknown version

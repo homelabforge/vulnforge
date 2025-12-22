@@ -9,10 +9,15 @@ from fastapi.responses import StreamingResponse
 
 from app.dependencies.auth import require_admin
 from app.models.user import User
-from app.repositories.dependencies import get_activity_logger, get_fp_pattern_repository, get_secret_repository
+from app.repositories.dependencies import (
+    get_activity_logger,
+    get_fp_pattern_repository,
+    get_secret_repository,
+)
 from app.repositories.false_positive_pattern_repository import FalsePositivePatternRepository
 from app.repositories.secret_repository import SecretRepository
-from app.schemas.secret import Secret as SecretSchema, SecretSummary, SecretUpdate
+from app.schemas.secret import Secret as SecretSchema
+from app.schemas.secret import SecretSummary, SecretUpdate
 from app.services.activity_logger import ActivityLogger
 
 router = APIRouter()
@@ -261,19 +266,19 @@ async def update_secret(
 
     # Log the status change for audit trail
     # Get container name from secret's scan
-    from app.repositories.secret_repository import SecretRepository
     container_name = "unknown"
     if secret.scan_id:
         try:
             # Get scan to find container
             from sqlalchemy import select
+
             from app.models import Scan
-            result = await secret_repo.db.execute(
-                select(Scan).where(Scan.id == secret.scan_id)
-            )
+
+            result = await secret_repo.db.execute(select(Scan).where(Scan.id == secret.scan_id))
             scan = result.scalar_one_or_none()
             if scan:
                 from app.models import Container
+
                 result = await secret_repo.db.execute(
                     select(Container).where(Container.id == scan.container_id)
                 )

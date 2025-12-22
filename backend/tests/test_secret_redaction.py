@@ -1,14 +1,11 @@
 """Tests for secret redaction in scanner services."""
 
-import pytest
-
 
 class TestTrivyScannerSecretRedaction:
     """Tests for secret redaction in Trivy scanner service."""
 
     async def test_secret_code_lines_are_redacted(self):
         """Test that secret code lines are redacted before database storage."""
-        from app.services.trivy_scanner import TrivyScanner
 
         # Mock Trivy secret finding with code snippet
         mock_secret = {
@@ -20,9 +17,13 @@ class TestTrivyScannerSecretRedaction:
             "Code": {
                 "Lines": [
                     {"Number": 42, "Content": "api_key=sk_test_123456789", "IsCause": True},
-                    {"Number": 43, "Content": "headers = {'Authorization': f'Bearer {api_key}'}", "IsCause": False},
+                    {
+                        "Number": 43,
+                        "Content": "headers = {'Authorization': f'Bearer {api_key}'}",
+                        "IsCause": False,
+                    },
                 ]
-            }
+            },
         }
 
         # Extract code snippet using scanner's logic
@@ -31,11 +32,13 @@ class TestTrivyScannerSecretRedaction:
 
         if code_lines:
             for line in code_lines:
-                redacted_lines.append({
-                    "Number": line.get("Number"),
-                    "Content": "***REDACTED***",
-                    "IsCause": line.get("IsCause", False)
-                })
+                redacted_lines.append(
+                    {
+                        "Number": line.get("Number"),
+                        "Content": "***REDACTED***",
+                        "IsCause": line.get("IsCause", False),
+                    }
+                )
 
             code_snippet = "\n".join(
                 [f"Line {line['Number']}: ***REDACTED***" for line in redacted_lines]
@@ -48,7 +51,6 @@ class TestTrivyScannerSecretRedaction:
 
     async def test_secret_match_field_preserved(self):
         """Test that Match field is preserved for secret type identification."""
-        from app.services.trivy_scanner import TrivyScanner
 
         mock_secret = {
             "RuleID": "aws-access-key-id",
@@ -74,11 +76,13 @@ class TestTrivyScannerSecretRedaction:
 
         if code_lines:
             for line in code_lines:
-                redacted_lines.append({
-                    "Number": line.get("Number"),
-                    "Content": "***REDACTED***",
-                    "IsCause": line.get("IsCause", False)
-                })
+                redacted_lines.append(
+                    {
+                        "Number": line.get("Number"),
+                        "Content": "***REDACTED***",
+                        "IsCause": line.get("IsCause", False),
+                    }
+                )
 
         # Should handle empty list gracefully
         assert len(redacted_lines) == 0
@@ -94,7 +98,10 @@ class TestLogRedaction:
         test_cases = [
             ("Authorization: Bearer sk_test_abcdefgh", "Authorization: Bearer ***REDACTED***"),
             ("Authorization: Basic Zm9vOmJhcg==", "Authorization: Basic ***REDACTED***"),
-            ("GET /download?token=secret_value&foo=bar", "GET /download?token=***REDACTED***&foo=bar"),
+            (
+                "GET /download?token=secret_value&foo=bar",
+                "GET /download?token=***REDACTED***&foo=bar",
+            ),
             ('{"password": "hunter2"}', '{"password": "***REDACTED***"}'),
         ]
 
@@ -138,29 +145,19 @@ class TestLogRedaction:
 class TestSecretScanningIntegration:
     """Integration tests for secret scanning workflow."""
 
-    async def test_secrets_not_exposed_in_api_response(self, client, db_with_settings):
+    async def test_secrets_not_exposed_in_api_response(
+        self, authenticated_client, db_with_settings
+    ):
         """Test that secrets are not exposed in API responses."""
-        from app.dependencies.auth import get_current_user
-        from app.models.user import User
-
-        # Mock admin user
-        async def override_get_current_user():
-            return User(username="admin", provider="test", is_admin=True)
-
-        from app.main import app
-        app.dependency_overrides[get_current_user] = override_get_current_user
-
         # Note: This would require actual scan results in the database
         # For now, we test the principle that secret code is redacted
 
         # If we had a secrets endpoint, we'd test:
-        # response = await client.get("/api/v1/secrets")
+        # response = await authenticated_client.get("/api/v1/secrets")
         # assert response.status_code == 200
         # for secret in response.json():
         #     assert "***REDACTED***" in secret.get("code_snippet", "")
         #     assert "sk_" not in secret.get("code_snippet", "")
-
-        app.dependency_overrides.clear()
 
     async def test_secret_stored_redacted_in_database(self):
         """Test that secrets are stored redacted in the database."""
@@ -190,21 +187,12 @@ class TestSecretScanningIntegration:
 class TestSettingsSecretMasking:
     """Tests for secret masking in settings."""
 
-    async def test_sensitive_settings_masked_in_list(self, client, db_with_settings):
+    async def test_sensitive_settings_masked_in_list(self, authenticated_client, db_with_settings):
         """Test that sensitive settings are masked when listed."""
-        from app.dependencies.auth import get_current_user
-        from app.models.user import User
-
-        # Mock admin user
-        async def override_get_current_user():
-            return User(username="admin", provider="test", is_admin=True)
-
-        from app.main import app
-        app.dependency_overrides[get_current_user] = override_get_current_user
-
         # Add a sensitive setting
-        from app.models import Setting
         from sqlalchemy import select
+
+        from app.models import Setting
 
         existing = await db_with_settings.execute(
             select(Setting).where(Setting.key == "ntfy_token")
@@ -218,7 +206,7 @@ class TestSettingsSecretMasking:
 
         await db_with_settings.commit()
 
-        response = await client.get("/api/v1/settings")
+        response = await authenticated_client.get("/api/v1/settings")
 
         # Check if sensitive values are masked
         settings_dict = {s["key"]: s["value"] for s in response.json()}
@@ -229,5 +217,3 @@ class TestSettingsSecretMasking:
             # If present, should be masked or indicate it's sensitive
             # Implementation detail - may show partial value or stars
             pass
-
-        app.dependency_overrides.clear()

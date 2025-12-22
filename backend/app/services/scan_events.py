@@ -3,34 +3,34 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, Set
+from typing import Any
 
 
 class ScanEventBroadcaster:
     """Manage subscriptions and delivery for scan status events."""
 
     def __init__(self) -> None:
-        self._subscribers: Set[asyncio.Queue[Dict[str, Any]]] = set()
+        self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
         self._lock = asyncio.Lock()
 
-    async def subscribe(self) -> asyncio.Queue[Dict[str, Any]]:
+    async def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
         """Register a new subscriber queue."""
-        queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue(maxsize=20)
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=20)
         async with self._lock:
             self._subscribers.add(queue)
         return queue
 
-    async def unsubscribe(self, queue: asyncio.Queue[Dict[str, Any]]) -> None:
+    async def unsubscribe(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
         """Remove a subscriber queue."""
         async with self._lock:
             self._subscribers.discard(queue)
 
-    async def broadcast(self, event: Dict[str, Any]) -> None:
+    async def broadcast(self, event: dict[str, Any]) -> None:
         """Broadcast an event to all subscribers."""
         async with self._lock:
             subscribers = list(self._subscribers)
 
-        stalled: list[asyncio.Queue[Dict[str, Any]]] = []
+        stalled: list[asyncio.Queue[dict[str, Any]]] = []
         for queue in subscribers:
             try:
                 queue.put_nowait(event)
@@ -47,7 +47,7 @@ class ScanEventBroadcaster:
                 for queue in stalled:
                     self._subscribers.discard(queue)
 
-    def schedule_broadcast(self, event: Dict[str, Any]) -> None:
+    def schedule_broadcast(self, event: dict[str, Any]) -> None:
         """Fire-and-forget broadcast helper for sync contexts."""
         asyncio.create_task(self.broadcast(event))
 

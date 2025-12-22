@@ -1,7 +1,7 @@
 """False Positive Pattern API endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.dependencies.auth import require_admin
 from app.models.user import User
@@ -15,6 +15,8 @@ router = APIRouter()
 class FPPatternSchema(BaseModel):
     """False positive pattern schema."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     container_name: str
     file_path: str
@@ -24,9 +26,6 @@ class FPPatternSchema(BaseModel):
     created_at: str
     match_count: int
     last_matched: str | None
-
-    class Config:
-        from_attributes = True
 
 
 class CreateFPPatternRequest(BaseModel):
@@ -116,9 +115,7 @@ async def create_fp_pattern(
     )
 
     if not pattern:
-        raise HTTPException(
-            status_code=404, detail="Secret not found or pattern already exists"
-        )
+        raise HTTPException(status_code=404, detail="Secret not found or pattern already exists")
 
     # Log the admin action for audit trail
     await activity_logger.log_false_positive_created(

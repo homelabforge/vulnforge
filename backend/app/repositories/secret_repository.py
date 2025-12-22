@@ -1,10 +1,7 @@
 """Secret repository for centralized secret queries with false positive filtering."""
 
-from datetime import datetime
-
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Query
 
 from app.models import Container, Scan, Secret
 from app.utils.timezone import get_now
@@ -275,7 +272,11 @@ class SecretRepository:
             List of tuples (Secret, container_name)
         """
         # Build query with filters
-        query = select(Secret, Container.name).join(Scan).join(Container, Scan.container_id == Container.id)
+        query = (
+            select(Secret, Container.name)
+            .join(Scan)
+            .join(Container, Scan.container_id == Container.id)
+        )
 
         if not include_false_positives:
             query = query.where(Secret.status != "false_positive")

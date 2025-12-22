@@ -22,7 +22,9 @@ class NotificationRule(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Trigger conditions
-    event_type: Mapped[str] = mapped_column(String(50))  # e.g., "scan_complete", "new_vulnerabilities"
+    event_type: Mapped[str] = mapped_column(
+        String(50)
+    )  # e.g., "scan_complete", "new_vulnerabilities"
 
     # Condition thresholds
     min_critical: Mapped[int | None] = mapped_column(Integer, nullable=True)

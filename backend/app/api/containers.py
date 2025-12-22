@@ -1,18 +1,18 @@
 """Container API endpoints."""
 
-import asyncio
 import logging
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.db import get_db
-from app.repositories.dependencies import get_container_repository
 from app.repositories.container_repository import ContainerRepository
+from app.repositories.dependencies import get_container_repository
 from app.schemas import (
     Container as ContainerSchema,
+)
+from app.schemas import (
     ContainerLastScan,
     ContainerList,
     ContainerScanVulnerability,
@@ -79,8 +79,8 @@ async def list_containers(
                 ),
             )
 
-            MAX_VULNS = 200
-            for vuln in sorted_vulns[:MAX_VULNS]:
+            max_vulns = 200
+            for vuln in sorted_vulns[:max_vulns]:
                 vuln_summaries.append(
                     ContainerScanVulnerability(
                         cve_id=vuln.cve_id,
@@ -168,8 +168,8 @@ async def get_container(
         )
 
         vuln_summaries: list[ContainerScanVulnerability] = []
-        MAX_VULNS = 200
-        for vuln in sorted_vulns[:MAX_VULNS]:
+        max_vulns = 200
+        for vuln in sorted_vulns[:max_vulns]:
             vuln_summaries.append(
                 ContainerScanVulnerability(
                     cve_id=vuln.cve_id,
@@ -242,13 +242,13 @@ async def discover_containers(
         """Identify short-lived scanner containers we don't want to persist."""
         image_name = (container_data.get("image") or "").lower()
         image_full = (container_data.get("image_full") or "").lower()
-        container_name = (container_data.get("name") or "").lower()
 
         # Ignore one-off compliance/scanner helpers
-        transient_prefixes = (
-            "docker/docker-bench-security",
-        )
-        if any(image_name.startswith(prefix) or image_full.startswith(prefix) for prefix in transient_prefixes):
+        transient_prefixes = ("docker/docker-bench-security",)
+        if any(
+            image_name.startswith(prefix) or image_full.startswith(prefix)
+            for prefix in transient_prefixes
+        ):
             return True
 
         return False
@@ -264,7 +264,11 @@ async def discover_containers(
 
         for dc in docker_containers:
             if _is_internal_scanner_container(dc):
-                logger.debug("Skipping transient scanner container: %s (%s)", dc.get("name"), dc.get("image_full"))
+                logger.debug(
+                    "Skipping transient scanner container: %s (%s)",
+                    dc.get("name"),
+                    dc.get("image_full"),
+                )
                 continue
 
             processed += 1
@@ -288,10 +292,12 @@ async def discover_containers(
             # Track if this was a new container
             if container.created_at == container.updated_at:
                 discovered.append(dc["name"])
-                newly_discovered_containers.append({
-                    "container": container,
-                    "docker_info": dc,
-                })
+                newly_discovered_containers.append(
+                    {
+                        "container": container,
+                        "docker_info": dc,
+                    }
+                )
 
         # Log activity for newly discovered containers (non-invasive)
         if newly_discovered_containers:
@@ -328,15 +334,19 @@ async def discover_containers(
             "message": ", ".join(message_parts),
         }
 
-    except asyncio.TimeoutError as e:
+    except TimeoutError as e:
         logger.error(f"Docker connection timeout: {e}")
         raise HTTPException(status_code=504, detail="Docker daemon connection timeout")
     except PermissionError as e:
         logger.error(f"Docker permission denied: {e}")
-        raise HTTPException(status_code=403, detail="Docker daemon permission denied - check socket permissions")
+        raise HTTPException(
+            status_code=403, detail="Docker daemon permission denied - check socket permissions"
+        )
     except ConnectionError as e:
         logger.error(f"Docker connection error: {e}")
-        raise HTTPException(status_code=503, detail="Docker daemon unavailable - check if Docker is running")
+        raise HTTPException(
+            status_code=503, detail="Docker daemon unavailable - check if Docker is running"
+        )
     except OSError as e:
         logger.error(f"Docker socket error: {e}")
         raise HTTPException(status_code=503, detail=f"Docker socket error: {e}")

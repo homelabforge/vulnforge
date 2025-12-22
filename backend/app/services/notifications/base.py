@@ -3,7 +3,6 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +18,8 @@ class NotificationService(ABC):
         title: str,
         message: str,
         priority: str = "default",
-        tags: Optional[list[str]] = None,
-        url: Optional[str] = None,
+        tags: list[str] | None = None,
+        url: str | None = None,
     ) -> bool:
         """Send a notification. Returns True on success."""
         pass
@@ -30,8 +29,8 @@ class NotificationService(ABC):
         title: str,
         message: str,
         priority: str = "default",
-        tags: Optional[list[str]] = None,
-        url: Optional[str] = None,
+        tags: list[str] | None = None,
+        url: str | None = None,
         max_attempts: int = 3,
         retry_delay: float = 2.0,
     ) -> bool:
@@ -41,7 +40,9 @@ class NotificationService(ABC):
                 if await self.send(title, message, priority, tags, url):
                     return True
             except Exception as e:
-                logger.warning(f"[{self.service_name}] Attempt {attempt + 1}/{max_attempts} failed: {e}")
+                logger.warning(
+                    f"[{self.service_name}] Attempt {attempt + 1}/{max_attempts} failed: {e}"
+                )
 
             if attempt < max_attempts - 1:
                 await asyncio.sleep(retry_delay)

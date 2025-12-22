@@ -1,9 +1,9 @@
 """Activity log model for tracking system events."""
 
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any
 
-from sqlalchemy import DateTime, Index, Integer, String, Text, JSON
+from sqlalchemy import JSON, DateTime, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -44,12 +44,10 @@ class ActivityLog(Base):
 
     # Flexible metadata storage for event-specific data
     # Examples: {"scan_id": 123, "duration": 45.2, "total_vulns": 87, "critical_count": 3}
-    event_metadata: Mapped[Dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    event_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     # Timestamps (timezone-aware based on config.timezone)
     timestamp: Mapped[datetime] = mapped_column(
         DateTime, default=get_now, nullable=False, index=True
     )  # When event occurred
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=get_now, nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=get_now, nullable=False)

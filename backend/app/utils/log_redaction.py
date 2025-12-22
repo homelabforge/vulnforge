@@ -48,9 +48,18 @@ def redact_dict_keys(data: dict[str, Any]) -> dict[str, Any]:
         return data
 
     sensitive_keys = {
-        "password", "passwd", "pwd",
-        "api_key", "apikey", "token", "secret", "auth",
-        "authorization", "bearer", "match", "code_snippet"
+        "password",
+        "passwd",
+        "pwd",
+        "api_key",
+        "apikey",
+        "token",
+        "secret",
+        "auth",
+        "authorization",
+        "bearer",
+        "match",
+        "code_snippet",
     }
 
     redacted = {}
@@ -63,7 +72,9 @@ def redact_dict_keys(data: dict[str, Any]) -> dict[str, Any]:
         elif isinstance(value, dict):
             redacted[key] = redact_dict_keys(value)
         elif isinstance(value, list):
-            redacted[key] = [redact_dict_keys(item) if isinstance(item, dict) else item for item in value]
+            redacted[key] = [
+                redact_dict_keys(item) if isinstance(item, dict) else item for item in value
+            ]
         else:
             redacted[key] = value
 
@@ -87,41 +98,33 @@ def _redact_string(text: str) -> str:
         Redacted string
     """
     # Redact Bearer tokens
-    text = re.sub(
-        r'(Bearer\s+)[A-Za-z0-9_\-\.]+',
-        r'\1***REDACTED***',
-        text,
-        flags=re.IGNORECASE
-    )
+    text = re.sub(r"(Bearer\s+)[A-Za-z0-9_\-\.]+", r"\1***REDACTED***", text, flags=re.IGNORECASE)
 
     # Redact Basic auth
-    text = re.sub(
-        r'(Basic\s+)[A-Za-z0-9+/=]+',
-        r'\1***REDACTED***',
-        text,
-        flags=re.IGNORECASE
-    )
+    text = re.sub(r"(Basic\s+)[A-Za-z0-9+/=]+", r"\1***REDACTED***", text, flags=re.IGNORECASE)
 
     # Redact API keys in query params
     text = re.sub(
-        r'([?&](api_key|token|secret|password|passwd|pwd)=)[^&\s]+',
-        r'\1***REDACTED***',
+        r"([?&](api_key|token|secret|password|passwd|pwd)=)[^&\s]+",
+        r"\1***REDACTED***",
         text,
-        flags=re.IGNORECASE
+        flags=re.IGNORECASE,
     )
 
     # Redact JSON-like strings with sensitive keys
     text = re.sub(
         r'("(?:password|passwd|pwd|api_key|apikey|token|secret|auth|authorization|bearer)":\s*")[^"]*(")',
-        r'\1***REDACTED***\2',
+        r"\1***REDACTED***\2",
         text,
-        flags=re.IGNORECASE
+        flags=re.IGNORECASE,
     )
 
     return text
 
 
-def redact_log_message(msg: str, *args: Any, **kwargs: Any) -> tuple[str, tuple[Any, ...], dict[str, Any]]:
+def redact_log_message(
+    msg: str, *args: Any, **kwargs: Any
+) -> tuple[str, tuple[Any, ...], dict[str, Any]]:
     """
     Redact sensitive data from log message and arguments.
 
@@ -149,3 +152,47 @@ def redact_log_message(msg: str, *args: Any, **kwargs: Any) -> tuple[str, tuple[
     redacted_kwargs = {k: redact_sensitive_data(v) for k, v in kwargs.items()}
 
     return redacted_msg, redacted_args, redacted_kwargs
+
+
+def sanitize_for_log(value: Any) -> str:
+    """
+    Sanitize user input for safe logging to prevent log injection.
+
+    Removes or escapes:
+    - Newlines (replaced with space)
+    - Carriage returns (removed)
+    - Other control characters (removed)
+    - Excessive whitespace (normalized)
+
+    Also redacts sensitive patterns.
+
+    Args:
+        value: Value to sanitize (will be converted to string)
+
+    Returns:
+        Safe string for logging
+    """
+    if value is None:
+        return "None"
+
+    # Convert to string
+    text = str(value)
+
+    # Remove control characters except tab
+    text = re.sub(r"[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]", "", text)
+
+    # Replace newlines and carriage returns with space
+    text = text.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+
+    # Normalize excessive whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+
+    # Limit length to prevent log flooding
+    max_length = 500
+    if len(text) > max_length:
+        text = text[:max_length] + "...[truncated]"
+
+    # Redact sensitive patterns
+    text = _redact_string(text)
+
+    return text

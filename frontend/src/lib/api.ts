@@ -468,6 +468,40 @@ export interface Setting {
   updated_at: string;
 }
 
+// API Keys
+export interface APIKey {
+  id: number;
+  name: string;
+  description: string | null;
+  key_prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  is_active: boolean;
+  created_by: string;
+}
+
+export interface APIKeyCreate {
+  name: string;
+  description?: string;
+}
+
+export interface APIKeyCreated {
+  id: number;
+  name: string;
+  description: string | null;
+  key: string;
+  key_prefix: string;
+  created_at: string;
+  created_by: string;
+  warning: string;
+}
+
+export interface APIKeyList {
+  keys: APIKey[];
+  total: number;
+}
+
 export interface ActivityEventMetadata {
   total_vulns?: number;
   fixable_vulns?: number;
@@ -656,6 +690,132 @@ export const authApi = {
 
   getAuthStatus: async (): Promise<AuthStatus> => {
     const res = await fetch(`${API_BASE}/auth/status`);
+    return handleResponse(res);
+  },
+};
+
+// User Authentication API (single-user JWT auth)
+import type {
+  UserProfile,
+  LoginRequest,
+  TokenResponse,
+  SetupRequest,
+  SetupResponse,
+  UpdateProfileRequest,
+  ChangePasswordRequest,
+  UserAuthStatusResponse,
+  MessageResponse,
+} from "../types/auth";
+
+export const userAuthApi = {
+  // Public endpoints (no auth required)
+  getStatus: async (): Promise<UserAuthStatusResponse> => {
+    const res = await fetch(`${API_BASE}/user-auth/status`);
+    return handleResponse(res);
+  },
+
+  login: async (data: LoginRequest): Promise<TokenResponse> => {
+    const res = await fetch(`${API_BASE}/user-auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  setup: async (data: SetupRequest): Promise<SetupResponse> => {
+    const res = await fetch(`${API_BASE}/user-auth/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  cancelSetup: async (): Promise<MessageResponse> => {
+    const res = await fetch(`${API_BASE}/user-auth/cancel-setup`, {
+      method: "POST",
+    });
+    return handleResponse(res);
+  },
+
+  // Protected endpoints (auth required)
+  logout: async (): Promise<MessageResponse> => {
+    const res = await fetch(`${API_BASE}/user-auth/logout`, {
+      method: "POST",
+    });
+    return handleResponse(res);
+  },
+
+  getMe: async (): Promise<UserProfile> => {
+    const res = await fetch(`${API_BASE}/user-auth/me`);
+    return handleResponse(res);
+  },
+
+  updateProfile: async (data: UpdateProfileRequest): Promise<UserProfile> => {
+    const res = await fetch(`${API_BASE}/user-auth/me`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  changePassword: async (data: ChangePasswordRequest): Promise<MessageResponse> => {
+    const res = await fetch(`${API_BASE}/user-auth/password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  // OIDC test connection
+  testOidcConnection: async (issuerUrl: string, clientId: string, clientSecret: string): Promise<{
+    success: boolean;
+    provider_reachable: boolean;
+    metadata_valid: boolean;
+    endpoints_found: boolean;
+    errors: string[];
+  }> => {
+    const res = await fetch(`${API_BASE}/user-auth/oidc/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        issuer_url: issuerUrl,
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    });
+    return handleResponse(res);
+  },
+};
+
+// API Keys
+export const apiKeysApi = {
+  list: async (includeRevoked: boolean = false): Promise<APIKeyList> => {
+    const res = await fetch(`${API_BASE}/api-keys?include_revoked=${includeRevoked}`);
+    return handleResponse(res);
+  },
+
+  create: async (data: APIKeyCreate): Promise<APIKeyCreated> => {
+    const res = await fetch(`${API_BASE}/api-keys`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return handleResponse(res);
+  },
+
+  get: async (id: number): Promise<APIKey> => {
+    const res = await fetch(`${API_BASE}/api-keys/${id}`);
+    return handleResponse(res);
+  },
+
+  revoke: async (id: number): Promise<APIKey> => {
+    const res = await fetch(`${API_BASE}/api-keys/${id}`, {
+      method: "DELETE",
+    });
     return handleResponse(res);
   },
 };

@@ -121,7 +121,11 @@ class TestTrivyScanner:
                             "Match": "api_key=supersecret",
                             "Code": {
                                 "Lines": [
-                                    {"Number": 10, "Content": "api_key=supersecret", "IsCause": True}
+                                    {
+                                        "Number": 10,
+                                        "Content": "api_key=supersecret",
+                                        "IsCause": True,
+                                    }
                                 ]
                             },
                         }

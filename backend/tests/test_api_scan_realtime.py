@@ -2,17 +2,15 @@
 
 from datetime import timedelta
 
-import pytest
-
 from app.utils.timezone import get_now
 
 
 class TestScanStreaming:
     """Validate Server-Sent Events for scan status updates."""
 
-    async def test_stream_provides_initial_snapshot(self, client):
+    async def test_stream_provides_initial_snapshot(self, authenticated_client):
         """The scan status snapshot endpoint should return queue information immediately."""
-        response = await client.get("/api/v1/scans/current")
+        response = await authenticated_client.get("/api/v1/scans/current")
         assert response.status_code == 200
 
         payload = response.json()
@@ -24,7 +22,7 @@ class TestScanStreaming:
 class TestScanTrendsEndpoint:
     """Tests for aggregated scan trends data."""
 
-    async def test_trends_include_recent_activity(self, client, db_with_settings):
+    async def test_trends_include_recent_activity(self, authenticated_client, db_with_settings):
         """Ensure /scans/trends aggregates scanned data correctly."""
         from app.models import Container, Scan
 
@@ -88,7 +86,7 @@ class TestScanTrendsEndpoint:
             db_with_settings.add(entry)
         await db_with_settings.commit()
 
-        response = await client.get("/api/v1/scans/trends?window_days=7")
+        response = await authenticated_client.get("/api/v1/scans/trends?window_days=7")
 
         assert response.status_code == 200
         data = response.json()
@@ -101,9 +99,9 @@ class TestScanTrendsEndpoint:
         assert len(data["series"]) >= 2
         assert "velocity" in data
 
-    async def test_trends_empty_response_defaults(self, client, db_with_settings):
+    async def test_trends_empty_response_defaults(self, authenticated_client, db_with_settings):
         """Window with no scans should return zeroed summary and no crash."""
-        response = await client.get("/api/v1/scans/trends?window_days=3")
+        response = await authenticated_client.get("/api/v1/scans/trends?window_days=3")
 
         assert response.status_code == 200
         data = response.json()

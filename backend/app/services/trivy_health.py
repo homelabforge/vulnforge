@@ -1,8 +1,7 @@
 """Trivy scanner health monitoring implementation."""
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime
 
 from app.services.scanner_health import (
     DatabaseFreshness,
@@ -69,15 +68,11 @@ class TrivyHealthMonitor(ScannerHealthMonitor):
             elif age_hours < stale_warning_hours:
                 freshness = DatabaseFreshness.STALE
                 status = ScannerStatus.DEGRADED
-                warnings.append(
-                    f"Database is {age_hours}h old (threshold: {max_age_hours}h)"
-                )
+                warnings.append(f"Database is {age_hours}h old (threshold: {max_age_hours}h)")
             else:
                 freshness = DatabaseFreshness.EXPIRED
                 status = ScannerStatus.DEGRADED
-                warnings.append(
-                    f"Database is {age_hours}h old and may contain outdated CVE data"
-                )
+                warnings.append(f"Database is {age_hours}h old and may contain outdated CVE data")
 
             return DatabaseHealth(
                 scanner_name=self.scanner_name,
@@ -105,7 +100,7 @@ class TrivyHealthMonitor(ScannerHealthMonitor):
                 warnings=[f"Health check failed: {str(e)}"],
             )
 
-    async def get_database_version(self) -> Optional[str]:
+    async def get_database_version(self) -> str | None:
         """Get Trivy database version."""
         try:
             db_info = await self.scanner.get_database_info()
@@ -114,7 +109,7 @@ class TrivyHealthMonitor(ScannerHealthMonitor):
             logger.error(f"Error getting Trivy DB version: {e}")
             return None
 
-    async def get_database_updated_at(self) -> Optional[datetime]:
+    async def get_database_updated_at(self) -> datetime | None:
         """Get when Trivy database was last updated."""
         try:
             db_info = await self.scanner.get_database_info()

@@ -7,6 +7,7 @@ import httpx
 from app.config import settings as app_settings
 from app.db import db_session
 from app.services.settings_manager import SettingsManager
+from app.utils.log_redaction import redact_sensitive_data
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,9 @@ class NotificationService:
         """Load settings from database."""
         async with db_session() as db:
             settings_manager = SettingsManager(db)
-            self.enabled = await settings_manager.get_bool("ntfy_enabled", default=app_settings.ntfy_enabled)
+            self.enabled = await settings_manager.get_bool(
+                "ntfy_enabled", default=app_settings.ntfy_enabled
+            )
             self.url = await settings_manager.get("ntfy_url", default=app_settings.ntfy_url)
             self.topic = await settings_manager.get("ntfy_topic", default=app_settings.ntfy_topic)
             self.token = await settings_manager.get("ntfy_token", default=app_settings.ntfy_token)
@@ -54,7 +57,7 @@ class NotificationService:
         await self._load_settings()
 
         if not self.enabled:
-            logger.debug(f"Notification not sent (disabled): {message}")
+            logger.debug(f"Notification not sent (disabled): {redact_sensitive_data(message)}")
             return False
 
         try:
@@ -78,7 +81,7 @@ class NotificationService:
                     headers=headers,
                 )
                 response.raise_for_status()
-                logger.info(f"Notification sent: {message[:50]}")
+                logger.info(f"Notification sent: {redact_sensitive_data(message[:50])}")
                 return True
 
         except httpx.HTTPError as e:
@@ -89,7 +92,12 @@ class NotificationService:
             return False
 
     async def notify_scan_complete(
-        self, total_containers: int, critical: int, high: int, fixable_critical: int, fixable_high: int
+        self,
+        total_containers: int,
+        critical: int,
+        high: int,
+        fixable_critical: int,
+        fixable_high: int,
     ) -> bool:
         """
         Send notification when scan completes.
@@ -198,6 +206,7 @@ class NotificationService:
             priority=4,
             tags=["x", "VulnForge"],
         )
+
     async def notify_secrets_detected(
         self,
         container_name: str,
@@ -336,8 +345,7 @@ class LegacyNotifier(NotificationService):
                 return False
 
             message = (
-                f"Scanned 1 container: {critical} critical (0 fixable), "
-                f"{high} high (0 fixable)"
+                f"Scanned 1 container: {critical} critical (0 fixable), {high} high (0 fixable)"
             )
             priority = 5 if critical > 0 else 3
             return await self.send_notification(
@@ -360,7 +368,8 @@ class LegacyNotifier(NotificationService):
                 return False
 
             threshold = self._as_int(
-                self._legacy_settings.get("notify_threshold_critical"), app_settings.notify_threshold_critical
+                self._legacy_settings.get("notify_threshold_critical"),
+                app_settings.notify_threshold_critical,
             )
             if critical_count < threshold:
                 return False

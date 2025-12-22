@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ComplianceFindingBase(BaseModel):
@@ -23,6 +23,8 @@ class ComplianceFindingBase(BaseModel):
 class ComplianceFinding(ComplianceFindingBase):
     """Full compliance finding schema with tracking."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     is_ignored: bool = False
     ignored_reason: str | None = None
@@ -31,11 +33,6 @@ class ComplianceFinding(ComplianceFindingBase):
     first_seen: datetime
     last_seen: datetime
     scan_date: datetime
-
-    class Config:
-        """Pydantic config."""
-
-        from_attributes = True
 
 
 class ComplianceFindingIgnoreRequest(BaseModel):
@@ -72,12 +69,9 @@ class ComplianceScanBase(BaseModel):
 class ComplianceScan(ComplianceScanBase):
     """Full compliance scan schema."""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
-
-    class Config:
-        """Pydantic config."""
-
-        from_attributes = True
 
 
 class ComplianceSummary(BaseModel):
