@@ -42,8 +42,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-bun.lock
-frontend/bun.lock
 
 # Environment files
 .env
