@@ -11,6 +11,8 @@ export default defineConfig({
     },
   },
   build: {
+    // Reduce memory usage in CI environments
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: {
