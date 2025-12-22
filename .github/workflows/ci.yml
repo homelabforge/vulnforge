@@ -33,13 +33,7 @@ jobs:
           DATABASE_URL: "sqlite+aiosqlite:///:memory:"
         run: |
           cd backend
-          pytest --cov=app --cov-report=term-missing --cov-report=xml -v
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./backend/coverage.xml
-          flags: backend
+          pytest -v --tb=short --cov=app --cov-report=term-missing
 
   test-frontend:
     name: Frontend Tests
