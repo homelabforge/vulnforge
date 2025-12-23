@@ -9,9 +9,8 @@ COPY frontend/package.json frontend/bun.lock ./
 RUN bun install --frozen-lockfile
 
 COPY frontend/ ./
-# Increase memory limit for Vite build in CI (GitHub Actions default is 2GB)
-ENV NODE_OPTIONS="--max-old-space-size=4096"
-RUN bun run build
+# Add verbose output to debug CI failures
+RUN bun run build --mode production
 
 # Stage 2: Build backend
 FROM python:3.14-slim AS backend-builder
