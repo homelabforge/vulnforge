@@ -10,11 +10,12 @@ RUN bun install --frozen-lockfile
 
 COPY frontend/ ./
 
-# Build frontend - capture full error output on failure
-RUN bun run build --mode production 2>&1 || \
+# Build frontend with full error output captured
+RUN set -o pipefail && \
+    bun run build --mode production 2>&1 | tee /tmp/vite-build.log || \
     (echo "=== Vite Build Failed ===" && \
-     echo "Working directory contents:" && ls -la && \
-     echo "Dist directory (if exists):" && ls -la dist 2>/dev/null; \
+     echo "Build log:" && cat /tmp/vite-build.log && \
+     echo "Working directory:" && ls -la && \
      exit 1)
 
 # Stage 2: Build backend

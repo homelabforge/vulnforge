@@ -597,26 +597,46 @@ def mock_docker_service():
     return service
 
 
-@pytest.fixture(scope="session", autouse=True)
-def cleanup_asyncio_tasks():
-    """Ensure all asyncio tasks and event loops are cleaned up after test session.
+def pytest_sessionfinish(session, exitstatus):
+    """Clean up asyncio resources after test session completes.
 
-    This fixture runs after all tests complete to prevent pytest hanging.
-    Cancels any pending tasks and closes the event loop properly.
+    This hook runs after all tests finish to prevent pytest from hanging.
+    Forcefully cancels any lingering asyncio tasks.
     """
     import asyncio
+    import warnings
 
-    yield
-
-    # Cancel all pending tasks
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            pending = asyncio.all_tasks(loop)
-            for task in pending:
-                task.cancel()
-            # Give tasks time to cancel
-            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-    except RuntimeError:
-        # No event loop exists, nothing to clean up
+        # Try to get any existing event loop
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            return  # No loop, nothing to clean
+
+        # Get all tasks
+        try:
+            all_tasks = asyncio.all_tasks(loop)
+        except RuntimeError:
+            return  # Can't get tasks
+
+        # Cancel any pending tasks
+        if all_tasks:
+            for task in all_tasks:
+                if not task.done():
+                    task.cancel()
+
+            # Give tasks a chance to cancel
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                try:
+                    if not loop.is_running():
+                        loop.run_until_complete(asyncio.gather(*all_tasks, return_exceptions=True))
+                except Exception:
+                    pass
+
+        # Close the loop if possible
+        if not loop.is_running() and not loop.is_closed():
+            loop.close()
+    except Exception:
+        # Ignore all cleanup errors
         pass
