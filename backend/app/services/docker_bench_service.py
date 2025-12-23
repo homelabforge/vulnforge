@@ -151,9 +151,7 @@ class DockerBenchService:
 
             logger.info("Streaming Docker Bench logs for real-time progress...")
 
-            # Wrap blocking operations in executor
-            loop = asyncio.get_event_loop()
-
+            # Wrap blocking operations in thread using modern asyncio.to_thread()
             def parse_logs():
                 nonlocal findings, completed_checks, full_output, scan_finished
                 try:
@@ -181,8 +179,8 @@ class DockerBenchService:
                 finally:
                     scan_finished = True
 
-            # Run log parsing in executor to avoid blocking
-            await loop.run_in_executor(None, parse_logs)
+            # Run log parsing in thread to avoid blocking (Python 3.9+)
+            await asyncio.to_thread(parse_logs)
 
             # Cancel progress update task
             progress_task.cancel()

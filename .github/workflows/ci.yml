@@ -33,7 +33,7 @@ jobs:
           DATABASE_URL: "sqlite+aiosqlite:///:memory:"
         run: |
           cd backend
-          pytest -v --tb=short --cov=app --cov-report=term-missing
+          timeout 10m pytest -v --tb=short --cov=app --cov-report=term-missing
 
   test-frontend:
     name: Frontend Tests
