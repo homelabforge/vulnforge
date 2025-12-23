@@ -595,3 +595,28 @@ def mock_docker_service():
     service = DockerService()
     # The client is already mocked by _mock_docker_service_init fixture
     return service
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_asyncio_tasks():
+    """Ensure all asyncio tasks and event loops are cleaned up after test session.
+
+    This fixture runs after all tests complete to prevent pytest hanging.
+    Cancels any pending tasks and closes the event loop properly.
+    """
+    import asyncio
+
+    yield
+
+    # Cancel all pending tasks
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                task.cancel()
+            # Give tasks time to cancel
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    except RuntimeError:
+        # No event loop exists, nothing to clean up
+        pass

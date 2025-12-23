@@ -9,8 +9,13 @@ COPY frontend/package.json frontend/bun.lock ./
 RUN bun install --frozen-lockfile
 
 COPY frontend/ ./
-# Add verbose output to debug CI failures
-RUN bun run build --mode production
+
+# Build frontend - capture full error output on failure
+RUN bun run build --mode production 2>&1 || \
+    (echo "=== Vite Build Failed ===" && \
+     echo "Working directory contents:" && ls -la && \
+     echo "Dist directory (if exists):" && ls -la dist 2>/dev/null; \
+     exit 1)
 
 # Stage 2: Build backend
 FROM python:3.14-slim AS backend-builder
