@@ -1,18 +1,19 @@
 # Multi-stage Dockerfile for VulnForge
 
 # Stage 1: Build frontend
-FROM oven/bun:1.3.4-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-COPY frontend/package.json frontend/bun.lock ./
-RUN bun install --frozen-lockfile
+# Install dependencies with npm (avoiding Bun-specific issues)
+COPY frontend/package.json ./
+RUN npm install --legacy-peer-deps
 
 COPY frontend/ ./
 
 # Build frontend with full error output captured
 RUN set -o pipefail && \
-    bun run build --mode production 2>&1 | tee /tmp/vite-build.log || \
+    npm run build --mode production 2>&1 | tee /tmp/vite-build.log || \
     (echo "=== Vite Build Failed ===" && \
      echo "Build log:" && cat /tmp/vite-build.log && \
      echo "Working directory:" && ls -la && \

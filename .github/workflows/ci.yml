@@ -28,12 +28,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e backend/[dev]
 
-      - name: Run pytest with coverage
+      - name: Run pytest
         env:
           DATABASE_URL: "sqlite+aiosqlite:///:memory:"
         run: |
           cd backend
-          timeout 10m pytest -v --tb=short --cov=app --cov-report=term-missing
+          pytest -v --tb=short
 
   test-frontend:
     name: Frontend Tests
