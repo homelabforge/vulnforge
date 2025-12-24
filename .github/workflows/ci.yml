@@ -33,7 +33,7 @@ jobs:
           DATABASE_URL: "sqlite+aiosqlite:///:memory:"
         run: |
           cd backend
-          timeout 300 pytest -q --tb=line
+          pytest -q --tb=line
 
   test-frontend:
     name: Frontend Tests

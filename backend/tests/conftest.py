@@ -625,14 +625,20 @@ def pytest_sessionfinish(session, exitstatus):
                 if not task.done():
                     task.cancel()
 
-            # Give tasks a chance to cancel
+            # Give tasks a SHORT time to cancel (max 1 second to avoid hanging)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 try:
                     if not loop.is_running():
-                        loop.run_until_complete(asyncio.gather(*all_tasks, return_exceptions=True))
-                except Exception:
-                    pass
+                        # Use wait_for with timeout to prevent infinite hangs
+                        loop.run_until_complete(
+                            asyncio.wait_for(
+                                asyncio.gather(*all_tasks, return_exceptions=True),
+                                timeout=1.0
+                            )
+                        )
+                except (Exception, asyncio.TimeoutError):
+                    pass  # Ignore all cleanup errors including timeouts
 
         # Close the loop if possible
         if not loop.is_running() and not loop.is_closed():
