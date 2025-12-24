@@ -28,10 +28,15 @@ jobs:
           pip install -e backend/[dev]
 
       - name: Run pytest
-        timeout-minutes: 10
+        timeout-minutes: 3
         run: |
           cd backend
-          pytest tests/ -n 0 -v --tb=short --timeout=300
+          timeout 120 pytest tests/ -n 0 -v --tb=short || exit_code=$?
+          if [ "${exit_code:-0}" -eq 124 ]; then
+            echo "::error::Pytest timed out after 120 seconds"
+            exit 1
+          fi
+          exit ${exit_code:-0}
 
   test-frontend:
     name: Frontend Tests
