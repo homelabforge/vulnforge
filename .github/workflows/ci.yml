@@ -27,10 +27,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e backend/[dev]
 
-      - name: Run pytest with coverage
+      - name: Run pytest
         run: |
           cd backend
-          pytest tests/ -v --tb=short --cov=app --cov-report=term-missing --forcexit
+          pytest tests/ -v --tb=short
 
   test-frontend:
     name: Frontend Tests
