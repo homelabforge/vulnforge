@@ -30,7 +30,7 @@ jobs:
       - name: Run pytest with coverage
         run: |
           cd backend
-          pytest tests/ -v --tb=short --cov=app --cov-report=term-missing
+          pytest tests/ -v --tb=short --cov=app --cov-report=term-missing --forcexit
 
   test-frontend:
     name: Frontend Tests
