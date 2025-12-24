@@ -600,49 +600,7 @@ def mock_docker_service():
 def pytest_sessionfinish(session, exitstatus):
     """Clean up asyncio resources after test session completes.
 
-    This hook runs after all tests finish to prevent pytest from hanging.
-    Forcefully cancels any lingering asyncio tasks.
+    Disabled to prevent hanging in CI environments.
+    Pytest will handle cleanup automatically.
     """
-    import asyncio
-    import warnings
-
-    try:
-        # Try to get any existing event loop
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            return  # No loop, nothing to clean
-
-        # Get all tasks
-        try:
-            all_tasks = asyncio.all_tasks(loop)
-        except RuntimeError:
-            return  # Can't get tasks
-
-        # Cancel any pending tasks
-        if all_tasks:
-            for task in all_tasks:
-                if not task.done():
-                    task.cancel()
-
-            # Give tasks a SHORT time to cancel (max 1 second to avoid hanging)
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                try:
-                    if not loop.is_running():
-                        # Use wait_for with timeout to prevent infinite hangs
-                        loop.run_until_complete(
-                            asyncio.wait_for(
-                                asyncio.gather(*all_tasks, return_exceptions=True),
-                                timeout=1.0
-                            )
-                        )
-                except (Exception, asyncio.TimeoutError):
-                    pass  # Ignore all cleanup errors including timeouts
-
-        # Close the loop if possible
-        if not loop.is_running() and not loop.is_closed():
-            loop.close()
-    except Exception:
-        # Ignore all cleanup errors
-        pass
+    pass

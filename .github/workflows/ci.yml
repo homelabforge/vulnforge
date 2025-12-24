@@ -87,5 +87,4 @@ jobs:
           context: .
           push: false
           tags: vulnforge:test
-          cache-from: type=gha,scope=vulnforge-v2
-          cache-to: type=gha,mode=max,scope=vulnforge-v2
+          no-cache: true
