@@ -75,7 +75,12 @@ jobs:
       - name: Run tests
         run: |
           cd frontend
-          bun run test:run
+          # Skip tests if no test files exist
+          if find src -name "*.test.ts*" -o -name "*.spec.ts*" | grep -q .; then
+            bun run test:run
+          else
+            echo "No test files found, skipping tests"
+          fi
 
   docker-build-test:
     name: Docker Build Test

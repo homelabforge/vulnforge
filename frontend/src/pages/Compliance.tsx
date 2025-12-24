@@ -541,7 +541,7 @@ export function Compliance() {
                     return (
                       <div className="bg-vuln-surface border border-vuln-border rounded-lg p-3 shadow-lg">
                         <p className="font-semibold text-vuln-text mb-2">
-                          {new Date(label).toLocaleString()}
+                          {label ? new Date(label).toLocaleString() : "Unknown"}
                         </p>
                         {payload.map((entry, index) => (
                           <p key={index} className="text-sm" style={{ color: entry.color }}>

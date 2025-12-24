@@ -148,16 +148,16 @@ export function parseSettingInt(value: string | undefined, defaultValue: number)
 export function validateSettingField<K extends keyof typeof settingsFieldSchemas>(
   field: K,
   value: unknown
-): { success: true; data: z.infer<(typeof settingsFieldSchemas)[K]> } | { success: false; error: string } {
+): { success: true; data: z.output<(typeof settingsFieldSchemas)[K]> } | { success: false; error: string } {
   const schema = settingsFieldSchemas[field];
   const result = schema.safeParse(value);
 
   if (result.success) {
-    return { success: true, data: result.data };
+    return { success: true, data: result.data as z.output<(typeof settingsFieldSchemas)[K]> };
   }
 
   return {
     success: false,
-    error: result.error.errors[0]?.message || "Invalid value"
+    error: result.error.issues[0]?.message || "Invalid value"
   };
 }

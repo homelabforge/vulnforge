@@ -50,7 +50,7 @@ export function validateVulnerabilityStatus(data: unknown):
   }
   return {
     success: false,
-    error: result.error.errors[0]?.message || "Invalid vulnerability status",
+    error: result.error.issues[0]?.message || "Invalid vulnerability status",
   };
 }
 
@@ -66,7 +66,7 @@ export function validateIgnoreReason(reason: string):
   }
   return {
     success: false,
-    error: result.error.errors[0]?.message || "Invalid reason",
+    error: result.error.issues[0]?.message || "Invalid reason",
   };
 }
 
@@ -82,6 +82,6 @@ export function validateImageName(imageName: string):
   }
   return {
     success: false,
-    error: result.error.errors[0]?.message || "Invalid image name",
+    error: result.error.issues[0]?.message || "Invalid image name",
   };
 }
