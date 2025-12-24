@@ -1,5 +1,6 @@
 """Pytest configuration and shared fixtures."""
 
+import asyncio
 import os
 import sys
 from collections.abc import AsyncGenerator
@@ -7,6 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -605,10 +607,64 @@ def mock_docker_service():
     return service
 
 
-def pytest_sessionfinish(session, exitstatus):
-    """Clean up asyncio resources after test session completes.
+@pytest_asyncio.fixture(autouse=True)
+async def cleanup_compliance_tasks():
+    """Cleanup any lingering compliance scan tasks after each test.
 
-    Disabled to prevent hanging in CI environments.
-    Pytest will handle cleanup automatically.
+    Module-level _current_scan_task variables in compliance APIs
+    are not automatically cleaned up between tests, which can cause
+    hanging in CI environments.
     """
-    pass
+    yield
+
+    # After each test, cancel module-level compliance tasks
+    from app.api import compliance, image_compliance
+
+    for module in [compliance, image_compliance]:
+        if hasattr(module, "_current_scan_task") and module._current_scan_task:
+            module._current_scan_task.cancel()
+            try:
+                await module._current_scan_task
+            except asyncio.CancelledError:
+                pass
+            module._current_scan_task = None
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Clean up all pending asyncio tasks after test session.
+
+    This ensures that any lingering background tasks (especially
+    fire-and-forget tasks) are properly cancelled before pytest exits,
+    preventing hangs in CI environments.
+    """
+    try:
+        # Try to get the running event loop
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No running loop, try to get the default loop
+            loop = asyncio.get_event_loop()
+
+        if loop and not loop.is_closed():
+            # Get all pending tasks for this loop
+            try:
+                pending = asyncio.all_tasks(loop)
+            except RuntimeError:
+                # If all_tasks fails, there's nothing to clean
+                return
+
+            if pending:
+                # Cancel all pending tasks
+                for task in pending:
+                    if not task.done():
+                        task.cancel()
+
+                # Wait for cancellation to complete
+                try:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                except RuntimeError:
+                    # Loop might already be running or closed
+                    pass
+    except (RuntimeError, AttributeError):
+        # No event loop exists or other runtime issue - nothing to clean up
+        pass

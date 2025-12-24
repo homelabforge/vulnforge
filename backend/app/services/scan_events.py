@@ -12,6 +12,7 @@ class ScanEventBroadcaster:
     def __init__(self) -> None:
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
         self._lock = asyncio.Lock()
+        self._broadcast_tasks: set[asyncio.Task[None]] = set()
 
     async def subscribe(self) -> asyncio.Queue[dict[str, Any]]:
         """Register a new subscriber queue."""
@@ -49,7 +50,28 @@ class ScanEventBroadcaster:
 
     def schedule_broadcast(self, event: dict[str, Any]) -> None:
         """Fire-and-forget broadcast helper for sync contexts."""
-        asyncio.create_task(self.broadcast(event))
+        task = asyncio.create_task(self.broadcast(event))
+        self._broadcast_tasks.add(task)
+        task.add_done_callback(self._broadcast_tasks.discard)
+
+    async def cleanup_tasks(self) -> None:
+        """Cancel and await all pending broadcast tasks.
+
+        This should be called during shutdown to ensure clean termination
+        of all background broadcast operations.
+        """
+        if not self._broadcast_tasks:
+            return
+
+        # Cancel all pending tasks
+        for task in self._broadcast_tasks:
+            task.cancel()
+
+        # Wait for cancellation to complete, ignoring CancelledError
+        await asyncio.gather(*self._broadcast_tasks, return_exceptions=True)
+
+        # Clear the task set
+        self._broadcast_tasks.clear()
 
     @property
     def subscriber_count(self) -> int:

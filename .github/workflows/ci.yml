@@ -28,9 +28,10 @@ jobs:
           pip install -e backend/[dev]
 
       - name: Run pytest
+        timeout-minutes: 10
         run: |
           cd backend
-          pytest tests/ -n 0 -v --tb=short
+          pytest tests/ -n 0 -v --tb=short --timeout=300
 
   test-frontend:
     name: Frontend Tests

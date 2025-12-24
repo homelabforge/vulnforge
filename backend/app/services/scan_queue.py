@@ -104,6 +104,10 @@ class ScanQueue:
 
         await asyncio.gather(*self.workers, return_exceptions=True)
         self.workers.clear()
+
+        # Clean up any pending broadcast tasks
+        await scan_events.cleanup_tasks()
+
         logger.info("Scan queue stopped")
 
     async def enqueue(
