@@ -611,27 +611,17 @@ def mock_docker_service():
 async def cleanup_async_tasks():
     """Cleanup any lingering async tasks after each test.
 
-    NOTE: Cleanup is minimal to avoid blocking in pytest-asyncio.
-    Relies on pytest-timeout to prevent indefinite hangs.
+    DISABLED: Any cleanup attempt (even just cancelling without awaiting)
+    causes pytest to hang in GitHub Actions CI.
+
+    The fire-and-forget tasks in scan_events.schedule_broadcast() are
+    tracked but not cleaned up during tests. They'll be garbage collected
+    when the process exits.
+
+    pytest-timeout (300s) will force exit if any test hangs indefinitely.
     """
     yield
-
-    # Only cancel tasks, don't await them (awaiting causes hangs)
-    from app.api import compliance, image_compliance
-    from app.services.scan_events import scan_events
-
-    # Cancel compliance tasks
-    for module in [compliance, image_compliance]:
-        if hasattr(module, "_current_scan_task") and module._current_scan_task:
-            if not module._current_scan_task.done():
-                module._current_scan_task.cancel()
-            module._current_scan_task = None
-
-    # Cancel broadcast tasks
-    for task in list(scan_events._broadcast_tasks):
-        if not task.done():
-            task.cancel()
-    scan_events._broadcast_tasks.clear()
+    # No cleanup - let pytest exit naturally and OS will clean up tasks
 
 
 def pytest_sessionfinish(session, exitstatus):
