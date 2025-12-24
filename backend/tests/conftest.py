@@ -627,14 +627,20 @@ async def cleanup_async_tasks():
             module._current_scan_task.cancel()
             try:
                 await module._current_scan_task
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, Exception):
+                # Task was cancelled or failed during cleanup (e.g., DB session closed)
+                # This is expected - just ensure it's marked as None
                 pass
             module._current_scan_task = None
 
     # Clean up broadcast tasks from scan_events
     from app.services.scan_events import scan_events
 
-    await scan_events.cleanup_tasks()
+    try:
+        await scan_events.cleanup_tasks()
+    except Exception:
+        # Swallow any exceptions during broadcast cleanup
+        pass
 
 
 def pytest_sessionfinish(session, exitstatus):
