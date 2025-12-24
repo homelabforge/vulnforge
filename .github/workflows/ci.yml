@@ -33,7 +33,7 @@ jobs:
           DATABASE_URL: "sqlite+aiosqlite:///:memory:"
         run: |
           cd backend
-          pytest -q --tb=line
+          timeout 10m pytest -v
 
   test-frontend:
     name: Frontend Tests
@@ -87,4 +87,5 @@ jobs:
           context: .
           push: false
           tags: vulnforge:test
-          no-cache: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

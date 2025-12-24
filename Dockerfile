@@ -13,10 +13,11 @@ RUN bun install --frozen-lockfile
 
 COPY frontend/ ./
 
-# Build frontend with debug logging enabled
-ENV DEBUG="vite:*"
-RUN bun run build --mode production --logLevel=debug 2>&1 || \
-    (echo "=== Vite Build Failed ===" && exit 1)
+# Build production bundle
+RUN bun run build
+
+# Verify build output exists (fail fast if build failed)
+RUN test -d dist && test -f dist/index.html
 
 # Stage 2: Build backend
 FROM python:3.14-slim AS backend-builder
