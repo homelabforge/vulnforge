@@ -30,7 +30,7 @@ jobs:
       - name: Run pytest with coverage
         run: |
           cd backend
-          pytest tests/unit/ -v --tb=short --cov=app --cov-report=term-missing
+          pytest tests/ -v --tb=short --cov=app --cov-report=term-missing
 
   test-frontend:
     name: Frontend Tests
@@ -68,6 +68,8 @@ jobs:
   docker-build-test:
     name: Docker Build Test
     runs-on: ubuntu-latest
+    env:
+      BUILDKIT_PROGRESS: plain
 
     steps:
       - name: Checkout code
@@ -84,3 +86,4 @@ jobs:
           tags: vulnforge:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
