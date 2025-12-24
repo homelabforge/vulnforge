@@ -636,14 +636,20 @@ def pytest_sessionfinish(session, exitstatus):
     This ensures that any lingering background tasks (especially
     fire-and-forget tasks) are properly cancelled before pytest exits,
     preventing hangs in CI environments.
+
+    NOTE: Simplified to just cancel tasks without waiting for completion,
+    as run_until_complete() can block in pytest-asyncio auto mode.
     """
     try:
-        # Try to get the running event loop
+        # Try to get the event loop
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            # No running loop, try to get the default loop
-            loop = asyncio.get_event_loop()
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # No loop available
+                return
 
         if loop and not loop.is_closed():
             # Get all pending tasks for this loop
@@ -653,18 +659,11 @@ def pytest_sessionfinish(session, exitstatus):
                 # If all_tasks fails, there's nothing to clean
                 return
 
-            if pending:
-                # Cancel all pending tasks
-                for task in pending:
-                    if not task.done():
-                        task.cancel()
-
-                # Wait for cancellation to complete
-                try:
-                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                except RuntimeError:
-                    # Loop might already be running or closed
-                    pass
-    except (RuntimeError, AttributeError):
-        # No event loop exists or other runtime issue - nothing to clean up
+            # Just cancel tasks, don't wait for completion
+            # (waiting can cause hangs in auto mode)
+            for task in pending:
+                if not task.done():
+                    task.cancel()
+    except Exception:
+        # Swallow all exceptions during cleanup
         pass
