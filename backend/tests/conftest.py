@@ -608,16 +608,18 @@ def mock_docker_service():
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def cleanup_compliance_tasks():
-    """Cleanup any lingering compliance scan tasks after each test.
+async def cleanup_async_tasks():
+    """Cleanup any lingering async tasks after each test.
 
-    Module-level _current_scan_task variables in compliance APIs
-    are not automatically cleaned up between tests, which can cause
-    hanging in CI environments.
+    This ensures:
+    1. Module-level compliance tasks are cancelled
+    2. Broadcast tasks from scan_events are cleaned up
+
+    This prevents tasks from accumulating across tests and causing hangs.
     """
     yield
 
-    # After each test, cancel module-level compliance tasks
+    # Clean up module-level compliance tasks
     from app.api import compliance, image_compliance
 
     for module in [compliance, image_compliance]:
@@ -629,41 +631,20 @@ async def cleanup_compliance_tasks():
                 pass
             module._current_scan_task = None
 
+    # Clean up broadcast tasks from scan_events
+    from app.services.scan_events import scan_events
+
+    await scan_events.cleanup_tasks()
+
 
 def pytest_sessionfinish(session, exitstatus):
-    """Clean up all pending asyncio tasks after test session.
+    """Clean up asyncio resources after test session completes.
 
-    This ensures that any lingering background tasks (especially
-    fire-and-forget tasks) are properly cancelled before pytest exits,
-    preventing hangs in CI environments.
+    Intentionally empty - cleanup is handled by:
+    1. scan_events.cleanup_tasks() called in scan_queue.stop()
+    2. cleanup_compliance_tasks fixture (per-test cleanup)
 
-    NOTE: Simplified to just cancel tasks without waiting for completion,
-    as run_until_complete() can block in pytest-asyncio auto mode.
+    Attempting session-level cleanup causes hangs in pytest-asyncio auto mode
+    because there's no reliable way to access and clean the event loop at this point.
     """
-    try:
-        # Try to get the event loop
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                # No loop available
-                return
-
-        if loop and not loop.is_closed():
-            # Get all pending tasks for this loop
-            try:
-                pending = asyncio.all_tasks(loop)
-            except RuntimeError:
-                # If all_tasks fails, there's nothing to clean
-                return
-
-            # Just cancel tasks, don't wait for completion
-            # (waiting can cause hangs in auto mode)
-            for task in pending:
-                if not task.done():
-                    task.cancel()
-    except Exception:
-        # Swallow all exceptions during cleanup
-        pass
+    pass
