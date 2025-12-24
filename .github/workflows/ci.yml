@@ -30,7 +30,7 @@ jobs:
       - name: Run pytest
         run: |
           cd backend
-          pytest tests/ -v --tb=short
+          pytest tests/ -n 0 -v --tb=short
 
   test-frontend:
     name: Frontend Tests
