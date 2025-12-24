@@ -1,6 +1,7 @@
 """User authentication API endpoints for VulnForge single-user auth."""
 
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
@@ -36,6 +37,11 @@ from app.services.user_auth import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/user-auth", tags=["User Authentication"])
+
+
+def _sanitize_for_log(value: str) -> str:
+    """Sanitize user input for safe logging (prevents log injection)."""
+    return re.sub(r"[\r\n\t]", "", str(value))
 
 
 # ============================================================================
@@ -100,7 +106,7 @@ async def setup_admin_account(
     # Enable local authentication
     await settings_manager.set("user_auth_mode", "local")
 
-    logger.info("User auth admin account created: %s", setup_data.username)
+    logger.info("User auth admin account created: %s", _sanitize_for_log(setup_data.username))
     logger.info("User authentication mode set to: local")
 
     return {
@@ -413,7 +419,7 @@ async def oidc_callback(
 
     from app.services import oidc as oidc_service
 
-    logger.info(f"OIDC callback received (state: {state[:8]}...)")
+    logger.info(f"OIDC callback received (state: {_sanitize_for_log(state[:8])}...)")
 
     # VALIDATE STATE (CSRF Protection)
     state_data = await oidc_service.validate_and_consume_state(db, state)
