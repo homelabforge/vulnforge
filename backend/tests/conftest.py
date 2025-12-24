@@ -152,16 +152,18 @@ async def db_engine():
     original_maker = db.async_session_maker
     db.async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-    yield engine
+    try:
+        yield engine
+    finally:
+        # Restore original session maker
+        db.async_session_maker = original_maker
 
-    # Restore original session maker
-    db.async_session_maker = original_maker
+        # Drop all tables
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
 
-    # Drop all tables
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-
-    await engine.dispose()
+        # Explicitly close and dispose engine
+        await engine.dispose(close=True)
 
 
 @pytest.fixture
@@ -171,7 +173,8 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession]:
 
     async_session = sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
 
-    async with async_session() as session:
+    session = async_session()
+    try:
         # Always initialize default settings to avoid middleware errors
         for key, value in SettingsManager.DEFAULTS.items():
             setting = Setting(key=key, value=value)
@@ -179,6 +182,8 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession]:
         await session.commit()
 
         yield session
+    finally:
+        await session.close()
 
 
 @pytest.fixture
@@ -203,12 +208,15 @@ async def client(db_session: AsyncSession):
 
     app.dependency_overrides[get_db] = override_get_db
 
-    async with AsyncClient(
+    test_client = AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test", follow_redirects=True
-    ) as test_client:
-        yield test_client
+    )
 
-    app.dependency_overrides.clear()
+    try:
+        yield test_client
+    finally:
+        await test_client.aclose()
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture
