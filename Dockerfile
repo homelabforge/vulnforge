@@ -5,8 +5,10 @@ FROM oven/bun:1.3.4-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-# Install glibc compatibility for native bindings (@swc/core, @tailwindcss/oxide)
-RUN apk add --no-cache libc6-compat
+# Install dependencies for native bindings (@swc/core, @tailwindcss/oxide)
+# Both gcompat and build-base are required for TailwindCSS v4 in Alpine
+# See: https://github.com/tailwindlabs/tailwindcss/issues/6690
+RUN apk add --no-cache gcompat build-base
 
 COPY frontend/package.json frontend/bun.lock ./
 RUN bun install --frozen-lockfile
