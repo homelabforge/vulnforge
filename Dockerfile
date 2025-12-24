@@ -5,6 +5,9 @@ FROM oven/bun:1.3.4-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
+# Install glibc compatibility for native bindings (@swc/core, @tailwindcss/oxide)
+RUN apk add --no-cache libc6-compat
+
 COPY frontend/package.json frontend/bun.lock ./
 RUN bun install --frozen-lockfile
 
@@ -12,7 +15,7 @@ COPY frontend/ ./
 
 # Build frontend with debug logging enabled
 ENV DEBUG="vite:*"
-RUN bun run build --mode production --logLevel=info 2>&1 || \
+RUN bun run build --mode production --logLevel=debug 2>&1 || \
     (echo "=== Vite Build Failed ===" && exit 1)
 
 # Stage 2: Build backend
