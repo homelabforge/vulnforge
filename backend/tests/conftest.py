@@ -634,13 +634,13 @@ async def cleanup_async_tasks():
             module._current_scan_task = None
 
     # Clean up broadcast tasks from scan_events
+    # Just cancel them, don't wait (waiting causes hangs in CI)
     from app.services.scan_events import scan_events
 
-    try:
-        await scan_events.cleanup_tasks()
-    except Exception:
-        # Swallow any exceptions during broadcast cleanup
-        pass
+    for task in list(scan_events._broadcast_tasks):
+        if not task.done():
+            task.cancel()
+    scan_events._broadcast_tasks.clear()
 
 
 def pytest_sessionfinish(session, exitstatus):
