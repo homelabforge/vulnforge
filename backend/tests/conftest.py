@@ -611,32 +611,23 @@ def mock_docker_service():
 async def cleanup_async_tasks():
     """Cleanup any lingering async tasks after each test.
 
-    This ensures:
-    1. Module-level compliance tasks are cancelled
-    2. Broadcast tasks from scan_events are cleaned up
-
-    This prevents tasks from accumulating across tests and causing hangs.
+    NOTE: Cleanup is minimal to avoid blocking in pytest-asyncio.
+    Relies on pytest-timeout to prevent indefinite hangs.
     """
     yield
 
-    # Clean up module-level compliance tasks
+    # Only cancel tasks, don't await them (awaiting causes hangs)
     from app.api import compliance, image_compliance
-
-    for module in [compliance, image_compliance]:
-        if hasattr(module, "_current_scan_task") and module._current_scan_task:
-            module._current_scan_task.cancel()
-            try:
-                await module._current_scan_task
-            except (asyncio.CancelledError, Exception):
-                # Task was cancelled or failed during cleanup (e.g., DB session closed)
-                # This is expected - just ensure it's marked as None
-                pass
-            module._current_scan_task = None
-
-    # Clean up broadcast tasks from scan_events
-    # Just cancel them, don't wait (waiting causes hangs in CI)
     from app.services.scan_events import scan_events
 
+    # Cancel compliance tasks
+    for module in [compliance, image_compliance]:
+        if hasattr(module, "_current_scan_task") and module._current_scan_task:
+            if not module._current_scan_task.done():
+                module._current_scan_task.cancel()
+            module._current_scan_task = None
+
+    # Cancel broadcast tasks
     for task in list(scan_events._broadcast_tasks):
         if not task.done():
             task.cancel()
