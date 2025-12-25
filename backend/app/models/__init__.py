@@ -21,6 +21,9 @@ if TYPE_CHECKING:
     from app.models.user import User
     from app.models.vulnerability import Vulnerability
 
+    # Legacy alias for backward compatibility
+    ScanResult = Scan
+
 __all__ = [
     "ActivityLog",
     "APIKey",
