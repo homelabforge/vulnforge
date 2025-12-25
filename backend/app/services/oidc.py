@@ -361,6 +361,7 @@ async def exchange_code_for_tokens(
             error_detail = e.response.json()
             logger.error(f"Token endpoint error: {error_detail}")
         except Exception:
+            # Ignore JSON parsing errors - error already logged above
             pass
         return None
     except httpx.TimeoutException:

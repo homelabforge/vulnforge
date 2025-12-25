@@ -473,6 +473,9 @@ class TrivyScanner:
             if timeout is None:
                 timeout = settings.scan_timeout
 
+            # TODO: Implement timeout functionality for compliance scans
+            _ = timeout  # Acknowledge parameter to suppress unused warning
+
             try:
                 trivy_container = self.docker_service.get_trivy_container()
                 if not trivy_container:
