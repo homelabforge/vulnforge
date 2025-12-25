@@ -6,6 +6,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from functools import total_ordering
 
 from sqlalchemy import select
 
@@ -34,6 +35,7 @@ class ScanPriority(Enum):
     LOW = 3  # Bulk scans
 
 
+@total_ordering
 @dataclass
 class ScanJob:
     """Represents a scan job in the queue."""
@@ -55,6 +57,14 @@ class ScanJob:
         if self.priority.value != other.priority.value:
             return self.priority.value < other.priority.value
         return self.created_at < other.created_at
+
+    def __eq__(self, other):
+        """Check equality for priority queue."""
+        return (
+            self.priority.value == other.priority.value
+            and self.created_at == other.created_at
+            and self.container_id == other.container_id
+        )
 
 
 class ScanQueue:

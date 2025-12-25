@@ -158,8 +158,6 @@ class NotificationService:
             True if sent successfully
         """
         # Load notification settings from database
-        notify_on_critical = False
-        notify_threshold_critical = 1
         async with db_session() as db:
             settings_manager = SettingsManager(db)
             notify_on_critical = await settings_manager.get_bool(

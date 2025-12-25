@@ -29,6 +29,7 @@ class TestTrivyScannerSecretRedaction:
         # Extract code snippet using scanner's logic
         code_lines = mock_secret.get("Code", {}).get("Lines", [])
         redacted_lines = []
+        code_snippet = ""
 
         if code_lines:
             for line in code_lines:
