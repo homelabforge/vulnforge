@@ -185,7 +185,6 @@ class TestAuthDependencyChaining:
         user = User(
             username="testuser",
             email="test@example.com",
-            groups=["users", "developers"],
             provider="authentik",
             is_admin=False,
         )
@@ -196,7 +195,5 @@ class TestAuthDependencyChaining:
         # All properties should be preserved
         assert result.username == "testuser"
         assert result.email == "test@example.com"
-        assert "users" in result.groups
-        assert "developers" in result.groups
         assert result.provider == "authentik"
         assert result.is_admin is False

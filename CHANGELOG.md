@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] - 2025-12-25
+
+### Changed
+- **Single-User Model Clarification** - Removed vestigial multi-user RBAC references
+  - Removed unused `groups: list[str]` field from User model
+  - Simplified `require_admin()` docstring to reflect simple `is_admin` boolean check
+  - Removed `groups` field from `/api/v1/auth/me` UserResponse schema
+  - Updated wiki documentation to clarify single-user application model
+  - Removed `AUTH_AUTHENTIK_HEADER_GROUPS` and `AUTH_ADMIN_GROUP` from setup guides
+  - No functional changes - `groups` field was never populated or checked
+
 ## [4.0.0] - 2025-12-22
 
 ### Added

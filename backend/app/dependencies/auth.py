@@ -43,10 +43,7 @@ async def require_admin(request: Request) -> User:
     Dependency that requires admin privileges.
 
     First ensures user is authenticated, then checks if they have admin rights.
-    Admin status determined by:
-    1. User has is_admin flag set (API keys, basic auth)
-    2. User belongs to configured admin group (header-based auth)
-    3. Username in admin usernames list
+    Admin status determined by is_admin flag (single-user application).
 
     Args:
         request: FastAPI request with user attached by auth middleware

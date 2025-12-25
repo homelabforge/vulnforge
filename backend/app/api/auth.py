@@ -14,7 +14,6 @@ class UserResponse(BaseModel):
 
     username: str
     email: str | None = None
-    groups: list[str] = []
     is_admin: bool = False
     provider: str = "unknown"
     is_authenticated: bool = True
@@ -32,7 +31,6 @@ async def get_current_user_info(
     return UserResponse(
         username=user.username,
         email=user.email,
-        groups=user.groups,
         is_admin=user.is_admin,
         provider=user.provider,
         is_authenticated=user.provider != "none",

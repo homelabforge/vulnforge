@@ -9,7 +9,6 @@ class User:
 
     username: str
     email: str | None = None
-    groups: list[str] = field(default_factory=list)
     is_admin: bool = False
     provider: str = "unknown"
 
