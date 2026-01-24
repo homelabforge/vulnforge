@@ -70,6 +70,15 @@ dive-output/
 *.db-shm
 *.db-wal
 
+# Local compose files (use compose.example.yml as template)
+compose.yml
+compose.yaml
+compose.dev.yml
+compose.dev.yaml
+
+# Local development Dockerfiles
+backend/Dockerfile.dev
+
 # Backups
 *.backup.*
 backend/pyproject.toml.backup.*
@@ -85,3 +94,7 @@ codeql-db/
 codeql-databases/
 *.sarif
 .codeql/
+
+# Root-level npm artifacts (frontend uses Bun)
+/package.json
+/package-lock.json
