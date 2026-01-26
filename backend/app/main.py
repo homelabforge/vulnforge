@@ -13,7 +13,11 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from sqlalchemy import select
 
-from app.api import (
+from app.config import settings as app_settings
+from app.database import db_session, init_db
+from app.middleware.auth import AuthenticationMiddleware
+from app.models import Container
+from app.routes import (
     activity,
     api_keys,
     auth,
@@ -30,13 +34,9 @@ from app.api import (
     vulnerabilities,
     widget,
 )
-from app.api import (
+from app.routes import (
     settings as settings_api,
 )
-from app.config import settings as app_settings
-from app.db import db_session, init_db
-from app.middleware.auth import AuthenticationMiddleware
-from app.models import Container
 from app.services.docker_client import DockerService
 from app.services.enhanced_notifier import get_enhanced_notifier
 from app.services.scan_queue import get_scan_queue

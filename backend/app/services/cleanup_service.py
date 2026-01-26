@@ -6,7 +6,7 @@ from datetime import timedelta
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import db_session
+from app.database import db_session
 from app.models import Scan, Vulnerability
 from app.services.settings_manager import SettingsManager
 from app.utils.timezone import get_now

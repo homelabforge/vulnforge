@@ -6,7 +6,7 @@ class TestSettingsAuthorization:
 
     async def test_list_settings_requires_auth(self, client, db_with_settings):
         """Test that listing settings requires authentication."""
-        from app.db import get_db
+        from app.database import get_db
         from app.main import app
 
         async def override_get_db():
@@ -23,7 +23,7 @@ class TestSettingsAuthorization:
 
     async def test_list_settings_allows_authenticated(self, authenticated_client, db_with_settings):
         """Test that authenticated users can list settings."""
-        from app.db import get_db
+        from app.database import get_db
         from app.main import app
 
         async def override_get_db():
@@ -40,7 +40,7 @@ class TestSettingsAuthorization:
 
     async def test_get_setting_requires_auth(self, client, db_with_settings):
         """Test that getting individual setting requires authentication."""
-        from app.db import get_db
+        from app.database import get_db
         from app.main import app
 
         async def override_get_db():
@@ -56,7 +56,7 @@ class TestSettingsAuthorization:
 
     async def test_update_setting_requires_auth(self, client, db_with_settings):
         """Test that updating settings requires authentication."""
-        from app.db import get_db
+        from app.database import get_db
         from app.main import app
 
         async def override_get_db():
@@ -77,7 +77,7 @@ class TestSettingsAuthorization:
         self, authenticated_client, db_with_settings
     ):
         """Test that authenticated users can update settings."""
-        from app.db import get_db
+        from app.database import get_db
         from app.main import app
 
         async def override_get_db():
@@ -98,7 +98,7 @@ class TestSettingsAuthorization:
 
     async def test_bulk_update_settings_requires_auth(self, client, db_with_settings):
         """Test that bulk updating settings requires authentication."""
-        from app.db import get_db
+        from app.database import get_db
         from app.main import app
 
         async def override_get_db():
@@ -121,7 +121,7 @@ class TestSettingsAuthorization:
 
     async def test_api_key_authentication(self, api_key_client, db_with_settings):
         """Test that API key authentication works for settings access."""
-        from app.db import get_db
+        from app.database import get_db
         from app.main import app
 
         async def override_get_db():

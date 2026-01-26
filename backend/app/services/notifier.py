@@ -5,7 +5,7 @@ import logging
 import httpx
 
 from app.config import settings as app_settings
-from app.db import db_session
+from app.database import db_session
 from app.services.settings_manager import SettingsManager
 from app.utils.log_redaction import redact_sensitive_data
 

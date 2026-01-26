@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import Column, DateTime, Index, String
 
-from app.db import Base
+from app.database import Base
 
 
 class OIDCState(Base):

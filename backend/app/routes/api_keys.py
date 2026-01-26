@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_db
+from app.database import get_db
 from app.schemas.api_key import APIKeyCreate, APIKeyCreated, APIKeyList, APIKeyResponse
 from app.services.api_key_service import APIKeyService
 

@@ -269,7 +269,7 @@ class TestCurrentScan:
             "queue": {"queue_size": 3, "active_scans": 1},
         }
 
-        monkeypatch.setattr("app.api.scans.get_scan_queue", lambda: mock_queue)
+        monkeypatch.setattr("app.routes.scans.get_scan_queue", lambda: mock_queue)
 
         # Act
         response = await authenticated_client.get("/api/v1/scans/current")

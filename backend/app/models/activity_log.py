@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import JSON, DateTime, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base
+from app.database import Base
 from app.utils.timezone import get_now
 
 

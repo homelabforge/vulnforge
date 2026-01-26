@@ -23,7 +23,8 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("STRICT_MIGRATIONS", "false")  # Disable strict migrations in tests
 
 # ruff: noqa: E402 - Imports must come after environment variable setup
-from app.db import Base, get_db
+from app import database
+from app.database import Base, get_db
 from app.main import app
 from app.models import Setting
 
@@ -148,16 +149,15 @@ async def db_engine():
         await conn.run_sync(Base.metadata.create_all)
 
     # Override the global async_session_maker so middleware and services use test database
-    from app import db
 
-    original_maker = db.async_session_maker
-    db.async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    original_maker = database.async_session_maker
+    database.async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     try:
         yield engine
     finally:
         # Restore original session maker
-        db.async_session_maker = original_maker
+        database.async_session_maker = original_maker
 
         # Drop all tables
         async with engine.begin() as conn:
@@ -587,7 +587,7 @@ def mock_async_session_local(db_session):
 
     mock_session_local = MockAsyncSessionLocal()
 
-    # NOTE: Services use "from app.db import db_session" directly,
+    # NOTE: Services use "from app.database import db_session" directly,
     # not async_session_maker, so no patching needed
     yield mock_session_local
 

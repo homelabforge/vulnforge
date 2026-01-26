@@ -6,7 +6,7 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_db
+from app.database import get_db
 from app.repositories.container_repository import ContainerRepository
 from app.repositories.dependencies import get_container_repository
 from app.schemas import (

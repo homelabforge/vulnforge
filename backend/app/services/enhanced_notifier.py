@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from app.db import db_session
+from app.database import db_session
 from app.models import NotificationLog, NotificationRule
 from app.services.notifications import NotificationDispatcher
 from app.utils.timezone import get_now

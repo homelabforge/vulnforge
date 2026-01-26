@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import db_session, get_db
+from app.database import db_session, get_db
 from app.dependencies.auth import require_admin
 from app.models import ComplianceFinding, ComplianceScan
 from app.models.user import User

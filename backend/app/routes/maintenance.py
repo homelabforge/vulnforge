@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.db import get_db
+from app.database import get_db
 from app.dependencies.auth import require_admin
 from app.models import Vulnerability
 from app.models.user import User

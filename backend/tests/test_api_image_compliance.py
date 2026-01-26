@@ -29,7 +29,7 @@ class TestTriggerImageScan:
         image_name = "nginx:latest"
 
         # Mock DockerService and TrivyMisconfigService
-        with patch("app.api.image_compliance.DockerService") as mock_docker:
+        with patch("app.routes.image_compliance.DockerService") as mock_docker:
             mock_docker_instance = MagicMock()
             mock_docker.return_value = mock_docker_instance
 
@@ -66,7 +66,7 @@ class TestTriggerImageScan:
     ):
         """Test triggering scan when one is already running."""
         # Arrange
-        with patch("app.api.image_compliance.DockerService"):
+        with patch("app.routes.image_compliance.DockerService"):
             # Start first scan
             await authenticated_client.post(
                 "/api/v1/image-compliance/scan",
@@ -111,12 +111,12 @@ class TestTriggerScanAll:
     ):
         """Test triggering batch scan for all images."""
         # Arrange
-        with patch("app.api.image_compliance.DockerService") as mock_docker:
+        with patch("app.routes.image_compliance.DockerService") as mock_docker:
             mock_docker_instance = MagicMock()
             mock_docker.return_value = mock_docker_instance
 
             # Mock _resolve_unique_images to return some images
-            with patch("app.api.image_compliance._resolve_unique_images") as mock_resolve:
+            with patch("app.routes.image_compliance._resolve_unique_images") as mock_resolve:
                 mock_resolve.return_value = {
                     "nginx:latest": ["container1", "container2"],
                     "redis:alpine": ["container3"],
@@ -138,11 +138,11 @@ class TestTriggerScanAll:
     ):
         """Test scan-all when no containers are found."""
         # Arrange
-        with patch("app.api.image_compliance.DockerService") as mock_docker:
+        with patch("app.routes.image_compliance.DockerService") as mock_docker:
             mock_docker_instance = MagicMock()
             mock_docker.return_value = mock_docker_instance
 
-            with patch("app.api.image_compliance._resolve_unique_images") as mock_resolve:
+            with patch("app.routes.image_compliance._resolve_unique_images") as mock_resolve:
                 mock_resolve.return_value = {}  # No images found
 
                 # Act
@@ -159,8 +159,8 @@ class TestTriggerScanAll:
     ):
         """Test scan-all when scan is already in progress."""
         # Arrange
-        with patch("app.api.image_compliance.DockerService"):
-            with patch("app.api.image_compliance._resolve_unique_images") as mock_resolve:
+        with patch("app.routes.image_compliance.DockerService"):
+            with patch("app.routes.image_compliance._resolve_unique_images") as mock_resolve:
                 mock_resolve.return_value = {"nginx:latest": ["container1"]}
 
                 # Start first scan
@@ -204,8 +204,8 @@ class TestGetCurrentScan:
     ):
         """Test getting current scan status during execution."""
         # Arrange
-        with patch("app.api.image_compliance.DockerService"):
-            with patch("app.api.image_compliance._resolve_unique_images") as mock_resolve:
+        with patch("app.routes.image_compliance.DockerService"):
+            with patch("app.routes.image_compliance._resolve_unique_images") as mock_resolve:
                 mock_resolve.return_value = {"nginx:latest": ["container1"]}
 
                 # Start scan

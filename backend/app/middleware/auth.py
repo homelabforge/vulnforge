@@ -105,7 +105,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         # Try API key authentication (external tools)
         api_key = request.headers.get("X-API-Key", "").strip()
         if api_key:
-            from app.db import async_session_maker
+            from app.database import async_session_maker
 
             async with async_session_maker() as db:
                 try:

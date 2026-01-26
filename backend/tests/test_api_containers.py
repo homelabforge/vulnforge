@@ -36,7 +36,7 @@ def _docker_container(**overrides):
 @pytest.fixture(autouse=True)
 def docker_service_mock():
     """Patch DockerService used by the containers API to avoid real Docker calls."""
-    with patch("app.api.containers.DockerService") as mock_cls:
+    with patch("app.routes.containers.DockerService") as mock_cls:
         mock_service = MagicMock()
         mock_service.list_containers.return_value = []
         mock_service.close.return_value = None

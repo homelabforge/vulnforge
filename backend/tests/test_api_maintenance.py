@@ -170,7 +170,7 @@ class TestMaintenanceKEV:
 
         app.dependency_overrides.clear()
 
-    @patch("app.api.maintenance.get_kev_service")
+    @patch("app.routes.maintenance.get_kev_service")
     async def test_kev_refresh_success(
         self, mock_get_service, authenticated_client, db_with_settings
     ):

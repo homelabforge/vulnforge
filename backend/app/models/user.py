@@ -1,6 +1,6 @@
 """User model for authentication."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

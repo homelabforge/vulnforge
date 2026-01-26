@@ -25,7 +25,7 @@ class TestTrivyDatabaseInfo:
             "downloaded_at": "2025-12-20T09:00:00Z",
         }
 
-        with patch("app.api.system.TrivyScanner") as mock_scanner_class:
+        with patch("app.routes.system.TrivyScanner") as mock_scanner_class:
             mock_scanner = AsyncMock()
             mock_scanner.get_database_info.return_value = mock_db_info
             mock_scanner_class.return_value = mock_scanner
@@ -43,7 +43,7 @@ class TestTrivyDatabaseInfo:
     async def test_get_trivy_db_info_no_database(self, authenticated_client: AsyncClient):
         """Test getting Trivy database info when DB not available."""
         # Mock the scanner to return None (no database)
-        with patch("app.api.system.TrivyScanner") as mock_scanner_class:
+        with patch("app.routes.system.TrivyScanner") as mock_scanner_class:
             mock_scanner = AsyncMock()
             mock_scanner.get_database_info.return_value = None
             mock_scanner_class.return_value = mock_scanner
@@ -62,7 +62,7 @@ class TestTrivyDatabaseInfo:
     @pytest.mark.asyncio
     async def test_trivy_db_info_structure(self, authenticated_client: AsyncClient):
         """Test Trivy DB info response has expected structure."""
-        with patch("app.api.system.TrivyScanner") as mock_scanner_class:
+        with patch("app.routes.system.TrivyScanner") as mock_scanner_class:
             mock_scanner = AsyncMock()
             mock_scanner.get_database_info.return_value = {
                 "db_version": "2",
@@ -92,10 +92,10 @@ class TestScannersInfo:
         """Test getting all scanners information."""
         # Mock Docker service
         with (
-            patch("app.api.system.DockerService") as mock_docker_service_class,
-            patch("app.api.system.get_docker_hub_client") as mock_docker_hub,
-            patch("app.api.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.api.system.DockerBenchService") as mock_bench_service_class,
+            patch("app.routes.system.DockerService") as mock_docker_service_class,
+            patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
+            patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
+            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -132,10 +132,10 @@ class TestScannersInfo:
     async def test_scanners_info_includes_trivy(self, authenticated_client: AsyncClient):
         """Test scanners info includes Trivy scanner."""
         with (
-            patch("app.api.system.DockerService") as mock_docker_service_class,
-            patch("app.api.system.get_docker_hub_client") as mock_docker_hub,
-            patch("app.api.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.api.system.DockerBenchService") as mock_bench_service_class,
+            patch("app.routes.system.DockerService") as mock_docker_service_class,
+            patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
+            patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
+            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -172,10 +172,10 @@ class TestScannersInfo:
     async def test_scanners_info_includes_docker_bench(self, authenticated_client: AsyncClient):
         """Test scanners info includes Docker Bench scanner."""
         with (
-            patch("app.api.system.DockerService") as mock_docker_service_class,
-            patch("app.api.system.get_docker_hub_client") as mock_docker_hub,
-            patch("app.api.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.api.system.DockerBenchService") as mock_bench_service_class,
+            patch("app.routes.system.DockerService") as mock_docker_service_class,
+            patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
+            patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
+            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -212,10 +212,10 @@ class TestScannersInfo:
     async def test_scanners_info_includes_dive(self, authenticated_client: AsyncClient):
         """Test scanners info includes Dive scanner."""
         with (
-            patch("app.api.system.DockerService") as mock_docker_service_class,
-            patch("app.api.system.get_docker_hub_client") as mock_docker_hub,
-            patch("app.api.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.api.system.DockerBenchService") as mock_bench_service_class,
+            patch("app.routes.system.DockerService") as mock_docker_service_class,
+            patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
+            patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
+            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -252,10 +252,10 @@ class TestScannersInfo:
     async def test_scanner_info_structure(self, authenticated_client: AsyncClient):
         """Test each scanner has expected structure."""
         with (
-            patch("app.api.system.DockerService") as mock_docker_service_class,
-            patch("app.api.system.get_docker_hub_client") as mock_docker_hub,
-            patch("app.api.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.api.system.DockerBenchService") as mock_bench_service_class,
+            patch("app.routes.system.DockerService") as mock_docker_service_class,
+            patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
+            patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
+            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -296,10 +296,10 @@ class TestScannersInfo:
     async def test_trivy_scanner_available_with_version(self, authenticated_client: AsyncClient):
         """Test Trivy scanner shows version when available."""
         with (
-            patch("app.api.system.DockerService") as mock_docker_service_class,
-            patch("app.api.system.get_docker_hub_client") as mock_docker_hub,
-            patch("app.api.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.api.system.DockerBenchService") as mock_bench_service_class,
+            patch("app.routes.system.DockerService") as mock_docker_service_class,
+            patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
+            patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
+            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -341,10 +341,10 @@ class TestScannersInfo:
     async def test_trivy_scanner_db_info(self, authenticated_client: AsyncClient):
         """Test Trivy scanner includes database information."""
         with (
-            patch("app.api.system.DockerService") as mock_docker_service_class,
-            patch("app.api.system.get_docker_hub_client") as mock_docker_hub,
-            patch("app.api.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.api.system.DockerBenchService") as mock_bench_service_class,
+            patch("app.routes.system.DockerService") as mock_docker_service_class,
+            patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
+            patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
+            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -390,10 +390,10 @@ class TestVersionComparison:
     async def test_version_comparison_update_available(self, authenticated_client: AsyncClient):
         """Test version comparison detects updates."""
         with (
-            patch("app.api.system.DockerService") as mock_docker_service_class,
-            patch("app.api.system.get_docker_hub_client") as mock_docker_hub,
-            patch("app.api.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.api.system.DockerBenchService") as mock_bench_service_class,
+            patch("app.routes.system.DockerService") as mock_docker_service_class,
+            patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
+            patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
+            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -431,10 +431,10 @@ class TestVersionComparison:
     async def test_version_comparison_no_update(self, authenticated_client: AsyncClient):
         """Test version comparison when no update available."""
         with (
-            patch("app.api.system.DockerService") as mock_docker_service_class,
-            patch("app.api.system.get_docker_hub_client") as mock_docker_hub,
-            patch("app.api.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.api.system.DockerBenchService") as mock_bench_service_class,
+            patch("app.routes.system.DockerService") as mock_docker_service_class,
+            patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
+            patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
+            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_db
+from app.database import get_db
 from app.dependencies.auth import require_admin
 from app.models import NotificationLog as NotificationLogModel
 from app.models import NotificationRule as NotificationRuleModel

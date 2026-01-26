@@ -2,7 +2,7 @@
 
 from sqlalchemy import Column, DateTime, Integer, String
 
-from app.db import Base
+from app.database import Base
 
 
 class APIKey(Base):

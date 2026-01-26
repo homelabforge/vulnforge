@@ -12,7 +12,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_db
+from app.database import get_db
 from app.models import Container, Scan, Vulnerability
 from app.schemas import Scan as ScanSchema
 from app.schemas import ScanRequest

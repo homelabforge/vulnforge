@@ -10,7 +10,7 @@ from functools import total_ordering
 
 from sqlalchemy import select
 
-from app.db import db_session
+from app.database import db_session
 from app.models import Container, FalsePositivePattern, Scan, Secret, Vulnerability
 from app.services.activity_logger import ActivityLogger
 from app.services.cache_manager import get_cache

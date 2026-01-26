@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 async def scheduled_scan_task():
     """Execute scheduled scan of all containers."""
-    from app.db import async_session_maker
+    from app.database import async_session_maker
     from app.models import Container
     from app.services.docker_client import DockerService
 
@@ -59,7 +59,7 @@ async def scheduled_scan_task():
 
     # Now trigger the scan
     try:
-        from app.api.scans import perform_scan
+        from app.routes.scans import perform_scan
 
         async with async_session_maker() as db:
             # Get all container IDs
@@ -86,7 +86,7 @@ async def scheduled_scan_task():
 
 async def scheduled_compliance_scan_task():
     """Execute scheduled Docker Bench compliance scan."""
-    from app.api.compliance import perform_compliance_scan
+    from app.routes.compliance import perform_compliance_scan
     from app.services.docker_client import DockerService
 
     logger.info("Starting scheduled compliance scan...")
@@ -103,7 +103,7 @@ async def scheduled_compliance_scan_task():
 
 async def scheduled_kev_refresh_task():
     """Execute scheduled KEV catalog refresh."""
-    from app.db import async_session_maker
+    from app.database import async_session_maker
     from app.models import Vulnerability
     from app.services.kev import get_kev_service
     from app.services.settings_manager import SettingsManager

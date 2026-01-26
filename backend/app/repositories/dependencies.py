@@ -3,7 +3,7 @@
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_db
+from app.database import get_db
 from app.repositories.container_repository import ContainerRepository
 from app.repositories.false_positive_pattern_repository import FalsePositivePatternRepository
 from app.repositories.secret_repository import SecretRepository
