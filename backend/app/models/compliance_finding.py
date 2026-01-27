@@ -1,4 +1,4 @@
-"""Compliance finding model for Docker Bench security checks."""
+"""Compliance finding model for security compliance checks."""
 
 from datetime import datetime
 
@@ -10,19 +10,22 @@ from app.utils.timezone import get_now
 
 
 class ComplianceFinding(Base):
-    """Model for Docker Bench security compliance findings."""
+    """Model for security compliance findings."""
 
     __tablename__ = "compliance_findings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
 
     # Check identification
-    check_id: Mapped[str] = mapped_column(String(20), index=True)  # e.g., "1.1.1", "4.5.2"
+    check_id: Mapped[str] = mapped_column(String(20), index=True)  # e.g., "VF-D-001", "VF-C-003"
     check_number: Mapped[str | None] = mapped_column(
         String(20), nullable=True
-    )  # Alternative ID format
+    )  # Alternative ID format (legacy)
     title: Mapped[str] = mapped_column(String(500))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Target (container/image name for per-target checks)
+    target: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
 
     # Status and severity
     status: Mapped[str] = mapped_column(String(20), index=True)  # PASS, WARN, FAIL, INFO, NOTE

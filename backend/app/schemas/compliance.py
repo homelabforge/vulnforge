@@ -12,9 +12,10 @@ class ComplianceFindingBase(BaseModel):
     check_number: str | None = None
     title: str
     description: str | None = None
-    status: str  # PASS, WARN, FAIL, INFO, NOTE
+    status: str  # PASS, WARN, FAIL, INFO, NOTE, SKIP
     severity: str  # HIGH, MEDIUM, LOW, INFO
     category: str
+    target: str | None = None  # Container/image name for per-target checks
     remediation: str | None = None
     actual_value: str | None = None
     expected_value: str | None = None

@@ -95,7 +95,6 @@ class TestScannersInfo:
             patch("app.routes.system.DockerService") as mock_docker_service_class,
             patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
             patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -114,10 +113,6 @@ class TestScannersInfo:
             mock_trivy.get_database_info.return_value = None
             mock_trivy.check_db_freshness.return_value = (True, 2)
             mock_trivy_scanner_class.return_value = mock_trivy
-
-            mock_bench = AsyncMock()
-            mock_bench.get_scanner_version.return_value = None
-            mock_bench_service_class.return_value = mock_bench
 
             # Act
             response = await authenticated_client.get("/api/v1/system/scanners")
@@ -135,7 +130,6 @@ class TestScannersInfo:
             patch("app.routes.system.DockerService") as mock_docker_service_class,
             patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
             patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -154,10 +148,6 @@ class TestScannersInfo:
             mock_trivy.get_database_info.return_value = None
             mock_trivy.check_db_freshness.return_value = (True, 2)
             mock_trivy_scanner_class.return_value = mock_trivy
-
-            mock_bench = AsyncMock()
-            mock_bench.get_scanner_version.return_value = None
-            mock_bench_service_class.return_value = mock_bench
 
             # Act
             response = await authenticated_client.get("/api/v1/system/scanners")
@@ -169,13 +159,14 @@ class TestScannersInfo:
             assert "Trivy" in scanner_names
 
     @pytest.mark.asyncio
-    async def test_scanners_info_includes_docker_bench(self, authenticated_client: AsyncClient):
-        """Test scanners info includes Docker Bench scanner."""
+    async def test_scanners_info_includes_vulnforge_checker(
+        self, authenticated_client: AsyncClient
+    ):
+        """Test scanners info includes VulnForge Checker (native compliance scanner)."""
         with (
             patch("app.routes.system.DockerService") as mock_docker_service_class,
             patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
             patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -194,10 +185,6 @@ class TestScannersInfo:
             mock_trivy.get_database_info.return_value = None
             mock_trivy.check_db_freshness.return_value = (True, 2)
             mock_trivy_scanner_class.return_value = mock_trivy
-
-            mock_bench = AsyncMock()
-            mock_bench.get_scanner_version.return_value = None
-            mock_bench_service_class.return_value = mock_bench
 
             # Act
             response = await authenticated_client.get("/api/v1/system/scanners")
@@ -206,7 +193,7 @@ class TestScannersInfo:
             assert response.status_code == 200
             data = response.json()
             scanner_names = [s["name"] for s in data["scanners"]]
-            assert "Docker Bench" in scanner_names
+            assert "VulnForge Checker" in scanner_names
 
     @pytest.mark.asyncio
     async def test_scanners_info_includes_dive(self, authenticated_client: AsyncClient):
@@ -215,7 +202,6 @@ class TestScannersInfo:
             patch("app.routes.system.DockerService") as mock_docker_service_class,
             patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
             patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -234,10 +220,6 @@ class TestScannersInfo:
             mock_trivy.get_database_info.return_value = None
             mock_trivy.check_db_freshness.return_value = (True, 2)
             mock_trivy_scanner_class.return_value = mock_trivy
-
-            mock_bench = AsyncMock()
-            mock_bench.get_scanner_version.return_value = None
-            mock_bench_service_class.return_value = mock_bench
 
             # Act
             response = await authenticated_client.get("/api/v1/system/scanners")
@@ -255,7 +237,6 @@ class TestScannersInfo:
             patch("app.routes.system.DockerService") as mock_docker_service_class,
             patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
             patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -274,10 +255,6 @@ class TestScannersInfo:
             mock_trivy.get_database_info.return_value = None
             mock_trivy.check_db_freshness.return_value = (True, 2)
             mock_trivy_scanner_class.return_value = mock_trivy
-
-            mock_bench = AsyncMock()
-            mock_bench.get_scanner_version.return_value = None
-            mock_bench_service_class.return_value = mock_bench
 
             # Act
             response = await authenticated_client.get("/api/v1/system/scanners")
@@ -299,7 +276,6 @@ class TestScannersInfo:
             patch("app.routes.system.DockerService") as mock_docker_service_class,
             patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
             patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -322,10 +298,6 @@ class TestScannersInfo:
             mock_trivy.check_db_freshness.return_value = (True, 2)
             mock_trivy_scanner_class.return_value = mock_trivy
 
-            mock_bench = AsyncMock()
-            mock_bench.get_scanner_version.return_value = None
-            mock_bench_service_class.return_value = mock_bench
-
             # Act
             response = await authenticated_client.get("/api/v1/system/scanners")
 
@@ -344,7 +316,6 @@ class TestScannersInfo:
             patch("app.routes.system.DockerService") as mock_docker_service_class,
             patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
             patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -366,10 +337,6 @@ class TestScannersInfo:
             }
             mock_trivy.check_db_freshness.return_value = (True, 5)
             mock_trivy_scanner_class.return_value = mock_trivy
-
-            mock_bench = AsyncMock()
-            mock_bench.get_scanner_version.return_value = None
-            mock_bench_service_class.return_value = mock_bench
 
             # Act
             response = await authenticated_client.get("/api/v1/system/scanners")
@@ -393,7 +360,6 @@ class TestVersionComparison:
             patch("app.routes.system.DockerService") as mock_docker_service_class,
             patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
             patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -414,10 +380,6 @@ class TestVersionComparison:
             mock_trivy.check_db_freshness.return_value = (True, 2)
             mock_trivy_scanner_class.return_value = mock_trivy
 
-            mock_bench = AsyncMock()
-            mock_bench.get_scanner_version.return_value = None
-            mock_bench_service_class.return_value = mock_bench
-
             # Act
             response = await authenticated_client.get("/api/v1/system/scanners")
 
@@ -434,7 +396,6 @@ class TestVersionComparison:
             patch("app.routes.system.DockerService") as mock_docker_service_class,
             patch("app.routes.system.get_docker_hub_client") as mock_docker_hub,
             patch("app.routes.system.TrivyScanner") as mock_trivy_scanner_class,
-            patch("app.routes.system.DockerBenchService") as mock_bench_service_class,
         ):
             # Setup mocks
             mock_docker_service = MagicMock()
@@ -454,10 +415,6 @@ class TestVersionComparison:
             mock_trivy.get_database_info.return_value = None
             mock_trivy.check_db_freshness.return_value = (True, 2)
             mock_trivy_scanner_class.return_value = mock_trivy
-
-            mock_bench = AsyncMock()
-            mock_bench.get_scanner_version.return_value = None
-            mock_bench_service_class.return_value = mock_bench
 
             # Act
             response = await authenticated_client.get("/api/v1/system/scanners")

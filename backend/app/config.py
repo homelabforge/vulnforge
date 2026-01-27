@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     dive_container_name: str = "dive"
 
     # Scanner configuration
-    compliance_enabled: bool = True  # Docker Bench for Security compliance scanner
+    compliance_enabled: bool = True  # Native compliance scanner
 
     # Scanning
     scan_schedule: str = "0 2 * * *"  # Daily at 2 AM

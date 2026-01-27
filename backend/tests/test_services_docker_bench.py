@@ -1,6 +1,10 @@
-"""Tests for Docker Bench Security service.
+"""DEPRECATED: Tests for Docker Bench Security service.
 
-This module tests the Docker Bench Security service which provides:
+These tests are for the deprecated docker_bench_service.py. The native
+VulnForge compliance checker (compliance_checker.py) is now used instead.
+These tests are kept for reference only.
+
+Original functionality tested:
 - CIS Docker Benchmark compliance scanning
 - Compliance scoring based on findings
 - Category-specific score calculation

@@ -31,7 +31,7 @@ const eventGroups: EventGroup[] = [
     events: [
       { key: 'notify_scans_complete', label: 'Scan Complete', description: 'Vulnerability scan batch finished' },
       { key: 'notify_scans_failed', label: 'Scan Failed', description: 'Container scan encountered errors' },
-      { key: 'notify_scans_compliance_complete', label: 'Compliance Scan Complete', description: 'Docker Bench scan finished' },
+      { key: 'notify_scans_compliance_complete', label: 'Compliance Scan Complete', description: 'Compliance scan finished' },
       { key: 'notify_scans_compliance_failures', label: 'Compliance Failures', description: 'Security compliance checks failed' },
     ],
   },

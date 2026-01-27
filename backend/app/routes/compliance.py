@@ -1,13 +1,16 @@
-"""Compliance API endpoints for Docker Bench security checks."""
+"""Compliance API endpoints for VulnForge native compliance checker.
+
+Replaces Docker Bench with a Python-based checker that queries the Docker API
+directly for faster, more relevant compliance scanning.
+"""
 
 import asyncio
 import csv
 import io
 import json
 import logging
-import subprocess
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,8 +34,8 @@ from app.schemas.compliance import (
     ComplianceScan as ComplianceScanSchema,
 )
 from app.services.activity_logger import ActivityLogger
+from app.services.compliance_checker import ComplianceChecker
 from app.services.compliance_state import compliance_state
-from app.services.docker_bench_service import DockerBenchService
 from app.services.docker_client import DockerService
 from app.services.enhanced_notifier import get_enhanced_notifier
 from app.services.settings_manager import SettingsManager
@@ -50,7 +53,7 @@ _completion_poll_count: int = 0  # Count polls since completion
 
 async def perform_compliance_scan(docker_service: DockerService, trigger_type: str = "manual"):
     """
-    Perform a compliance scan using Trivy (primary) with Docker Bench in legacy validation mode.
+    Perform a compliance scan using VulnForge native compliance checker.
 
     Args:
         docker_service: Docker service instance
@@ -73,90 +76,73 @@ async def perform_compliance_scan(docker_service: DockerService, trigger_type: s
         _current_scan_id = scan.id
 
         try:
-            # Track scan start time for duration calculation
-            import time
+            # Run native compliance checker
+            checker = ComplianceChecker(docker_service)
+            scan_result = await checker.run_scan()
 
-            scan_start_time = time.time()
-
-            # Run Docker Bench Security scan for Docker host compliance.
-            # Note: Trivy's --compliance flag is for scanning container images against
-            # compliance benchmarks, not for scanning the Docker daemon/host itself.
-            # For Docker daemon compliance (CIS Docker Benchmark), we use Docker Bench.
-            bench_service = DockerBenchService(docker_service)
-
-            scan_data = await bench_service.run_compliance_scan()
-
-            if scan_data is None:
-                # Scanner failed
-                scan.scan_status = "failed"
-                scan.error_message = "Docker Bench scan returned no data"
-                await db.commit()
-                return
-
-            # Use Docker Bench results
-            findings = scan_data["findings"]
-            compliance_score = bench_service.calculate_compliance_score(findings)
-            category_scores = bench_service.calculate_category_scores(findings)
-
-            # Count statuses from Docker Bench findings
-            passed = sum(1 for f in findings if f["status"] == "PASS")
-            warned = sum(1 for f in findings if f["status"] == "WARN")
-            failed = sum(1 for f in findings if f["status"] == "FAIL")
-            info = sum(1 for f in findings if f["status"] == "INFO")
-            note = sum(1 for f in findings if f["status"] == "NOTE")
-
-            # TODO: Future enhancement - add Trivy image compliance scanning
-            # (scanning individual container images for compliance, not the Docker host)
-
-            # Calculate scan duration
-            scan_duration_seconds = int(time.time() - scan_start_time)
-
-            # Use Docker Bench duration if available, otherwise use calculated duration
-            if scan_data is not None and "scan_duration_seconds" in scan_data:
-                scan_duration_seconds = scan_data["scan_duration_seconds"]
-
-            # Update scan record
+            # Update scan record with results
             scan.scan_status = "completed"
-            scan.scan_duration_seconds = scan_duration_seconds
-            scan.total_checks = len(findings)
-            scan.passed_checks = passed
-            scan.warned_checks = warned
-            scan.failed_checks = failed
-            scan.info_checks = info
-            scan.note_checks = note
-            scan.compliance_score = compliance_score
-            scan.category_scores = json.dumps(category_scores)
+            scan.scan_duration_seconds = scan_result.duration_seconds
+            scan.total_checks = scan_result.total_checks
+            scan.passed_checks = scan_result.passed
+            scan.warned_checks = scan_result.warned
+            scan.failed_checks = scan_result.failed
+            scan.info_checks = scan_result.info
+            scan.note_checks = scan_result.skipped  # Map skipped to note_checks
+            scan.compliance_score = scan_result.compliance_score
+            scan.category_scores = json.dumps(scan_result.category_scores)
 
             # Store findings
-            for finding_data in findings:
-                # Check if this finding already exists (by check_id)
-                result = await db.execute(
-                    select(ComplianceFinding).where(
-                        ComplianceFinding.check_id == finding_data["check_id"]
+            for finding_result in scan_result.findings:
+                # For per-target checks, use check_id + target as unique key
+                # For global checks (daemon, host), use just check_id
+                if finding_result.target:
+                    # Per-target finding: check by check_id AND target
+                    result = await db.execute(
+                        select(ComplianceFinding).where(
+                            ComplianceFinding.check_id == finding_result.check_id,
+                            ComplianceFinding.target == finding_result.target,
+                        )
                     )
-                )
+                else:
+                    # Global finding: check by check_id only
+                    result = await db.execute(
+                        select(ComplianceFinding).where(
+                            ComplianceFinding.check_id == finding_result.check_id,
+                            ComplianceFinding.target.is_(None),
+                        )
+                    )
                 existing_finding = result.scalar_one_or_none()
+
+                # Serialize remediation dict to JSON string for storage
+                remediation_json = (
+                    json.dumps(finding_result.remediation) if finding_result.remediation else None
+                )
 
                 if existing_finding:
                     # Update existing finding
-                    existing_finding.status = finding_data["status"]
-                    existing_finding.severity = finding_data["severity"]
+                    existing_finding.status = finding_result.status.value
+                    existing_finding.severity = finding_result.severity.value
+                    existing_finding.actual_value = finding_result.actual_value
+                    existing_finding.expected_value = finding_result.expected_value
+                    existing_finding.remediation = remediation_json
                     existing_finding.last_seen = get_now()
                     existing_finding.scan_date = get_now()
                     # Don't change ignore status if it was previously ignored
                 else:
                     # Create new finding
                     finding = ComplianceFinding(
-                        check_id=finding_data["check_id"],
-                        check_number=finding_data.get("check_number"),
-                        title=finding_data["title"],
-                        description=finding_data.get("description"),
-                        status=finding_data["status"],
-                        severity=finding_data["severity"],
-                        category=finding_data["category"],
-                        remediation=finding_data.get("remediation"),
-                        actual_value=finding_data.get("actual_value"),
-                        expected_value=finding_data.get("expected_value"),
+                        check_id=finding_result.check_id,
+                        check_number=None,  # Not used in native checker
+                        title=finding_result.title,
+                        description=finding_result.description,
+                        status=finding_result.status.value,
+                        severity=finding_result.severity.value,
+                        category=finding_result.category,
+                        target=finding_result.target,
+                        remediation=remediation_json,
+                        actual_value=finding_result.actual_value,
+                        expected_value=finding_result.expected_value,
                         first_seen=get_now(),
                         last_seen=get_now(),
                         scan_date=get_now(),
@@ -165,8 +151,8 @@ async def perform_compliance_scan(docker_service: DockerService, trigger_type: s
 
             await db.commit()
             logger.info(
-                f"Compliance scan completed: {compliance_score:.1f}% score, "
-                f"{failed} failed, {warned} warned, {passed} passed"
+                f"Compliance scan completed: {scan_result.compliance_score:.1f}% score, "
+                f"{scan_result.failed} failed, {scan_result.warned} warned, {scan_result.passed} passed"
             )
 
             # Send notifications if enabled
@@ -187,9 +173,9 @@ async def perform_compliance_scan(docker_service: DockerService, trigger_type: s
                         notification_type="compliance_scan_complete",
                         title="VulnForge: Compliance Scan Complete",
                         message=(
-                            "Docker Bench scan completed\n"
-                            f"Compliance Score: {compliance_score:.1f}%\n"
-                            f"Checks: {passed} passed, {warned} warned, {failed} failed"
+                            "Compliance scan completed\n"
+                            f"Compliance Score: {scan_result.compliance_score:.1f}%\n"
+                            f"Checks: {scan_result.passed} passed, {scan_result.warned} warned, {scan_result.failed} failed"
                         ),
                         priority=3,
                         tags=["shield", "VulnForge", "compliance"],
@@ -197,13 +183,13 @@ async def perform_compliance_scan(docker_service: DockerService, trigger_type: s
                     )
 
                 # Send failure notification if there are critical failures
-                if notify_on_failures and failed > 0:
+                if notify_on_failures and scan_result.failed > 0:
                     await notifier.send_notification_with_logging(
                         notification_type="compliance_failures",
                         title="VulnForge: Compliance Failures Detected",
                         message=(
-                            f"Docker Bench found {failed} critical failures\n"
-                            f"Compliance Score: {compliance_score:.1f}%\n"
+                            f"Compliance scan found {scan_result.failed} failures\n"
+                            f"Compliance Score: {scan_result.compliance_score:.1f}%\n"
                             "Review required on Compliance page"
                         ),
                         priority=4,
@@ -215,25 +201,15 @@ async def perform_compliance_scan(docker_service: DockerService, trigger_type: s
                 # INTENTIONAL: Notification failures should not affect scan success.
                 logger.error(f"Failed to send compliance notifications: {notif_error}")
 
-        except subprocess.TimeoutExpired as e:
-            logger.error(f"Compliance scan timed out: {e}")
-            scan.scan_status = "failed"
-            scan.error_message = "Compliance scan timed out - Docker Bench may need longer"
-            await db.commit()
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Docker Bench process failed with exit code {e.returncode}")
-            scan.scan_status = "failed"
-            scan.error_message = f"Docker Bench scan failed with exit code {e.returncode}"
-            await db.commit()
         except PermissionError as e:
             logger.error(f"Permission denied running compliance scan: {e}")
             scan.scan_status = "failed"
             scan.error_message = "Permission denied - Docker socket access required"
             await db.commit()
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse Docker Bench output: {e}")
+        except ConnectionError as e:
+            logger.error(f"Docker connection error: {e}")
             scan.scan_status = "failed"
-            scan.error_message = "Invalid compliance scan output format"
+            scan.error_message = "Could not connect to Docker - check DOCKER_HOST setting"
             await db.commit()
         except Exception as e:
             # INTENTIONAL: Catch-all for unexpected compliance scan errors.
@@ -255,17 +231,13 @@ async def perform_compliance_scan(docker_service: DockerService, trigger_type: s
 @router.post("/scan", response_model=dict)
 async def trigger_compliance_scan(
     request: ComplianceTriggerRequest,
-    background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(require_admin),
+    _user: User = Depends(require_admin),  # Admin required but not used
 ):
     """
     Trigger a compliance scan. Admin only.
 
     Args:
         request: Trigger request with scan type
-        background_tasks: FastAPI background tasks
-        db: Database session
 
     Returns:
         Message confirming scan trigger
@@ -292,7 +264,7 @@ async def trigger_compliance_scan(
     )
 
     return {
-        "message": "Compliance scan started (Trivy compliance with Docker Bench legacy validation)",
+        "message": "Compliance scan started (VulnForge native checker)",
         "trigger_type": request.trigger_type,
     }
 
@@ -426,10 +398,10 @@ async def get_compliance_summary(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(ComplianceFinding.severity, func.count(ComplianceFinding.id).label("count"))
         .where(ComplianceFinding.status == "FAIL")
-        .where(not ComplianceFinding.is_ignored)
+        .where(ComplianceFinding.is_ignored == False)  # noqa: E712
         .group_by(ComplianceFinding.severity)
     )
-    severity_counts = {row.severity: row.count for row in result}
+    severity_counts: dict[str, int] = {row[0]: row[1] for row in result}
 
     # Get ignored findings count
     result = await db.execute(
@@ -487,7 +459,7 @@ async def get_compliance_findings(
 
     # Filter ignored
     if not include_ignored:
-        query = query.where(not ComplianceFinding.is_ignored)
+        query = query.where(ComplianceFinding.is_ignored == False)  # noqa: E712
 
     # Filter by status
     if status_filter:
@@ -693,7 +665,7 @@ async def export_compliance_csv(
     query = select(ComplianceFinding)
 
     if not include_ignored:
-        query = query.where(not ComplianceFinding.is_ignored)
+        query = query.where(ComplianceFinding.is_ignored == False)  # noqa: E712
 
     if status_filter:
         query = query.where(ComplianceFinding.status == status_filter.upper())

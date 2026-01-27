@@ -36,7 +36,7 @@ class ComplianceState:
         _is_scanning = True
         _progress_current = 0
         _progress_total = total_checks
-        _current_check = "Initializing Docker Bench scan..."
+        _current_check = "Initializing compliance scan..."
         _current_check_id = ""
         _started_at = get_now()
         logger.info(f"DEBUG start_scan: Set _is_scanning={_is_scanning}, total={total_checks}")

@@ -1,4 +1,12 @@
-"""Service for executing Docker Bench for Security compliance checks."""
+"""DEPRECATED: Docker Bench service - replaced by native compliance_checker.py.
+
+This service is kept for reference only. The native VulnForge compliance checker
+(compliance_checker.py) should be used instead. It provides:
+- Faster execution (no container spin-up)
+- Homelab-relevant checks only
+- Built-in remediation guidance
+- Per-check enable/disable configuration
+"""
 
 import asyncio
 import logging

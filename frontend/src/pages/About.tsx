@@ -20,7 +20,7 @@ const featureGroups = [
     description: "Keep images and hosts aligned with CIS best practices.",
     icon: FileCheck,
     points: [
-      "Docker Bench scheduling with weekly reports, CSV export, and historical trend charts.",
+      "Native compliance checks with weekly reports, CSV export, and historical trend charts.",
       "Trivy misconfiguration scanning with on-demand scans, severity breakdowns, and remediation tips.",
       "Dive integration for layer efficiency analysis and wasted-byte insights per image.",
     ],
@@ -51,7 +51,7 @@ const backendStack = [
   "Python 3.14 + FastAPI 0.121+ async backend",
   "SQLAlchemy 2.0+ ORM with SQLite (WAL mode)",
   "Docker SDK 7.1+, APScheduler 3.11+, and background task orchestration",
-  "Trivy (vulnerabilities + misconfig), Docker Bench, Dive CLI integrations",
+  "Trivy (vulnerabilities + misconfig), native compliance checker, Dive CLI integrations",
   "httpx 0.27+, ntfy/webhook notifications, and CISA KEV enrichment",
 ];
 
@@ -90,7 +90,7 @@ export function About() {
         <h2 className="text-2xl font-bold text-vuln-text mb-4">What is VulnForge?</h2>
         <p className="text-vuln-text leading-relaxed mb-4">
           VulnForge is a self-hosted dashboard that keeps homelab operators on top of container security.
-          It combines Trivy (for vulnerabilities and misconfigurations), Docker Bench (for host compliance),
+          It combines Trivy (for vulnerabilities and misconfigurations), a native compliance checker (for host and container compliance),
           and Dive (for image efficiency) to surface security issues and configuration drift in one
           place—all without relying on external SaaS services.
         </p>

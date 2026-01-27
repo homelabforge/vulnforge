@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2025-01-27
+
+### Added
+- **VulnForge Native Compliance Checker** - Replaced Docker Bench with a Python-based compliance checker
+  - Runs directly via Docker API (no container spin-up needed)
+  - 20 homelab-relevant checks across 4 categories:
+    - Daemon Configuration (6 checks): ICC, userland proxy, no-new-privileges, live restore, log rotation, DNS
+    - Container Runtime (8 checks): Memory limits, CPU shares, no-new-privileges, capabilities, health checks, restart policy, read-only root, privileged mode
+    - Image Security (4 checks): Non-root user, HEALTHCHECK instruction, secrets in env, latest tag usage
+    - Host Configuration (2 checks): Docker audit rules, socket permissions
+  - Built-in remediation guidance with copy-paste snippets for each check
+  - Per-container findings with actual/expected values
+  - ~0.4 second scan time (vs Docker Bench container overhead)
+  - New check ID format: `VF-D-*` (Daemon), `VF-C-*` (Container), `VF-I-*` (Image), `VF-H-*` (Host)
+- **Grouped Compliance Findings View** - New UI that aggregates findings by check ID
+  - Each row shows check ID, title, and result count badges (pass/warn/fail)
+  - Container checks display "(X containers)" count
+  - Expandable rows reveal:
+    - Check description
+    - Remediation guidance with copy-to-clipboard button
+    - Nested table of per-container results (sorted by severity: FAIL → WARN → PASS)
+  - System-level checks show "System" badge instead of container count
+  - Reduces visual clutter from 400+ rows to ~20 grouped checks
+
+### Changed
+- **oven/bun**: 1.3.4-alpine → 1.3.7-alpine
+- **react**: 19.2.3 → 19.2.4
+- **react-dom**: 19.2.3 → 19.2.4
+- **@types/react**: 19.2.9 → 19.2.10
+- **@typescript-eslint/eslint-plugin**: 8.53.1 → 8.54.0
+- **@typescript-eslint/parser**: 8.53.1 → 8.54.0
+- **globals**: 16.5.0 → 17.2.0
+- **typescript-eslint**: 8.53.1 → 8.54.0
+- **Compliance Page Refactored** - Updated to use native checker and grouped view
+  - Tab renamed from "Docker Bench" to "VulnForge Checker"
+  - Findings table reduced from 8 columns to 6 (Status and Target merged into Results)
+  - Added `target` field to findings for per-container tracking
+
+### Removed
+- **Docker Bench dependency** - No longer requires `docker-bench-security` container
+  - Removed `docker_bench_service.py` (deprecated, kept for reference)
+  - Native checker provides equivalent functionality with better performance
+
 ## [4.0.1] - 2025-12-25
 
 ### Changed
@@ -304,7 +347,9 @@ Previous release with dual-scanner (Trivy + Grype) support.
 - Responsive dashboard
 - Secret scanning with triage workflow
 
-[Unreleased]: https://github.com/homelabforge/vulnforge/compare/v4.0.0...HEAD
+[Unreleased]: https://github.com/homelabforge/vulnforge/compare/v4.1.0...HEAD
+[4.1.0]: https://github.com/homelabforge/vulnforge/compare/v4.0.1...v4.1.0
+[4.0.1]: https://github.com/homelabforge/vulnforge/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/homelabforge/vulnforge/compare/v3.3.0...v4.0.0
 [3.3.0]: https://github.com/homelabforge/vulnforge/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/oaniach/vulnforge/compare/v3.1.0...v3.2.0

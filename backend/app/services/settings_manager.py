@@ -37,7 +37,7 @@ class SettingsManager:
         "parallel_scans": "3",
         "enable_secret_scanning": "true",  # Enable Trivy secret detection
         # Compliance settings
-        "compliance_scan_enabled": "true",  # Enable Docker Bench compliance scanning
+        "compliance_scan_enabled": "true",  # Enable compliance scanning
         "compliance_scan_schedule": "0 3 * * 0",  # 3 AM every Sunday
         "compliance_notify_on_scan": "true",  # Send notification after compliance scan
         "compliance_notify_on_failures": "true",  # Send notification for failed checks

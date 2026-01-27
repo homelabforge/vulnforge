@@ -1,8 +1,8 @@
 """Tests for compliance API endpoints.
 
 This module tests the compliance scanning API which provides:
-- Docker Bench Security (CIS compliance scanning)
-- Dockle image compliance scanning
+- Native VulnForge compliance checker (CIS compliance scanning)
+- Trivy image compliance scanning
 - Compliance history and reporting
 - Compliance scan management
 """
@@ -71,7 +71,7 @@ class TestRunComplianceScan:
 
     @pytest.mark.asyncio
     async def test_run_compliance_scan_invalid_container(
-        self, authenticated_client: AsyncClient, db_session: AsyncSession
+        self, authenticated_client: AsyncClient, db_session: AsyncSession, mock_docker_bench
     ):
         """Test running compliance scan with invalid container ID."""
         # Act
@@ -93,7 +93,7 @@ class TestRunComplianceScan:
 
     @pytest.mark.asyncio
     async def test_run_compliance_scan_empty_container_list(
-        self, authenticated_client: AsyncClient
+        self, authenticated_client: AsyncClient, mock_docker_bench
     ):
         """Test compliance scan with empty container list."""
         # Act

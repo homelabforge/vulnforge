@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for VulnForge
 
 # Stage 1: Build frontend
-FROM oven/bun:1.3.4-alpine AS frontend-builder
+FROM oven/bun:1.3.7-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -48,7 +48,7 @@ LABEL org.opencontainers.image.description="Container vulnerability scanning and
 
 # HTTP server metadata
 LABEL http.server.name="granian"
-LABEL http.server.version="2.6.0"
+LABEL http.server.version="2.6.1"
 LABEL http.server.type="asgi"
 
 WORKDIR /app

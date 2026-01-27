@@ -524,9 +524,10 @@ def mock_notification_dispatcher(monkeypatch):
 
 @pytest.fixture
 def mock_docker_bench(monkeypatch):
-    """Mock Docker Bench scanner for compliance tests.
+    """Mock compliance scanner for compliance tests.
 
-    Returns CIS compliance scan results without executing Docker Bench Security.
+    Returns CIS compliance scan results without executing real compliance scans.
+    Named mock_docker_bench for backwards compatibility with existing tests.
     """
 
     async def mock_run_compliance_scan(self, container_name: str):
@@ -557,6 +558,28 @@ def mock_docker_bench(monkeypatch):
         "app.services.docker_bench_service.DockerBenchService.run_compliance_scan",
         mock_run_compliance_scan,
     )
+
+    # Also mock the new native ComplianceChecker
+    from dataclasses import dataclass
+
+    @dataclass
+    class MockScanResult:
+        findings: list
+        total_checks: int = 7
+        passed_checks: int = 5
+        warned_checks: int = 2
+        failed_checks: int = 0
+        score: float = 71.4
+        duration_seconds: float = 0.1
+
+    async def mock_native_run_scan(self):
+        return MockScanResult(findings=[])
+
+    monkeypatch.setattr(
+        "app.services.compliance_checker.ComplianceChecker.run_scan",
+        mock_native_run_scan,
+    )
+
     return mock_run_compliance_scan
 
 

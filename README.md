@@ -23,7 +23,7 @@ Container Security Insights for Your Homelab
 ## Key Features
 
 - **Vulnerability Scanning** - Trivy integration with KEV tagging, CVSS scoring, and comprehensive history
-- **Compliance Monitoring** - Docker Bench CIS compliance checks with weekly reporting
+- **Compliance Monitoring** - Native CIS compliance checks with weekly reporting
 - **Image Efficiency Analysis** - Dive layer analysis for optimization insights
 - **Secret Detection** - Scan for exposed credentials with false-positive triage
 - **Real-time Progress** - SSE-powered scan status updates

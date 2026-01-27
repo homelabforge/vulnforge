@@ -4,7 +4,6 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.config import settings
-from app.services.docker_bench_service import DockerBenchService
 from app.services.docker_client import DockerService
 from app.services.docker_hub import get_docker_hub_client
 from app.services.trivy_scanner import TrivyScanner
@@ -122,50 +121,23 @@ async def get_scanners_info():
 
         scanners.append(trivy_info)
 
-        # Docker Bench Security (Compliance Scanner - legacy)
-        docker_bench_service = DockerBenchService(docker_service)
-
-        # Check if Docker Bench image exists
-        bench_available = False
-        try:
-            docker_service.client.images.get("docker/docker-bench-security:latest")
-            bench_available = True
-        except Exception:
-            bench_available = (
-                False  # INTENTIONAL: Image not found or Docker error means unavailable.
-            )
-
-        bench_info = ScannerInfo(
-            name="Docker Bench",
+        # VulnForge Native Compliance Checker
+        # Always available since it's built into VulnForge
+        compliance_info = ScannerInfo(
+            name="VulnForge Checker",
             enabled=settings.compliance_enabled,
-            available=bench_available,
-            version=None,
-            latest_version=None,
+            available=True,  # Always available (native Python implementation)
+            version="native",  # Built into VulnForge
+            latest_version=None,  # Uses VulnForge's version
             update_available=False,
-            db_version=None,
+            db_version=None,  # No separate database
             db_latest_version=None,
             db_update_available=False,
             db_updated_at=None,
             db_age_hours=None,
         )
 
-        if bench_available and settings.compliance_enabled:
-            # Get scanner version from image
-            bench_info.version = await docker_bench_service.get_scanner_version()
-
-            # Check for latest release from GitHub
-            latest_version = await docker_hub.get_github_release_version(
-                "docker/docker-bench-security"
-            )
-            if latest_version:
-                bench_info.latest_version = latest_version
-                # Compare versions if both are available
-                if bench_info.version and latest_version:
-                    bench_info.update_available = _compare_versions(
-                        bench_info.version, latest_version
-                    )
-
-        scanners.append(bench_info)
+        scanners.append(compliance_info)
 
         # Dive - Image Efficiency Analysis
         dive_available = False

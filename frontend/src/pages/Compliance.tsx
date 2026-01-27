@@ -1,9 +1,9 @@
 /**
- * Compliance Page - Docker Bench (Host) + Trivy (Image Misconfiguration)
+ * Compliance Page - VulnForge Native Checker (Host) + Trivy (Image Misconfiguration)
  */
 
 import { useState, useMemo, useEffect, type ReactNode } from "react";
-import { Shield, Play, Filter, AlertCircle, CheckCircle, XCircle, Info, TrendingUp, Download, Loader2 } from "lucide-react";
+import { Shield, Play, Filter, AlertCircle, CheckCircle, XCircle, Info, TrendingUp, Download, Loader2, ChevronDown, ChevronRight, Copy, Check, Container, Server } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { handleApiError } from "@/lib/errorHandler";
@@ -37,6 +37,7 @@ interface ComplianceFinding {
   status: string; // PASS, WARN, FAIL, INFO, NOTE
   severity: string; // HIGH, MEDIUM, LOW, INFO
   category: string;
+  target: string | null; // Container/image name for per-target checks
   remediation: string | null;
   actual_value: string | null;
   expected_value: string | null;
@@ -79,6 +80,8 @@ export function Compliance() {
   const [selectedFinding, setSelectedFinding] = useState<ComplianceFinding | null>(null);
   const [ignoreReason, setIgnoreReason] = useState("");
   const [imageActions, setImageActions] = useState<ReactNode | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -250,6 +253,83 @@ export function Compliance() {
     setIgnoreModalOpen(true);
   };
 
+  const toggleGroupExpanded = (checkId: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(checkId)) {
+        next.delete(checkId);
+      } else {
+        next.add(checkId);
+      }
+      return next;
+    });
+  };
+
+  const copyToClipboard = async (text: string, field: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  // Group findings by check_id for aggregated view
+  interface GroupedFinding {
+    check_id: string;
+    title: string;
+    description: string | null;
+    category: string;
+    severity: string;
+    remediation: string | null;
+    findings: ComplianceFinding[];
+    passCount: number;
+    warnCount: number;
+    failCount: number;
+    infoCount: number;
+    worstStatus: string;
+    hasTargets: boolean;
+  }
+
+  const groupedFindings = useMemo<GroupedFinding[]>(() => {
+    if (!findings) return [];
+
+    const groups = new Map<string, GroupedFinding>();
+
+    for (const finding of findings) {
+      const existing = groups.get(finding.check_id);
+      if (existing) {
+        existing.findings.push(finding);
+        if (finding.status === "PASS") existing.passCount++;
+        else if (finding.status === "WARN") existing.warnCount++;
+        else if (finding.status === "FAIL") existing.failCount++;
+        else existing.infoCount++;
+
+        // Update worst status (FAIL > WARN > INFO > PASS)
+        if (finding.status === "FAIL") existing.worstStatus = "FAIL";
+        else if (finding.status === "WARN" && existing.worstStatus !== "FAIL") existing.worstStatus = "WARN";
+
+        if (finding.target) existing.hasTargets = true;
+      } else {
+        groups.set(finding.check_id, {
+          check_id: finding.check_id,
+          title: finding.title,
+          description: finding.description,
+          category: finding.category,
+          severity: finding.severity,
+          remediation: finding.remediation,
+          findings: [finding],
+          passCount: finding.status === "PASS" ? 1 : 0,
+          warnCount: finding.status === "WARN" ? 1 : 0,
+          failCount: finding.status === "FAIL" ? 1 : 0,
+          infoCount: finding.status !== "PASS" && finding.status !== "WARN" && finding.status !== "FAIL" ? 1 : 0,
+          worstStatus: finding.status,
+          hasTargets: !!finding.target,
+        });
+      }
+    }
+
+    // Sort by check_id
+    return Array.from(groups.values()).sort((a, b) => a.check_id.localeCompare(b.check_id));
+  }, [findings]);
+
   const handleIgnoreSubmit = () => {
     if (!selectedFinding) return;
 
@@ -390,7 +470,7 @@ export function Compliance() {
             }`}
           >
             Host Configuration
-            <span className="text-xs ml-2 text-vuln-text-disabled">Docker Bench</span>
+            <span className="text-xs ml-2 text-vuln-text-disabled">VulnForge Checker</span>
           </button>
           <button
             onClick={() => setActiveTab("image")}
@@ -627,14 +707,13 @@ export function Compliance() {
         )}
       </div>
 
-      {/* Findings Table */}
+      {/* Findings Table - Grouped by Check ID */}
       <div className="bg-vuln-surface rounded-lg border border-vuln-border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-vuln-surface-light">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-vuln-text-muted uppercase tracking-wider">
-                  Status
+                <th className="px-4 py-3 text-left text-xs font-medium text-vuln-text-muted uppercase tracking-wider w-8">
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-vuln-text-muted uppercase tracking-wider">
                   Check ID
@@ -643,13 +722,13 @@ export function Compliance() {
                   Title
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-vuln-text-muted uppercase tracking-wider">
+                  Results
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-vuln-text-muted uppercase tracking-wider">
                   Severity
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-vuln-text-muted uppercase tracking-wider">
                   Category
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-vuln-text-muted uppercase tracking-wider">
-                  Actions
                 </th>
               </tr>
             </thead>
@@ -660,56 +739,257 @@ export function Compliance() {
                     Loading findings...
                   </td>
                 </tr>
-              ) : findings && findings.length > 0 ? (
-                findings.map((finding) => (
-                  <tr
-                    key={finding.id}
-                    className={`hover:bg-vuln-surface-light transition-colors ${
-                      finding.is_ignored ? "opacity-50" : ""
-                    }`}
-                  >
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {getStatusBadge(finding.status)}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <span className="text-sm text-vuln-text font-mono">{finding.check_id}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-sm ${finding.is_ignored ? "line-through" : "text-vuln-text"}`}>
-                        {finding.title}
-                      </span>
-                      {finding.is_ignored && (
-                        <div className="text-xs text-vuln-text-disabled mt-1">
-                          Ignored: {finding.ignored_reason}
-                        </div>
+              ) : groupedFindings.length > 0 ? (
+                groupedFindings.map((group) => {
+                  const isExpanded = expandedGroups.has(group.check_id);
+                  const hasDetails = group.remediation || group.description || group.hasTargets;
+                  const totalFindings = group.passCount + group.warnCount + group.failCount + group.infoCount;
+
+                  return (
+                    <>
+                      {/* Group Header Row */}
+                      <tr
+                        key={group.check_id}
+                        className={`hover:bg-vuln-surface-light transition-colors ${hasDetails ? "cursor-pointer" : ""}`}
+                        onClick={() => hasDetails && toggleGroupExpanded(group.check_id)}
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {hasDetails && (
+                            <button className="text-vuln-text-muted hover:text-vuln-text">
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className="text-sm text-vuln-text font-mono">{group.check_id}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm text-vuln-text">{group.title}</span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            {group.passCount > 0 && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-400">
+                                <CheckCircle className="w-3 h-3" />
+                                {group.passCount}
+                              </span>
+                            )}
+                            {group.warnCount > 0 && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400">
+                                <AlertCircle className="w-3 h-3" />
+                                {group.warnCount}
+                              </span>
+                            )}
+                            {group.failCount > 0 && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/20 text-red-400">
+                                <XCircle className="w-3 h-3" />
+                                {group.failCount}
+                              </span>
+                            )}
+                            {group.infoCount > 0 && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400">
+                                <Info className="w-3 h-3" />
+                                {group.infoCount}
+                              </span>
+                            )}
+                            {!group.hasTargets && totalFindings === 1 && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-vuln-text-disabled/20 text-vuln-text-muted">
+                                <Server className="w-3 h-3" />
+                                System
+                              </span>
+                            )}
+                            {group.hasTargets && (
+                              <span className="text-xs text-vuln-text-muted">
+                                ({totalFindings} {totalFindings === 1 ? "container" : "containers"})
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {getSeverityBadge(group.severity)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm text-vuln-text-muted">{group.category}</span>
+                        </td>
+                      </tr>
+
+                      {/* Expanded Details */}
+                      {isExpanded && (
+                        <tr key={`${group.check_id}-details`} className="bg-vuln-bg">
+                          <td colSpan={6} className="px-4 py-4">
+                            <div className="space-y-4">
+                              {/* Description */}
+                              {group.description && (
+                                <div>
+                                  <h4 className="text-sm font-medium text-vuln-text mb-2">Description</h4>
+                                  <p className="text-sm text-vuln-text-muted">{group.description}</p>
+                                </div>
+                              )}
+
+                              {/* Remediation */}
+                              {group.remediation && (
+                                <div>
+                                  <h4 className="text-sm font-medium text-vuln-text mb-2 flex items-center gap-2">
+                                    Remediation
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        copyToClipboard(group.remediation || "", `remediation-${group.check_id}`);
+                                      }}
+                                      className="text-vuln-text-muted hover:text-blue-400 transition-colors"
+                                      title="Copy remediation"
+                                    >
+                                      {copiedField === `remediation-${group.check_id}` ? (
+                                        <Check className="w-4 h-4 text-green-400" />
+                                      ) : (
+                                        <Copy className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                  </h4>
+                                  <pre className="text-xs bg-vuln-surface p-3 rounded overflow-x-auto text-vuln-text-muted whitespace-pre-wrap">
+                                    {group.remediation}
+                                  </pre>
+                                </div>
+                              )}
+
+                              {/* Individual Container Results */}
+                              {group.hasTargets && (
+                                <div>
+                                  <h4 className="text-sm font-medium text-vuln-text mb-2">Container Results</h4>
+                                  <div className="bg-vuln-surface rounded-lg border border-vuln-border overflow-hidden">
+                                    <table className="w-full">
+                                      <thead className="bg-vuln-surface-light">
+                                        <tr>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-vuln-text-muted uppercase">Status</th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-vuln-text-muted uppercase">Container</th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-vuln-text-muted uppercase">Current Value</th>
+                                          <th className="px-3 py-2 text-left text-xs font-medium text-vuln-text-muted uppercase">Actions</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-700">
+                                        {group.findings
+                                          .sort((a, b) => {
+                                            // Sort: FAIL first, then WARN, then PASS
+                                            const order: Record<string, number> = { FAIL: 0, WARN: 1, INFO: 2, NOTE: 3, PASS: 4 };
+                                            return (order[a.status] ?? 5) - (order[b.status] ?? 5);
+                                          })
+                                          .map((finding) => (
+                                            <tr
+                                              key={finding.id}
+                                              className={`hover:bg-vuln-surface-light ${finding.is_ignored ? "opacity-50" : ""}`}
+                                            >
+                                              <td className="px-3 py-2 whitespace-nowrap">
+                                                {getStatusBadge(finding.status)}
+                                              </td>
+                                              <td className="px-3 py-2 whitespace-nowrap">
+                                                {finding.target ? (
+                                                  <span className="inline-flex items-center gap-1 text-sm text-vuln-text">
+                                                    <Container className="w-3 h-3 text-purple-400" />
+                                                    {finding.target}
+                                                  </span>
+                                                ) : (
+                                                  <span className="inline-flex items-center gap-1 text-sm text-vuln-text-muted">
+                                                    <Server className="w-3 h-3" />
+                                                    System
+                                                  </span>
+                                                )}
+                                              </td>
+                                              <td className="px-3 py-2">
+                                                {finding.actual_value && (
+                                                  <code className="text-xs bg-vuln-bg px-2 py-1 rounded text-vuln-text-muted">
+                                                    {finding.actual_value}
+                                                  </code>
+                                                )}
+                                              </td>
+                                              <td className="px-3 py-2 whitespace-nowrap">
+                                                {finding.is_ignored ? (
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      unignoreFindingMutation.mutate(finding.id);
+                                                    }}
+                                                    disabled={unignoreFindingMutation.isPending}
+                                                    className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                                                  >
+                                                    Unignore
+                                                  </button>
+                                                ) : finding.status !== "PASS" ? (
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleIgnore(finding);
+                                                    }}
+                                                    className="text-xs text-vuln-text-muted hover:text-vuln-text"
+                                                  >
+                                                    Mark as False Positive
+                                                  </button>
+                                                ) : null}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* System check (non-container) details */}
+                              {!group.hasTargets && group.findings.length === 1 && (
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    {group.findings[0].actual_value && (
+                                      <div className="flex items-start gap-2">
+                                        <span className="text-xs text-vuln-text-disabled min-w-16">Current:</span>
+                                        <code className="text-xs bg-vuln-surface px-2 py-1 rounded text-vuln-text-muted">
+                                          {group.findings[0].actual_value}
+                                        </code>
+                                      </div>
+                                    )}
+                                    {group.findings[0].expected_value && (
+                                      <div className="flex items-start gap-2 mt-1">
+                                        <span className="text-xs text-vuln-text-disabled min-w-16">Expected:</span>
+                                        <code className="text-xs bg-vuln-surface px-2 py-1 rounded text-green-400">
+                                          {group.findings[0].expected_value}
+                                        </code>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {group.findings[0].status !== "PASS" && !group.findings[0].is_ignored && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleIgnore(group.findings[0]);
+                                      }}
+                                      className="text-xs text-vuln-text-muted hover:text-vuln-text"
+                                    >
+                                      Mark as False Positive
+                                    </button>
+                                  )}
+                                  {group.findings[0].is_ignored && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        unignoreFindingMutation.mutate(group.findings[0].id);
+                                      }}
+                                      disabled={unignoreFindingMutation.isPending}
+                                      className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                                    >
+                                      Unignore
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {getSeverityBadge(finding.severity)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-vuln-text-muted">{finding.category}</span>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {finding.is_ignored ? (
-                        <button
-                          onClick={() => unignoreFindingMutation.mutate(finding.id)}
-                          disabled={unignoreFindingMutation.isPending}
-                          className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50"
-                        >
-                          Unignore
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleIgnore(finding)}
-                          className="text-xs text-vuln-text-muted hover:text-vuln-text"
-                        >
-                          Mark as False Positive
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                    </>
+                  );
+                })
               ) : (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-vuln-text-muted">

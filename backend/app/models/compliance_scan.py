@@ -1,4 +1,4 @@
-"""Compliance scan model for tracking Docker Bench scan runs."""
+"""Compliance scan model for tracking compliance scan runs."""
 
 from datetime import datetime
 
@@ -10,7 +10,7 @@ from app.utils.timezone import get_now
 
 
 class ComplianceScan(Base):
-    """Model for tracking Docker Bench compliance scan executions."""
+    """Model for tracking compliance scan executions."""
 
     __tablename__ = "compliance_scans"
 
