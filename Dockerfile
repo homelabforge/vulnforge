@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for VulnForge
 
 # Stage 1: Build frontend
-FROM oven/bun:1.3.7-alpine AS frontend-builder
+FROM oven/bun:1.3.8-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
