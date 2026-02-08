@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-02-08
+
 ### Added
 - **System Info Endpoint** - New `/api/v1/system/info` returns `{"name": "VulnForge", "version": "..."}`
   - About page now fetches version dynamically instead of hardcoded "3.3.0"
@@ -80,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dependency Floors Bumped** - fastapi (0.128.2), granian (2.7.0), sqlalchemy (2.0.46), httpx (0.28.1), apscheduler (3.11.2), aiosqlite (0.22.1), croniter (6.0.0), aiosmtplib (5.1.0), authlib (1.6.6), argon2-cffi (25.1.0), pyjwt (2.11.0), python-multipart (0.0.22), ruff (0.15.0)
 - **oven/bun**: 1.3.7-alpine → 1.3.8-alpine
 - **CI Bun version**: 1.3.4 → 1.3.8 (matches Dockerfile)
-- **package.json version**: 4.0.1 → 4.1.0
+- **package.json version**: 4.1.0 → 4.2.0
 
 ### Fixed
 - **Image Security Dashboard Card** - Critical and Failures tiles showing empty
@@ -98,6 +100,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Inline toggle CSS** - ~15 identical 200-char Tailwind toggle strings replaced by Toggle component
 - **Loader2 imports** - Removed from 7 notification config files (uses TestConnectionButton)
 - **Frontend test skip logic** - Removed `find src -name "*.test.ts*"` guard from CI (tests now exist)
+
+### Security
+- **CodeQL Remediation** - Resolved 48 CodeQL security alerts (16 false positives dismissed with justification)
+  - Log injection prevention across backend logging calls
+  - Path injection hardening for directory-listing lookup
+  - Stack trace exposure fixes (generic messages to users, details in logs only)
+  - SSRF validation strengthening
+  - Clear-text logging remediation
 
 ## [4.1.0] - 2025-01-27
 
@@ -439,7 +449,8 @@ Previous release with dual-scanner (Trivy + Grype) support.
 - Responsive dashboard
 - Secret scanning with triage workflow
 
-[Unreleased]: https://github.com/homelabforge/vulnforge/compare/v4.1.0...HEAD
+[Unreleased]: https://github.com/homelabforge/vulnforge/compare/v4.2.0...HEAD
+[4.2.0]: https://github.com/homelabforge/vulnforge/compare/v4.1.0...v4.2.0
 [4.1.0]: https://github.com/homelabforge/vulnforge/compare/v4.0.1...v4.1.0
 [4.0.1]: https://github.com/homelabforge/vulnforge/compare/v4.0.0...v4.0.1
 [4.0.0]: https://github.com/homelabforge/vulnforge/compare/v3.3.0...v4.0.0
