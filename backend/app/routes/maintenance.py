@@ -28,26 +28,35 @@ from app.utils.timezone import get_now
 _BACKUP_FILENAME_PATTERN = re.compile(r"^(vulnforge_backup_|pre_restore_)\d{8}_\d{6}\.db$")
 
 
-def _validate_backup_filename(filename: str, backup_dir: Path) -> str:
-    """Validate backup filename matches expected pattern and is safe.
+def _find_backup_file(filename: str, backup_dir: Path) -> Path:
+    """Find a backup file by validated name using directory listing.
 
-    Normalizes the filename to prevent directory traversal, then validates
-    it matches the strict backup naming convention.
+    Normalizes the filename, validates it matches the strict backup naming
+    convention, then looks it up in the actual directory listing. The returned
+    Path comes from ``iterdir()`` (a trusted source), not from user input,
+    which breaks the CodeQL taint chain for path-injection.
 
     Args:
         filename: Raw user-provided filename
         backup_dir: Base directory for backups
 
     Returns:
-        Validated safe filename string
+        Path to the backup file (from directory listing)
 
     Raises:
-        HTTPException: If filename is invalid or doesn't match expected pattern
+        HTTPException: If filename is invalid, doesn't match pattern, or not found
     """
     safe = normalize_path(filename, backup_dir)
     if not _BACKUP_FILENAME_PATTERN.match(safe):
         raise HTTPException(status_code=400, detail="Invalid backup filename format")
-    return safe
+
+    # Look up in actual directory — returned Path is from iterdir(), not user input
+    if backup_dir.is_dir():
+        for entry in backup_dir.iterdir():
+            if entry.is_file() and entry.name == safe:
+                return entry
+
+    raise HTTPException(status_code=404, detail="Backup file not found")
 
 
 router = APIRouter()
@@ -197,16 +206,12 @@ async def download_backup(filename: str, user: User = Depends(require_admin)):
         db_file = Path(db_path)
         backup_dir = db_file.parent / "backups"
 
-        # Validate filename matches expected backup pattern
-        safe_filename = _validate_backup_filename(filename, backup_dir)
-        backup_file = backup_dir / safe_filename
-
-        if not backup_file.exists():
-            raise HTTPException(status_code=404, detail="Backup file not found")
+        # Find backup file via directory listing (path from iterdir, not user input)
+        backup_file = _find_backup_file(filename, backup_dir)
 
         return FileResponse(
             path=str(backup_file),
-            filename=safe_filename,
+            filename=backup_file.name,
             media_type="application/x-sqlite3",
         )
     except HTTPException:
@@ -235,12 +240,8 @@ async def delete_backup(filename: str, user: User = Depends(require_admin)):
         db_file = Path(db_path)
         backup_dir = db_file.parent / "backups"
 
-        # Validate filename matches expected backup pattern
-        safe_filename = _validate_backup_filename(filename, backup_dir)
-        backup_file = backup_dir / safe_filename
-
-        if not backup_file.exists():
-            raise HTTPException(status_code=404, detail="Backup file not found")
+        # Find backup file via directory listing (path from iterdir, not user input)
+        backup_file = _find_backup_file(filename, backup_dir)
 
         # Delete the file
         backup_file.unlink()
@@ -278,12 +279,8 @@ async def restore_backup(filename: str, user: User = Depends(require_admin)):
         db_file = Path(db_path)
         backup_dir = db_file.parent / "backups"
 
-        # Validate filename matches expected backup pattern
-        safe_filename = _validate_backup_filename(filename, backup_dir)
-        backup_file = backup_dir / safe_filename
-
-        if not backup_file.exists():
-            raise HTTPException(status_code=404, detail="Backup file not found")
+        # Find backup file via directory listing (path from iterdir, not user input)
+        backup_file = _find_backup_file(filename, backup_dir)
 
         # Create a safety backup of current database before restoring
         timestamp = get_now().strftime("%Y%m%d_%H%M%S")

@@ -1,5 +1,7 @@
 """Notification API endpoints."""
 
+import logging
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import desc, select
@@ -16,6 +18,8 @@ from app.schemas.notification import (
     NotificationRuleCreate,
     NotificationRuleUpdate,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -582,13 +586,13 @@ async def test_email_connection(db: AsyncSession = Depends(get_db)):
             use_tls=use_tls if use_tls is not None else True,
         )
 
-        success, message = await email_service.test_connection()
-        # Sanitize failure messages that may contain internal error details
-        if not success and "failed:" in message.lower():
-            return {
-                "success": False,
-                "message": "Connection test failed. Check server logs for details.",
-            }
-        return {"success": success, "message": message}
+        success, raw_message = await email_service.test_connection()
+        # Return generic messages to avoid exposing internal error details (CWE-209)
+        if success:
+            safe_message = "Connection test successful"
+        else:
+            logger.warning("Email connection test failed: %s", raw_message)
+            safe_message = "Connection test failed. Check server logs for details."
+        return {"success": success, "message": safe_message}
     except Exception:
         return {"success": False, "message": "Connection test failed. Check logs for details."}
