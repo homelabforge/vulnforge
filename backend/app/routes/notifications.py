@@ -587,12 +587,13 @@ async def test_email_connection(db: AsyncSession = Depends(get_db)):
         )
 
         success, raw_message = await email_service.test_connection()
-        # Return generic messages to avoid exposing internal error details (CWE-209)
+        # Return hardcoded literals to avoid exposing internal error details (CWE-209)
         if success:
-            safe_message = "Connection test successful"
-        else:
-            logger.warning("Email connection test failed: %s", raw_message)
-            safe_message = "Connection test failed. Check server logs for details."
-        return {"success": success, "message": safe_message}
+            return {"success": True, "message": "Connection test successful"}
+        logger.warning("Email connection test failed: %s", raw_message)
+        return {
+            "success": False,
+            "message": "Connection test failed. Check server logs for details.",
+        }
     except Exception:
         return {"success": False, "message": "Connection test failed. Check logs for details."}
