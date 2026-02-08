@@ -32,7 +32,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "pytest-xdist>=3.8.0",
     "pytest-timeout>=2.4.0",
-    "ruff==0.15.0",
+    "ruff>=0.15.0",
 ]
 
 [build-system]
@@ -45,10 +45,14 @@ packages = ["app"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+src = ["."]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
