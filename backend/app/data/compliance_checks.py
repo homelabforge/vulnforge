@@ -33,7 +33,9 @@ class Status(StrEnum):
 
 
 CheckType = Literal["daemon", "container", "image", "host"]
-Category = Literal["Daemon Configuration", "Container Runtime", "Image Security", "Host Configuration"]
+Category = Literal[
+    "Daemon Configuration", "Container Runtime", "Image Security", "Host Configuration"
+]
 
 
 @dataclass
@@ -60,7 +62,9 @@ class ComplianceCheck:
     severity: Severity
     check_type: CheckType
     enabled_default: bool = True
-    remediation: Remediation = field(default_factory=lambda: Remediation(summary="No remediation available"))
+    remediation: Remediation = field(
+        default_factory=lambda: Remediation(summary="No remediation available")
+    )
 
 
 # =============================================================================
@@ -315,7 +319,7 @@ IMAGE_CHECKS: list[ComplianceCheck] = [
         check_type="image",
         remediation=Remediation(
             summary="Add HEALTHCHECK instruction to Dockerfile",
-            dockerfile='HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \\\n    CMD curl -f http://localhost:8080/health || exit 1',
+            dockerfile="HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \\\n    CMD curl -f http://localhost:8080/health || exit 1",
             docs_url="https://docs.docker.com/reference/dockerfile/#healthcheck",
         ),
     ),
@@ -401,8 +405,7 @@ sudo systemctl restart auditd""",
 # =============================================================================
 
 ALL_CHECKS: dict[str, ComplianceCheck] = {
-    check.id: check
-    for check in DAEMON_CHECKS + CONTAINER_CHECKS + IMAGE_CHECKS + HOST_CHECKS
+    check.id: check for check in DAEMON_CHECKS + CONTAINER_CHECKS + IMAGE_CHECKS + HOST_CHECKS
 }
 
 CHECKS_BY_TYPE: dict[CheckType, list[ComplianceCheck]] = {
