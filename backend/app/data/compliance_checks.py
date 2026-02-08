@@ -9,11 +9,11 @@ and remediation guidance. Checks are organized by category:
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     """Check severity levels."""
 
     HIGH = "HIGH"
@@ -22,7 +22,7 @@ class Severity(str, Enum):
     INFO = "INFO"
 
 
-class Status(str, Enum):
+class Status(StrEnum):
     """Check result status."""
 
     PASS = "PASS"
