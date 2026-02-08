@@ -61,8 +61,8 @@ yarn-error.log*
 Thumbs.db
 
 # VulnForge specific
-data/
-data-dev/
+/data/
+/data-dev/
 trivy-cache/
 dive-cache/
 dive-output/
