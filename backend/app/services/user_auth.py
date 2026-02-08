@@ -111,7 +111,8 @@ def get_or_create_secret_key(key_file: Path = JWT_SECRET_KEY_FILE) -> str:
         validated_key_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Write key to file
-        validated_key_file.write_text(secret_key)
+        # nosec: intentional storage of JWT signing key for session persistence
+        validated_key_file.write_text(secret_key)  # noqa: S105
 
         # Set restrictive permissions (owner read/write only)
         validated_key_file.chmod(0o600)

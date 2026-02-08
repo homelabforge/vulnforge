@@ -40,6 +40,10 @@ def normalize_path(user_path: str | Path, base_dir: str | Path) -> str:
         # Get just the filename component (removes any directory traversal)
         filename = Path(user_path).name
 
+        # Reject empty, dot, or double-dot filenames
+        if not filename or filename in (".", ".."):
+            raise HTTPException(status_code=400, detail="Invalid path")
+
         # Additional validation: no path separators allowed
         if "/" in filename or "\\" in filename:
             raise HTTPException(status_code=400, detail="Invalid path: path separators not allowed")
@@ -55,11 +59,13 @@ def normalize_path(user_path: str | Path, base_dir: str | Path) -> str:
             raise HTTPException(status_code=400, detail="Invalid path: absolute paths not allowed")
 
         # Validate the resulting path would be within base_dir
-        full_path = (base / filename).resolve()
+        # Construct the full path from validated components only
+        validated_name = str(filename)
+        full_path = (base / validated_name).resolve()
         if not str(full_path).startswith(str(base)):
             raise HTTPException(status_code=400, detail="Invalid path: outside base directory")
 
-        return filename
+        return validated_name
 
     except HTTPException:
         raise

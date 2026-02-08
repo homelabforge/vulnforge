@@ -1,6 +1,7 @@
 """Maintenance API endpoints."""
 
 import json
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,31 @@ from app.services.kev import get_kev_service
 from app.services.settings_manager import SettingsManager
 from app.utils.path_normalization import normalize_path
 from app.utils.timezone import get_now
+
+_BACKUP_FILENAME_PATTERN = re.compile(r"^(vulnforge_backup_|pre_restore_)\d{8}_\d{6}\.db$")
+
+
+def _validate_backup_filename(filename: str, backup_dir: Path) -> str:
+    """Validate backup filename matches expected pattern and is safe.
+
+    Normalizes the filename to prevent directory traversal, then validates
+    it matches the strict backup naming convention.
+
+    Args:
+        filename: Raw user-provided filename
+        backup_dir: Base directory for backups
+
+    Returns:
+        Validated safe filename string
+
+    Raises:
+        HTTPException: If filename is invalid or doesn't match expected pattern
+    """
+    safe = normalize_path(filename, backup_dir)
+    if not _BACKUP_FILENAME_PATTERN.match(safe):
+        raise HTTPException(status_code=400, detail="Invalid backup filename format")
+    return safe
+
 
 router = APIRouter()
 
@@ -171,8 +197,8 @@ async def download_backup(filename: str, user: User = Depends(require_admin)):
         db_file = Path(db_path)
         backup_dir = db_file.parent / "backups"
 
-        # Normalize and validate path to prevent directory traversal
-        safe_filename = normalize_path(filename, backup_dir)
+        # Validate filename matches expected backup pattern
+        safe_filename = _validate_backup_filename(filename, backup_dir)
         backup_file = backup_dir / safe_filename
 
         if not backup_file.exists():
@@ -209,8 +235,8 @@ async def delete_backup(filename: str, user: User = Depends(require_admin)):
         db_file = Path(db_path)
         backup_dir = db_file.parent / "backups"
 
-        # Normalize and validate path to prevent directory traversal
-        safe_filename = normalize_path(filename, backup_dir)
+        # Validate filename matches expected backup pattern
+        safe_filename = _validate_backup_filename(filename, backup_dir)
         backup_file = backup_dir / safe_filename
 
         if not backup_file.exists():
@@ -252,8 +278,8 @@ async def restore_backup(filename: str, user: User = Depends(require_admin)):
         db_file = Path(db_path)
         backup_dir = db_file.parent / "backups"
 
-        # Normalize and validate path to prevent directory traversal
-        safe_filename = normalize_path(filename, backup_dir)
+        # Validate filename matches expected backup pattern
+        safe_filename = _validate_backup_filename(filename, backup_dir)
         backup_file = backup_dir / safe_filename
 
         if not backup_file.exists():

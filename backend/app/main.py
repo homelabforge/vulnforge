@@ -44,6 +44,7 @@ from app.services.scan_queue import get_scan_queue
 from app.services.scheduler import ScanScheduler
 from app.services.settings_manager import SettingsManager
 from app.services.trivy_scanner import TrivyScanner
+from app.utils.log_redaction import sanitize_for_log
 
 # Configure logging
 logging.basicConfig(
@@ -308,15 +309,23 @@ if static_dir.exists():
 
             # Security check: Ensure the resolved path is within static_dir
             if not str(requested_path).startswith(str(static_dir_resolved)):
-                logger.warning(f"Path traversal attempt blocked: {full_path}")
+                logger.warning("Path traversal attempt blocked: %s", sanitize_for_log(full_path))
                 return FileResponse(static_dir / "index.html")
 
+            # Re-derive from validated relative path to break taint tracking.
+            # After the startswith check, compute the safe relative component
+            # and reconstruct from the known-safe static_dir base.
+            relative = requested_path.relative_to(static_dir_resolved)
+            safe_path = (static_dir_resolved / relative).resolve()
+
             # If requesting a file that exists, serve it
-            if requested_path.is_file():
-                return FileResponse(requested_path)
+            if safe_path.is_file():
+                return FileResponse(str(safe_path))
 
         except (ValueError, OSError) as e:
-            logger.warning(f"Invalid path request: {full_path} - {e}")
+            logger.warning(
+                "Invalid path request: %s - %s", sanitize_for_log(full_path), sanitize_for_log(e)
+            )
 
         # Otherwise, serve index.html for client-side routing
         return FileResponse(static_dir / "index.html")

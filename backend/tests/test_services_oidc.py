@@ -15,36 +15,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.oidc import (
     SSRFProtectionError,
-    _sanitize_for_log,
     generate_state,
     get_oidc_config,
     store_oidc_state,
     validate_and_consume_state,
     validate_oidc_url,
 )
+from app.utils.log_redaction import sanitize_for_log
 
 
 class TestSanitizeForLog:
-    """Test _sanitize_for_log helper for log injection prevention."""
+    """Test sanitize_for_log helper for log injection prevention."""
 
     def test_sanitize_for_log_strips_newlines(self):
-        """Verify newline characters are removed to prevent log injection."""
-        result = _sanitize_for_log("normal\ninjected line")
+        """Verify newline characters are neutralized to prevent log injection."""
+        result = sanitize_for_log("normal\ninjected line")
         assert "\n" not in result
-        assert result == "normalinjected line"
+        assert result == "normal injected line"
 
     def test_sanitize_for_log_strips_tabs(self):
-        """Verify tab characters are removed to prevent log injection."""
-        result = _sanitize_for_log("before\tafter")
+        """Verify tab characters are neutralized to prevent log injection."""
+        result = sanitize_for_log("before\tafter")
         assert "\t" not in result
-        assert result == "beforeafter"
+        assert result == "before after"
 
     def test_sanitize_for_log_strips_carriage_return(self):
-        """Verify carriage return characters are also removed."""
-        result = _sanitize_for_log("line1\r\nline2")
+        """Verify carriage return characters are also neutralized."""
+        result = sanitize_for_log("line1\r\nline2")
         assert "\r" not in result
         assert "\n" not in result
-        assert result == "line1line2"
+        assert result == "line1 line2"
 
 
 class TestValidateOidcUrl:

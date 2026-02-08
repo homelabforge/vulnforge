@@ -1,9 +1,12 @@
 """Abstract base classes for scanner health monitoring."""
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 
 class ScannerStatus(Enum):
@@ -124,9 +127,10 @@ class ScannerHealthMonitor(ABC):
                 "health": health.to_dict(),
             }
         except Exception as e:
+            logger.error("Scanner health check failed for %s: %s", self.scanner_name, e)
             return {
                 "scanner": self.scanner_name,
                 "available": False,
                 "supports_offline": False,
-                "error": str(e),
+                "error": "Health check failed. Check server logs for details.",
             }

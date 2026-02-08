@@ -1,7 +1,6 @@
 """User authentication API endpoints for VulnForge single-user auth."""
 
 import logging
-import re
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
@@ -33,15 +32,11 @@ from app.services.user_auth import (
     update_user_admin_profile,
     verify_password,
 )
+from app.utils.log_redaction import sanitize_for_log
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/user-auth", tags=["User Authentication"])
-
-
-def _sanitize_for_log(value: str) -> str:
-    """Sanitize user input for safe logging (prevents log injection)."""
-    return re.sub(r"[\r\n\t]", "", str(value))
 
 
 # ============================================================================
@@ -106,7 +101,7 @@ async def setup_admin_account(
     # Enable local authentication
     await settings_manager.set("user_auth_mode", "local")
 
-    logger.info("User auth admin account created: %s", _sanitize_for_log(setup_data.username))
+    logger.info("User auth admin account created: %s", sanitize_for_log(setup_data.username))
     logger.info("User authentication mode set to: local")
 
     return {
@@ -382,7 +377,7 @@ async def oidc_login(
             )
 
     except oidc_service.SSRFProtectionError as e:
-        logger.error(f"SSRF protection blocked OIDC issuer URL: {e}")
+        logger.error("SSRF protection blocked OIDC issuer URL: %s", sanitize_for_log(e))
         raise HTTPException(
             status_code=400,
             detail="Invalid OIDC issuer URL (SSRF protection)",
@@ -398,7 +393,7 @@ async def oidc_login(
     # Create authorization URL with state/nonce
     auth_url, state = await oidc_service.create_authorization_url(db, config, metadata, base_url)
 
-    logger.info(f"Initiating OIDC login flow (state: {state[:8]}...)")
+    logger.info("Initiating OIDC login flow (state: %s...)", sanitize_for_log(state[:8]))
 
     # Redirect to OIDC provider
     return RedirectResponse(url=auth_url, status_code=302)
@@ -421,7 +416,7 @@ async def oidc_callback(
 
     from app.services import oidc as oidc_service
 
-    logger.info(f"OIDC callback received (state: {_sanitize_for_log(state[:8])}...)")
+    logger.info("OIDC callback received (state: %s...)", sanitize_for_log(state[:8]))
 
     # VALIDATE STATE (CSRF Protection)
     state_data = await oidc_service.validate_and_consume_state(db, state)
@@ -515,7 +510,11 @@ async def oidc_callback(
             datetime.now(UTC).isoformat(),
         )
 
-        logger.info(f"OIDC login successful for admin: {username} (sub: {oidc_sub})")
+        logger.info(
+            "OIDC login successful for admin: %s (sub: %s)",
+            sanitize_for_log(username),
+            sanitize_for_log(oidc_sub),
+        )
 
         # GET UPDATED ADMIN PROFILE
         admin_profile = await get_user_admin_profile(db)
@@ -550,16 +549,16 @@ async def oidc_callback(
         return redirect_response
 
     except oidc_service.SSRFProtectionError as e:
-        logger.error(f"SSRF protection error: {e}")
+        logger.error("SSRF protection error: %s", sanitize_for_log(e))
         raise HTTPException(
             status_code=400,
             detail="Invalid OIDC provider URL (SSRF protection)",
         )
     except Exception as e:
-        logger.error(f"OIDC callback error: {e}", exc_info=True)
+        logger.error("OIDC callback error: %s", sanitize_for_log(e), exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"OIDC authentication failed: {str(e)}",
+            detail="OIDC authentication failed. Check server logs for details.",
         )
 
 
@@ -587,12 +586,34 @@ async def test_oidc_connection(
         try:
             oidc_service.validate_oidc_url(discovery_url)
         except oidc_service.SSRFProtectionError as e:
+            logger.warning("SSRF protection blocked OIDC test URL: %s", e)
             return {
                 "success": False,
                 "provider_reachable": False,
                 "metadata_valid": False,
                 "endpoints_found": False,
-                "errors": [f"SSRF protection: {str(e)}"],
+                "errors": ["URL blocked by SSRF protection policy"],
+            }
+
+        # Validate URL scheme and hostname before making request
+        from urllib.parse import urlparse
+
+        parsed = urlparse(discovery_url)
+        if parsed.scheme not in ("http", "https"):
+            return {
+                "success": False,
+                "provider_reachable": False,
+                "metadata_valid": False,
+                "endpoints_found": False,
+                "errors": ["Invalid URL scheme - only HTTP and HTTPS are allowed"],
+            }
+        if not parsed.hostname:
+            return {
+                "success": False,
+                "provider_reachable": False,
+                "metadata_valid": False,
+                "endpoints_found": False,
+                "errors": ["Invalid URL - no hostname specified"],
             }
 
         # Fetch discovery document
@@ -615,15 +636,16 @@ async def test_oidc_connection(
                     "provider_reachable": True,
                     "metadata_valid": False,
                     "endpoints_found": False,
-                    "errors": [f"HTTP {e.response.status_code}: {e.response.text[:200]}"],
+                    "errors": [f"HTTP {e.response.status_code} error from provider"],
                 }
             except Exception as e:
+                logger.error("OIDC discovery connection error: %s", e)
                 return {
                     "success": False,
                     "provider_reachable": False,
                     "metadata_valid": False,
                     "endpoints_found": False,
-                    "errors": [f"Connection error: {str(e)}"],
+                    "errors": ["Failed to connect to OIDC provider"],
                 }
 
         # Validate metadata structure
@@ -664,11 +686,11 @@ async def test_oidc_connection(
         }
 
     except Exception as e:
-        logger.error(f"OIDC test connection error: {e}", exc_info=True)
+        logger.error("OIDC test connection error: %s", sanitize_for_log(e), exc_info=True)
         return {
             "success": False,
             "provider_reachable": False,
             "metadata_valid": False,
             "endpoints_found": False,
-            "errors": [f"Unexpected error: {str(e)}"],
+            "errors": ["An unexpected error occurred during OIDC connection test"],
         }

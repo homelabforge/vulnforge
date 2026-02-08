@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 
+from app.utils.log_redaction import sanitize_for_log
 from app.utils.timezone import get_now
 
 logger = logging.getLogger(__name__)
@@ -59,12 +60,12 @@ class ImageMisconfigState:
         }
 
         if success:
-            logger.info("Image misconfiguration scan finished for %s", image_name)
+            logger.info("Image misconfiguration scan finished for %s", sanitize_for_log(image_name))
         else:
             logger.warning(
                 "Image misconfiguration scan failed for %s: %s",
-                image_name,
-                error_message or "unknown error",
+                sanitize_for_log(image_name),
+                sanitize_for_log(error_message or "unknown error"),
             )
 
     def finish_scan(self):

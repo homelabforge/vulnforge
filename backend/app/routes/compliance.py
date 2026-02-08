@@ -39,6 +39,7 @@ from app.services.compliance_state import compliance_state
 from app.services.docker_client import DockerService
 from app.services.enhanced_notifier import get_enhanced_notifier
 from app.services.settings_manager import SettingsManager
+from app.utils.log_redaction import sanitize_for_log
 from app.utils.timezone import get_now
 
 router = APIRouter()
@@ -523,7 +524,10 @@ async def ignore_compliance_finding(
     )
 
     logger.info(
-        f"Marked compliance finding {finding.check_id} as ignored by {user.username}: {request.reason}"
+        "Marked compliance finding %s as ignored by %s: %s",
+        sanitize_for_log(finding.check_id),
+        sanitize_for_log(user.username),
+        sanitize_for_log(request.reason),
     )
 
     return ComplianceFindingSchema.model_validate(finding)
@@ -572,7 +576,11 @@ async def unignore_compliance_finding(
         username=user.username,
     )
 
-    logger.info(f"Unmarked compliance finding {finding.check_id} as ignored by {user.username}")
+    logger.info(
+        "Unmarked compliance finding %s as ignored by %s",
+        sanitize_for_log(finding.check_id),
+        sanitize_for_log(user.username),
+    )
 
     return ComplianceFindingSchema.model_validate(finding)
 

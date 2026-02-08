@@ -2,7 +2,6 @@
 
 import json
 import logging
-import re
 from typing import Any
 
 from docker.errors import DockerException
@@ -10,14 +9,10 @@ from docker.errors import DockerException
 from app.config import settings
 from app.services.docker_client import DockerService
 from app.services.trivy_scanner import TrivyScanner
+from app.utils.log_redaction import sanitize_for_log
 from app.utils.timezone import get_now
 
 logger = logging.getLogger(__name__)
-
-
-def _sanitize_for_log(value: str) -> str:
-    """Sanitize user input for safe logging (prevents log injection)."""
-    return re.sub(r"[\r\n\t]", "", str(value))
 
 
 class TrivyMisconfigService:
@@ -53,7 +48,7 @@ class TrivyMisconfigService:
         # Currently timeout parameter is accepted but not enforced
         _ = timeout  # Acknowledge parameter to suppress unused warning
 
-        logger.info(f"Starting Trivy misconfiguration scan: image={_sanitize_for_log(image)}")
+        logger.info("Starting Trivy misconfiguration scan: image=%s", sanitize_for_log(image))
 
         try:
             trivy_container = self.docker_service.get_trivy_container()

@@ -1,7 +1,6 @@
 """OIDC service for OAuth2/OpenID Connect authentication."""
 
 import logging
-import re
 import secrets
 from datetime import UTC, datetime
 from typing import Any
@@ -13,13 +12,9 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.oidc_state import OIDCState
+from app.utils.log_redaction import sanitize_for_log
 
 logger = logging.getLogger(__name__)
-
-
-def _sanitize_for_log(value: str) -> str:
-    """Sanitize user input for safe logging (prevents log injection)."""
-    return re.sub(r"[\r\n\t]", "", str(value))
 
 
 class SSRFProtectionError(Exception):
@@ -194,7 +189,7 @@ async def store_oidc_state(
 
     db.add(oidc_state)
     await db.commit()
-    logger.debug(f"Stored OIDC state: {state[:8]}...")
+    logger.debug("Stored OIDC state: %s...", sanitize_for_log(state[:8]))
 
 
 async def _cleanup_expired_states(db: AsyncSession) -> None:
@@ -251,7 +246,7 @@ async def validate_and_consume_state(
     await db.delete(oidc_state)
     await db.commit()
 
-    logger.debug(f"Validated and consumed OIDC state: {_sanitize_for_log(state[:8])}...")
+    logger.debug("Validated and consumed OIDC state: %s...", sanitize_for_log(state[:8]))
     return state_data
 
 

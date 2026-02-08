@@ -583,6 +583,12 @@ async def test_email_connection(db: AsyncSession = Depends(get_db)):
         )
 
         success, message = await email_service.test_connection()
+        # Sanitize failure messages that may contain internal error details
+        if not success and "failed:" in message.lower():
+            return {
+                "success": False,
+                "message": "Connection test failed. Check server logs for details.",
+            }
         return {"success": success, "message": message}
     except Exception:
         return {"success": False, "message": "Connection test failed. Check logs for details."}

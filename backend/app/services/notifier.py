@@ -57,7 +57,7 @@ class NotificationService:
         await self._load_settings()
 
         if not self.enabled:
-            logger.debug(f"Notification not sent (disabled): {redact_sensitive_data(message)}")
+            logger.debug("Notification not sent (disabled): %s", redact_sensitive_data(message))
             return False
 
         try:
@@ -81,7 +81,7 @@ class NotificationService:
                     headers=headers,
                 )
                 response.raise_for_status()
-                logger.info(f"Notification sent: {redact_sensitive_data(message[:50])}")
+                logger.info("Notification sent: %s", redact_sensitive_data(message[:50]))
                 return True
 
         except httpx.HTTPError as e:

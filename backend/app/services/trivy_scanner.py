@@ -10,6 +10,7 @@ from docker.errors import DockerException
 
 from app.config import settings
 from app.services.docker_client import DockerService
+from app.utils.log_redaction import sanitize_for_log
 from app.utils.timezone import get_now
 
 logger = logging.getLogger(__name__)
@@ -211,7 +212,10 @@ class TrivyScanner:
                 return None
 
             logger.info(
-                f"Scanning image: {image} (secrets: {scan_secrets}, skip_db_update: {skip_db_update})"
+                "Scanning image: %s (secrets: %s, skip_db_update: %s)",
+                sanitize_for_log(image),
+                scan_secrets,
+                skip_db_update,
             )
             start_time = get_now()
 
@@ -319,7 +323,10 @@ class TrivyScanner:
                 return 1, None, 0.0
 
             logger.info(
-                f"Scanning image: {image} (mode: client, secrets: {scan_secrets}, skip_db_update: {skip_db_update})"
+                "Scanning image: %s (mode: client, secrets: %s, skip_db_update: %s)",
+                sanitize_for_log(image),
+                scan_secrets,
+                skip_db_update,
             )
             start_time = get_now()
 

@@ -182,8 +182,12 @@ async def perform_image_compliance_scan(
 
             await db.commit()
             logger.info(
-                f"Image misconfiguration scan completed: {image_name} - {compliance_score:.1f}% score, "
-                f"{failed} critical/high, {info} medium/low"
+                "Image misconfiguration scan completed: %s - %.1f%% score, "
+                "%d critical/high, %d medium/low",
+                sanitize_for_log(image_name),
+                compliance_score,
+                failed,
+                info,
             )
 
             success = True
@@ -363,7 +367,9 @@ async def trigger_image_scan(
     )
 
     logger.info(
-        "Triggered image misconfiguration scan for %s by %s", normalized_image, user.username
+        "Triggered image misconfiguration scan for %s by %s",
+        sanitize_for_log(normalized_image),
+        sanitize_for_log(user.username),
     )
 
     return {"message": "Image misconfiguration scan started", "image_name": normalized_image}
@@ -403,7 +409,7 @@ async def trigger_image_scan_all(
     logger.info(
         "Triggered batch image misconfiguration scan for %d images by %s",
         len(image_map),
-        user.username,
+        sanitize_for_log(user.username),
     )
 
     return {"message": "Batch image misconfiguration scan started", "image_count": len(image_map)}
@@ -698,7 +704,10 @@ async def ignore_image_finding(
     await db.refresh(finding)
 
     logger.info(
-        f"Marked image compliance finding {finding.check_id} for {finding.image_name} as ignored by {user.username}"
+        "Marked image compliance finding %s for %s as ignored by %s",
+        sanitize_for_log(finding.check_id),
+        sanitize_for_log(finding.image_name),
+        sanitize_for_log(user.username),
     )
 
     return {
@@ -746,7 +755,10 @@ async def unignore_image_finding(
     await db.refresh(finding)
 
     logger.info(
-        f"Unmarked image compliance finding {finding.check_id} for {finding.image_name} as ignored by {user.username}"
+        "Unmarked image compliance finding %s for %s as ignored by %s",
+        sanitize_for_log(finding.check_id),
+        sanitize_for_log(finding.image_name),
+        sanitize_for_log(user.username),
     )
 
     return {

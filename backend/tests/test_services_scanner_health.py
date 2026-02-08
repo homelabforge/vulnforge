@@ -192,5 +192,5 @@ class TestScannerHealthMonitor:
         assert summary["available"] is False
         assert summary["supports_offline"] is False
         assert "error" in summary
-        assert "database corrupted" in summary["error"]
+        assert "Health check failed" in summary["error"]
         assert "health" not in summary

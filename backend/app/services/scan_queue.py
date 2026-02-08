@@ -511,7 +511,7 @@ class ScanQueue:
                     container = result.scalar_one_or_none()
                     if not container:
                         logger.error(f"Container {job.container_id} not found in database")
-                        return
+                        return None
 
                     # Refresh image tag from Docker before scanning
                     live_container = docker_service.get_container(container.name)
