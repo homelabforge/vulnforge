@@ -186,4 +186,4 @@ class ActivityLogRepository:
         result = await self.db.execute(stmt)
         await self.db.commit()
 
-        return result.rowcount
+        return result.rowcount  # type: ignore[union-attr]

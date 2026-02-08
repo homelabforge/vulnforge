@@ -7,8 +7,7 @@ import logging
 import tarfile
 from typing import Any
 
-import docker
-from docker.errors import DockerException
+from docker.errors import DockerException, NotFound
 
 from app.config import settings
 from app.services.docker_client import DockerService
@@ -65,7 +64,7 @@ class DiveService:
 
         try:
             dive_container = self.docker_service.client.containers.get(settings.dive_container_name)
-        except docker.errors.NotFound:
+        except NotFound:
             raise DiveError(
                 f"Dive container '{settings.dive_container_name}' not found. "
                 "Please ensure the Dive container is running."
@@ -111,7 +110,10 @@ class DiveService:
                     )
                     archive_bytes = b"".join(tar_stream)
                     tar = tarfile.open(fileobj=io.BytesIO(archive_bytes))
-                    json_content = tar.extractfile(tar.getmembers()[0]).read()
+                    member_file = tar.extractfile(tar.getmembers()[0])
+                    if member_file is None:
+                        raise DiveError("Failed to extract Dive JSON output from archive")
+                    json_content = member_file.read()
                     dive_data = json.loads(json_content)
                 finally:
                     await asyncio.to_thread(

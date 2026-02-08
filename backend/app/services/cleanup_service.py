@@ -38,7 +38,9 @@ class CleanupService:
         """Internal method that performs cleanup with a given session."""
         try:
             settings_manager = SettingsManager(db)
-            retention_days = await settings_manager.get_int("keep_scan_history_days", default=90)
+            retention_days = (
+                await settings_manager.get_int("keep_scan_history_days", default=90) or 90
+            )
 
             # Calculate cutoff date
             cutoff_date = get_now() - timedelta(days=retention_days)
@@ -108,7 +110,7 @@ class CleanupService:
     async def _get_stats_with_session(db: AsyncSession) -> dict:
         """Internal method that gets cleanup stats with a given session."""
         settings_manager = SettingsManager(db)
-        retention_days = await settings_manager.get_int("keep_scan_history_days", default=90)
+        retention_days = await settings_manager.get_int("keep_scan_history_days", default=90) or 90
 
         cutoff_date = get_now() - timedelta(days=retention_days)
 

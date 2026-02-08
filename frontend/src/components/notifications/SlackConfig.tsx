@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { Hash, Eye, EyeOff, ExternalLink, Loader2 } from 'lucide-react';
+import { Hash, Eye, EyeOff, ExternalLink } from 'lucide-react';
 import { HelpTooltip } from '@/components/HelpTooltip';
+import { Toggle } from '@/components/Toggle';
+import { TestConnectionButton } from './TestConnectionButton';
+import type { NotificationSettings } from './types';
 
 interface SlackConfigProps {
-  settings: Record<string, unknown>;
+  settings: NotificationSettings;
   onSettingChange: (key: string, value: boolean) => void;
   onTextChange: (key: string, value: string) => void;
   onTest: () => Promise<void>;
@@ -21,8 +24,8 @@ export function SlackConfig({
 }: SlackConfigProps) {
   const [showWebhook, setShowWebhook] = useState(false);
 
-  const isEnabled = settings.slack_enabled === 'true' || settings.slack_enabled === true;
-  const webhookUrl = (settings.slack_webhook_url as string) || '';
+  const isEnabled = settings.slack_enabled;
+  const webhookUrl = settings.slack_webhook_url;
 
   return (
     <div className="bg-vuln-surface border border-vuln-border rounded-lg p-6">
@@ -51,16 +54,7 @@ export function SlackConfig({
                 Send notifications to a Slack channel
               </p>
             </div>
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={isEnabled}
-                onChange={(e) => onSettingChange('slack_enabled', e.target.checked)}
-                disabled={saving}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </div>
+            <Toggle checked={isEnabled} onChange={(v) => onSettingChange('slack_enabled', v)} disabled={saving} />
           </label>
         </div>
 
@@ -93,21 +87,7 @@ export function SlackConfig({
           </p>
         </div>
 
-        {/* Test Button */}
-        <button
-          onClick={onTest}
-          disabled={!isEnabled || testing || !webhookUrl}
-          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {testing ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Testing...
-            </>
-          ) : (
-            'Test Connection'
-          )}
-        </button>
+        <TestConnectionButton onTest={onTest} testing={testing} disabled={!isEnabled || !webhookUrl} />
 
         {/* Info Box */}
         <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">

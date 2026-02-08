@@ -58,7 +58,11 @@ async def get_activities(
     # Get event type counts (for filter chips)
     event_type_counts = await repository.count_by_type()
 
-    return ActivityList(activities=activities, total=total, event_type_counts=event_type_counts)
+    return ActivityList(
+        activities=[ActivityLog.model_validate(a) for a in activities],
+        total=total,
+        event_type_counts=event_type_counts,
+    )
 
 
 @router.get("/types", response_model=ActivityTypesResponse)

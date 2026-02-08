@@ -35,7 +35,7 @@ class TestActivityLogger:
         # Act
         await logger.log_scan_completed(
             container_name="nginx-prod",
-            container_id="abc123",
+            container_id=123,
             scan_id=1,
             duration=5.2,
             total_vulns=15,
@@ -71,7 +71,7 @@ class TestActivityLogger:
         # Act
         await logger.log_scan_failed(
             container_name="nginx-prod",
-            container_id="abc123",
+            container_id=123,
             error_message="Trivy returned exit code 1",
             scan_id=1,
         )
@@ -101,7 +101,7 @@ class TestActivityLogger:
         # Act
         await logger.log_secret_detected(
             container_name="app-backend",
-            container_id="def456",
+            container_id=456,
             scan_id=2,
             total_secrets=5,
             critical_count=2,
@@ -134,7 +134,7 @@ class TestActivityLogger:
         # Act
         await logger.log_high_severity_found(
             container_name="web-server",
-            container_id="ghi789",
+            container_id=789,
             scan_id=3,
             critical_count=3,
             high_count=7,
@@ -165,7 +165,7 @@ class TestActivityLogger:
         # Act
         await logger.log_container_discovered(
             container_name="redis-cache",
-            container_id="jkl012",
+            container_id=12,
             image="redis",
             image_tag="7.2-alpine",
             is_running=True,
@@ -226,7 +226,7 @@ class TestActivityLogger:
         # Act
         await logger.log_container_status_changed(
             container_name="database",
-            container_id="mno345",
+            container_id=345,
             old_status="running",
             new_status="stopped",
         )
@@ -454,7 +454,7 @@ class TestActivityLoggerErrorHandling:
         try:
             await logger.log_scan_completed(
                 container_name="test",
-                container_id="test123",
+                container_id=999,
                 scan_id=1,
                 duration=1.0,
                 total_vulns=0,

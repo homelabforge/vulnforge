@@ -2,7 +2,9 @@
  * About Page - Application information and credits
  */
 
+import { useEffect, useState } from "react";
 import { Shield, CheckCircle, FileCheck, Clock, Database, Code, Layers, Sparkles } from "lucide-react";
+import { systemApi } from "../lib/api";
 
 const featureGroups = [
   {
@@ -71,6 +73,12 @@ const projectStats = [
 ];
 
 export function About() {
+  const [version, setVersion] = useState<string>("...");
+
+  useEffect(() => {
+    systemApi.getAppInfo().then((info) => setVersion(info.version)).catch(() => setVersion("unknown"));
+  }, []);
+
   return (
     <div className="max-w-5xl mx-auto">
       {/* Header */}
@@ -81,7 +89,7 @@ export function About() {
         <h1 className="text-4xl font-bold text-vuln-text mb-3">VulnForge</h1>
         <p className="text-xl text-vuln-text-muted">Container security insights for your homelab</p>
         <div className="mt-4 inline-block px-3 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full">
-          <span className="text-blue-500 font-semibold">Version 3.3.0</span>
+          <span className="text-blue-500 font-semibold">Version {version}</span>
         </div>
       </div>
 
@@ -210,7 +218,7 @@ export function About() {
 
       {/* Footer */}
       <div className="text-center mt-12 pb-8">
-        <p className="text-vuln-text-disabled text-sm">VulnForge v3.3.0 • Built with AI collaborators • November 2025</p>
+        <p className="text-vuln-text-disabled text-sm">VulnForge v{version} • Built with AI collaborators</p>
         <p className="text-vuln-text-disabled text-xs mt-2">Deployed at vulnforge.starett.net</p>
       </div>
     </div>

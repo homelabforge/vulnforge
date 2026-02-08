@@ -1,5 +1,7 @@
 """System information API endpoints."""
 
+from importlib.metadata import version as pkg_version
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -9,6 +11,12 @@ from app.services.docker_hub import get_docker_hub_client
 from app.services.trivy_scanner import TrivyScanner
 
 router = APIRouter()
+
+# Read version from installed package metadata (works in Docker / site-packages)
+try:
+    _APP_VERSION = pkg_version("vulnforge")
+except Exception:
+    _APP_VERSION = "0.0.0"
 
 
 class ScannerInfo(BaseModel):
@@ -31,6 +39,19 @@ class ScannersInfoResponse(BaseModel):
     """Response model for all scanners info."""
 
     scanners: list[ScannerInfo]
+
+
+class AppInfoResponse(BaseModel):
+    """Application version and metadata."""
+
+    name: str
+    version: str
+
+
+@router.get("/info", response_model=AppInfoResponse)
+async def get_app_info() -> AppInfoResponse:
+    """Get application name and version."""
+    return AppInfoResponse(name="VulnForge", version=_APP_VERSION)
 
 
 @router.get("/trivy-db-info")

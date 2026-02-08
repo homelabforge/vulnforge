@@ -4,56 +4,45 @@ The target field stores the container or image name for per-target checks,
 enabling the native compliance checker to show results per container/image.
 """
 
-import os
-from pathlib import Path
+import logging
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 
-def upgrade():
+async def upgrade(connection):
     """Add target column to compliance_findings table."""
-    # Get database path from environment
-    data_dir = Path(os.getenv("DATA_DIR", "/data"))
-    database_path = data_dir / "vulnforge.db"
-    database_url = f"sqlite:///{database_path}"
+    # Check if column already exists
+    result = await connection.execute(text("PRAGMA table_info(compliance_findings)"))
+    existing_columns = {row[1] for row in result.fetchall()}
 
-    engine = create_engine(database_url)
+    if "target" in existing_columns:
+        logger.info("  → Column 'target' already exists, skipping")
+        return
 
-    with engine.begin() as conn:
-        # Check if column already exists
-        result = conn.execute(text("PRAGMA table_info(compliance_findings)"))
-        existing_columns = {row[1] for row in result.fetchall()}
+    # Add target column
+    await connection.execute(
+        text("""
+            ALTER TABLE compliance_findings
+            ADD COLUMN target VARCHAR(255)
+        """)
+    )
+    logger.info("  Added 'target' column to compliance_findings")
 
-        if "target" in existing_columns:
-            print("  → Column 'target' already exists, skipping")
-            return
-
-        # Add target column
-        conn.execute(
-            text("""
-                ALTER TABLE compliance_findings
-                ADD COLUMN target VARCHAR(255)
-            """)
+    # Create index for target column
+    result = await connection.execute(
+        text(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='ix_compliance_findings_target'"
         )
-        print("  Added 'target' column to compliance_findings")
-
-        # Create index for target column
-        result = conn.execute(
-            text(
-                "SELECT name FROM sqlite_master WHERE type='index' AND name='ix_compliance_findings_target'"
-            )
+    )
+    if not result.fetchone():
+        await connection.execute(
+            text("CREATE INDEX ix_compliance_findings_target ON compliance_findings(target)")
         )
-        if not result.fetchone():
-            conn.execute(
-                text("CREATE INDEX ix_compliance_findings_target ON compliance_findings(target)")
-            )
-            print("  Created index on 'target' column")
+        logger.info("  Created index on 'target' column")
 
 
-def downgrade():
+async def downgrade(connection):
     """Remove target column (not supported in SQLite)."""
-    print("  Downgrade not supported for SQLite (cannot drop columns)")
-
-
-if __name__ == "__main__":
-    upgrade()
+    logger.info("  Downgrade not supported for SQLite (cannot drop columns)")

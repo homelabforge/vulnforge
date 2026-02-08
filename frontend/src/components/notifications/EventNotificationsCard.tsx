@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Bell, ChevronDown, ChevronRight, Shield, AlertTriangle, Settings, Settings2 } from 'lucide-react';
 import { HelpTooltip } from '@/components/HelpTooltip';
+import { Toggle } from '@/components/Toggle';
+import type { NotificationSettings } from './types';
 
 interface EventGroup {
   id: string;
   label: string;
   icon: typeof Bell;
-  enabledKey: string;
-  events: { key: string; label: string; description: string }[];
+  enabledKey: keyof NotificationSettings;
+  events: { key: keyof NotificationSettings; label: string; description: string }[];
 }
 
 // VulnForge-specific event groups
@@ -48,7 +50,7 @@ const eventGroups: EventGroup[] = [
 ];
 
 interface EventNotificationsCardProps {
-  settings: Record<string, unknown>;
+  settings: NotificationSettings;
   onSettingChange: (key: string, value: boolean) => void;
   onTextChange: (key: string, value: string) => void;
   saving: boolean;
@@ -78,13 +80,10 @@ export function EventNotificationsCard({
   };
 
   const getEnabledCount = (group: EventGroup): { enabled: number; total: number } => {
-    const groupEnabled = settings[group.enabledKey] === 'true' || settings[group.enabledKey] === true;
-    if (!groupEnabled) {
+    if (!settings[group.enabledKey]) {
       return { enabled: 0, total: group.events.length };
     }
-    const enabled = group.events.filter(
-      (e) => settings[e.key] === 'true' || settings[e.key] === true
-    ).length;
+    const enabled = group.events.filter((e) => Boolean(settings[e.key])).length;
     return { enabled, total: group.events.length };
   };
 
@@ -128,7 +127,7 @@ export function EventNotificationsCard({
         {eventGroups.map((group) => {
           const Icon = group.icon;
           const isExpanded = expandedGroups.has(group.id);
-          const isGroupEnabled = settings[group.enabledKey] === 'true' || settings[group.enabledKey] === true;
+          const isGroupEnabled = Boolean(settings[group.enabledKey]);
           const { enabled, total } = getEnabledCount(group);
 
           return (
@@ -157,25 +156,14 @@ export function EventNotificationsCard({
                     </span>
                   )}
                 </div>
-                <label className="flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isGroupEnabled}
-                    onChange={(e) => onSettingChange(group.enabledKey, e.target.checked)}
-                    disabled={saving}
-                    className="sr-only peer"
-                  />
-                  <div className="w-10 h-5 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 relative"></div>
-                </label>
+                <Toggle checked={isGroupEnabled} onChange={(v) => onSettingChange(group.enabledKey, v)} disabled={saving} />
               </div>
 
               {/* Events List */}
               {isExpanded && (
                 <div className="divide-y divide-vuln-border">
                   {group.events.map((event) => {
-                    const isEventEnabled =
-                      isGroupEnabled &&
-                      (settings[event.key] === 'true' || settings[event.key] === true);
+                    const isEventEnabled = isGroupEnabled && Boolean(settings[event.key]);
 
                     return (
                       <div
@@ -192,16 +180,7 @@ export function EventNotificationsCard({
                             {event.description}
                           </p>
                         </div>
-                        <label className="flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={isEventEnabled}
-                            onChange={(e) => onSettingChange(event.key, e.target.checked)}
-                            disabled={saving || !isGroupEnabled}
-                            className="sr-only peer"
-                          />
-                          <div className="w-10 h-5 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50 relative"></div>
-                        </label>
+                        <Toggle checked={isEventEnabled} onChange={(v) => onSettingChange(event.key, v)} disabled={saving || !isGroupEnabled} />
                       </div>
                     );
                   })}
@@ -241,7 +220,7 @@ export function EventNotificationsCard({
                 type="number"
                 min="1"
                 max="10"
-                value={String(settings.notification_retry_attempts ?? '3')}
+                value={settings.notification_retry_attempts ?? '3'}
                 onChange={(e) => onTextChange('notification_retry_attempts', e.target.value)}
                 disabled={saving}
                 className="w-20 px-2 py-1 text-sm bg-vuln-bg border border-vuln-border rounded text-vuln-text focus:outline-none focus:border-blue-500"
@@ -257,7 +236,7 @@ export function EventNotificationsCard({
                 min="0.5"
                 max="30"
                 step="0.5"
-                value={String(settings.notification_retry_delay ?? '2.0')}
+                value={settings.notification_retry_delay ?? '2.0'}
                 onChange={(e) => onTextChange('notification_retry_delay', e.target.value)}
                 disabled={saving}
                 className="w-20 px-2 py-1 text-sm bg-vuln-bg border border-vuln-border rounded text-vuln-text focus:outline-none focus:border-blue-500"

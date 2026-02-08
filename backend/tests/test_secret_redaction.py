@@ -179,6 +179,7 @@ class TestSecretScanningIntegration:
         )
 
         # Verify no actual secret data in fields
+        assert secret.code_snippet is not None
         assert "***REDACTED***" in secret.code_snippet
         # The match field contains pattern, not actual key
         assert "sk_" not in secret.code_snippet

@@ -2,33 +2,11 @@ import { useState, useEffect } from "react";
 import { Download, Trash2, RefreshCw, Calendar, HardDrive, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { handleApiError } from "@/lib/errorHandler";
-
-// Simple relative time formatter
-const formatRelativeTime = (dateString: string): string => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
-  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
-  return date.toLocaleDateString();
-};
-
-interface Backup {
-  filename: string;
-  path: string;
-  size_bytes: number;
-  size_mb: number;
-  created_at: string;
-}
+import { maintenanceApi, type BackupEntry } from "@/lib/api";
+import { formatRelativeDate } from "@/lib/utils";
 
 export function DatabaseBackupSection() {
-  const [backups, setBackups] = useState<Backup[]>([]);
+  const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -40,13 +18,10 @@ export function DatabaseBackupSection() {
   const loadBackups = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/v1/maintenance/backup/list");
-      if (response.ok) {
-        const data = await response.json();
-        setBackups(data.backups || []);
-      }
+      const data = await maintenanceApi.listBackups();
+      setBackups(data.backups || []);
     } catch (error) {
-      console.error("Failed to load backups:", error);
+      handleApiError(error, "Failed to load backups");
     } finally {
       setLoading(false);
     }
@@ -55,23 +30,10 @@ export function DatabaseBackupSection() {
   const createBackup = async () => {
     try {
       setCreating(true);
-      const response = await fetch("/api/v1/maintenance/backup", {
-        method: "POST",
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        toast.success(`Backup created: ${data.filename} (${data.size_mb} MB)`);
-        await loadBackups(); // Reload the list
-      } else {
-        const errorData = await response.json();
-        toast.error(errorData.detail || "Backup failed", {
-          description: errorData.suggestions?.[0],
-          duration: 6000,
-        });
-      }
+      const data = await maintenanceApi.createBackup();
+      toast.success(`Backup created: ${data.filename} (${data.size_mb} MB)`);
+      await loadBackups();
     } catch (error) {
-      console.error("Failed to create backup", error);
       handleApiError(error, "Failed to create backup");
     } finally {
       setCreating(false);
@@ -80,24 +42,17 @@ export function DatabaseBackupSection() {
 
   const downloadBackup = async (filename: string) => {
     try {
-      const response = await fetch(`/api/v1/maintenance/backup/download/${filename}`);
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        toast.success("Backup downloaded");
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        toast.error(errorData.detail || "Download failed");
-      }
+      const blob = await maintenanceApi.downloadBackup(filename);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success("Backup downloaded");
     } catch (error) {
-      console.error("Failed to download backup", error);
       handleApiError(error, "Failed to download backup");
     }
   };
@@ -108,21 +63,10 @@ export function DatabaseBackupSection() {
     }
 
     try {
-      const response = await fetch(`/api/v1/maintenance/backup/${filename}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        toast.success("Backup deleted");
-        await loadBackups(); // Reload the list
-      } else {
-        const errorData = await response.json();
-        toast.error(errorData.detail || "Delete failed", {
-          description: errorData.suggestions?.[0],
-        });
-      }
+      await maintenanceApi.deleteBackup(filename);
+      toast.success("Backup deleted");
+      await loadBackups();
     } catch (error) {
-      console.error("Failed to delete backup", error);
       handleApiError(error, "Failed to delete backup");
     }
   };
@@ -147,31 +91,18 @@ Type 'RESTORE' to confirm:`;
 
     try {
       toast.loading("Restoring database...", { id: "restore" });
-      const response = await fetch(`/api/v1/maintenance/backup/restore/${filename}`, {
-        method: "POST",
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        toast.success(
-          `Database restored! Safety backup created: ${data.safety_backup}. Reloading...`,
-          { id: "restore", duration: 5000 }
-        );
-        // Reload the page after a short delay
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
-      } else {
-        const errorData = await response.json();
-        toast.error(errorData.detail || "Restore failed", {
-          id: "restore",
-          description: errorData.suggestions?.[0],
-          duration: 6000,
-        });
-      }
+      const data = await maintenanceApi.restoreBackup(filename);
+      toast.success(
+        `Database restored! Safety backup created: ${data.safety_backup}. Reloading...`,
+        { id: "restore", duration: 5000 }
+      );
+      // Reload the page after a short delay
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     } catch (error) {
-      console.error("Failed to restore backup", error);
-      toast.error("Failed to restore backup", { id: "restore" });
+      handleApiError(error, "Failed to restore backup");
+      toast.dismiss("restore");
     }
   };
 
@@ -237,7 +168,7 @@ Type 'RESTORE' to confirm:`;
                     </span>
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
-                      {formatRelativeTime(backup.created_at)}
+                      {formatRelativeDate(backup.created_at)}
                     </span>
                   </div>
                 </div>

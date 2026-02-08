@@ -95,6 +95,15 @@ codeql-databases/
 *.sarif
 .codeql/
 
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/e2e/.auth/
+frontend/blob-report/
+
+# Coverage
+frontend/coverage/
+
 # Root-level npm artifacts (frontend uses Bun)
 /package.json
 /package-lock.json

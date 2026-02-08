@@ -1,8 +1,11 @@
 """OIDC state model for OAuth2/OIDC authentication flows."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import Column, DateTime, Index, String
+from sqlalchemy import DateTime, Index, String
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
@@ -16,11 +19,11 @@ class OIDCState(Base):
 
     __tablename__ = "oidc_states"
 
-    state = Column(String(128), primary_key=True, index=True, nullable=False)
-    nonce = Column(String(128), nullable=False)
-    redirect_uri = Column(String(512), nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
+    state: Mapped[str] = mapped_column(String(128), primary_key=True, index=True, nullable=False)
+    nonce: Mapped[str] = mapped_column(String(128), nullable=False)
+    redirect_uri: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (Index("idx_oidc_states_expires_at", "expires_at"),)
 

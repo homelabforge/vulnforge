@@ -310,6 +310,7 @@ class TestSecretRepository:
 
         assert secret.id is not None
         assert secret.rule_id == "generic-api-key"
+        assert secret.code_snippet is not None
         assert "***REDACTED***" in secret.code_snippet
 
     async def test_secrets_are_redacted(self, scan_result, db_session):
@@ -335,5 +336,6 @@ class TestSecretRepository:
         result = await db_session.execute(select(Secret).where(Secret.id == secret.id))
         found = result.scalar_one()
 
+        assert found.code_snippet is not None
         assert "***REDACTED***" in found.code_snippet
         assert "AKIA" not in found.code_snippet or "***" in found.match

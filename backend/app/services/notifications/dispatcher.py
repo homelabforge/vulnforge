@@ -87,7 +87,8 @@ class NotificationDispatcher:
             return False
 
         # Check specific event toggle
-        return await self.settings.get_bool(event_key, default=True)
+        event_enabled = await self.settings.get_bool(event_key, default=True)
+        return event_enabled if event_enabled is not None else True
 
     async def _get_enabled_services(self) -> list[NotificationService]:
         """Get list of enabled and configured notification services."""
@@ -146,12 +147,13 @@ class NotificationDispatcher:
         # Check email
         if await self.settings.get_bool("email_enabled", default=False):
             smtp_host = await self.settings.get("email_smtp_host")
-            smtp_port = await self.settings.get_int("email_smtp_port", default=587)
+            smtp_port = await self.settings.get_int("email_smtp_port", default=587) or 587
             smtp_user = await self.settings.get("email_smtp_user")
             smtp_password = await self.settings.get("email_smtp_password")
             from_address = await self.settings.get("email_from")
             to_address = await self.settings.get("email_to")
-            use_tls = await self.settings.get_bool("email_smtp_tls", default=True)
+            use_tls_val = await self.settings.get_bool("email_smtp_tls", default=True)
+            use_tls = use_tls_val if use_tls_val is not None else True
             if smtp_host and smtp_user and smtp_password and from_address and to_address:
                 services.append(
                     EmailNotificationService(
@@ -212,7 +214,7 @@ class NotificationDispatcher:
             final_tags = list(final_tags) + ["VulnForge"]
 
         # Load global retry settings once
-        max_attempts = await self.settings.get_int("notification_retry_attempts", default=3)
+        max_attempts = await self.settings.get_int("notification_retry_attempts", default=3) or 3
         base_delay = float(await self.settings.get("notification_retry_delay") or "2.0")
 
         # Send to all enabled services

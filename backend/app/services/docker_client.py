@@ -6,7 +6,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import docker
-from docker.errors import DockerException
+from docker.errors import DockerException, NotFound
 
 from app.config import settings
 
@@ -89,7 +89,10 @@ class DockerService:
             for container in containers:
                 # Get image info
                 image = container.image
-                image_tags = image.tags if image.tags else [f"{image.id[:12]}"]
+                if image is None:
+                    continue
+                image_id = image.id or "unknown"
+                image_tags = image.tags if image.tags else [f"{image_id[:12]}"]
                 image_name, image_tag = self._parse_image_tag(image_tags[0])
 
                 result.append(
@@ -99,7 +102,7 @@ class DockerService:
                         "name": container.name,
                         "image": image_name,
                         "image_tag": image_tag,
-                        "image_id": image.id,
+                        "image_id": image_id,
                         "image_full": image_tags[0],
                         "status": container.status,
                         "is_running": container.status == "running",
@@ -126,7 +129,10 @@ class DockerService:
         try:
             container = self.client.containers.get(container_name)
             image = container.image
-            image_tags = image.tags if image.tags else [f"{image.id[:12]}"]
+            if image is None:
+                return None
+            image_id = image.id or "unknown"
+            image_tags = image.tags if image.tags else [f"{image_id[:12]}"]
             image_name, image_tag = self._parse_image_tag(image_tags[0])
 
             return {
@@ -134,12 +140,12 @@ class DockerService:
                 "name": container.name,
                 "image": image_name,
                 "image_tag": image_tag,
-                "image_id": image.id,
+                "image_id": image_id,
                 "image_full": image_tags[0],
                 "status": container.status,
                 "is_running": container.status == "running",
             }
-        except docker.errors.NotFound:
+        except NotFound:
             logger.warning(f"Container {container_name} not found")
             return None
         except DockerException as e:
@@ -159,7 +165,7 @@ class DockerService:
         try:
             self.client.containers.get(container_name)
             return True
-        except docker.errors.NotFound:
+        except NotFound:
             return False
         except DockerException as e:
             logger.error(f"Error checking container {container_name}: {e}")
@@ -174,7 +180,7 @@ class DockerService:
         """
         try:
             return self.client.containers.get(settings.trivy_container_name)
-        except docker.errors.NotFound:
+        except NotFound:
             logger.error(f"Trivy container '{settings.trivy_container_name}' not found")
             return None
         except DockerException as e:

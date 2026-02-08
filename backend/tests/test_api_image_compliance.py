@@ -253,9 +253,9 @@ class TestGetSummary:
         assert response.status_code == 200
         data = response.json()
         assert data["total_images_scanned"] == 0
-        assert data["average_compliance_score"] is None
-        assert data["critical_findings"] == 0
-        assert data["total_active_failures"] == 0
+        assert data["compliance_score"] is None
+        assert data["fatal_count"] == 0
+        assert data["failed_checks"] == 0
 
     @pytest.mark.asyncio
     async def test_get_summary_with_scans(
@@ -293,10 +293,10 @@ class TestGetSummary:
         assert response.status_code == 200
         data = response.json()
         assert data["total_images_scanned"] == 2
-        assert isinstance(data["average_compliance_score"], (int, float))
-        assert data["average_compliance_score"] >= 85
-        assert data["critical_findings"] >= 2
-        assert data["total_active_failures"] >= 12
+        assert isinstance(data["compliance_score"], (int, float))
+        assert data["compliance_score"] >= 85
+        assert data["fatal_count"] >= 2
+        assert data["failed_checks"] >= 12
 
     @pytest.mark.asyncio
     async def test_get_summary_filters_completed_only(

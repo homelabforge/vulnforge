@@ -122,11 +122,10 @@ async def scheduled_kev_refresh_task():
         # Update last refresh timestamp in settings
         async with async_session_maker() as db:
             settings_manager = SettingsManager(db)
+            last_refresh = kev_service.get_last_refresh()
             await settings_manager.set(
                 "kev_last_refresh",
-                kev_service.get_last_refresh().isoformat()
-                if kev_service.get_last_refresh()
-                else "",
+                last_refresh.isoformat() if last_refresh else "",
             )
 
         # Re-check all existing vulnerabilities against updated KEV catalog

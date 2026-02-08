@@ -163,8 +163,11 @@ class NotificationService:
             notify_on_critical = await settings_manager.get_bool(
                 "notify_on_critical", default=app_settings.notify_on_critical
             )
-            notify_threshold_critical = await settings_manager.get_int(
-                "notify_threshold_critical", default=app_settings.notify_threshold_critical
+            notify_threshold_critical = (
+                await settings_manager.get_int(
+                    "notify_threshold_critical", default=app_settings.notify_threshold_critical
+                )
+                or app_settings.notify_threshold_critical
             )
 
         if not notify_on_critical:
@@ -325,7 +328,7 @@ class LegacyNotifier(NotificationService):
         else:
             await super()._load_settings()
 
-    async def notify_scan_complete(
+    async def notify_scan_complete(  # type: ignore[override]
         self, container_name: str, critical: int, high: int, medium: int, low: int
     ) -> bool:
         if self._legacy_settings:

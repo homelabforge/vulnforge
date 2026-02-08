@@ -8,6 +8,7 @@ import { useAllSecrets, useSecretsSummary, useBulkUpdateSecrets } from "@/hooks/
 import { getSeverityBadge } from "@/lib/utils";
 import { toast } from "sonner";
 import { handleApiError } from "@/lib/errorHandler";
+import { secretsApi } from "@/lib/api";
 
 export function Secrets() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -48,16 +49,11 @@ export function Secrets() {
   };
 
   const handleExport = async (format: "csv" | "json") => {
-    const params = new URLSearchParams();
-    if (filters.severity) params.append("severity", filters.severity);
-    if (filters.category) params.append("category", filters.category);
-    params.append("format", format);
-
-    const url = `/api/v1/secrets/export?${params}`;
-
     try {
-      const response = await fetch(url);
-      const blob = await response.blob();
+      const blob = await secretsApi.export(format, {
+        severity: filters.severity || undefined,
+        category: filters.category || undefined,
+      });
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = downloadUrl;
@@ -68,7 +64,6 @@ export function Secrets() {
       window.URL.revokeObjectURL(downloadUrl);
       toast.success(`Exported ${format.toUpperCase()} file`);
     } catch (error) {
-      console.error("Failed to export secrets", error);
       handleApiError(error, "Export failed");
     }
   };

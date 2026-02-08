@@ -72,7 +72,7 @@ class TestListContainers:
 
             # Assert
             assert len(result) == 1
-            service.client.containers.list.assert_called_once_with(all=True)
+            service.client.containers.list.assert_called_once_with(all=True)  # type: ignore[attr-defined]
 
             container_data = result[0]
             assert container_data["name"] == "nginx-prod"
@@ -100,7 +100,7 @@ class TestListContainers:
             result = service.list_containers(all_containers=False)
 
             # Assert
-            service.client.containers.list.assert_called_once_with(all=False)
+            service.client.containers.list.assert_called_once_with(all=False)  # type: ignore[attr-defined]
             assert isinstance(result, list)
             assert len(result) == 0
 

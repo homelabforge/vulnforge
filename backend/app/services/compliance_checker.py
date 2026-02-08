@@ -535,8 +535,9 @@ class ComplianceChecker:
             seen_images: set[str] = set()
             images_to_check = []
             for container in containers:
-                if container.image and container.image.id not in seen_images:
-                    seen_images.add(container.image.id)
+                image_id = container.image.id if container.image else None
+                if image_id and image_id not in seen_images:
+                    seen_images.add(image_id)
                     images_to_check.append(container.image)
         except Exception as e:
             logger.error(f"Could not list images: {e}")

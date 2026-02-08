@@ -28,6 +28,73 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_SEVERITY_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+_MAX_VULNS = 200
+
+
+def _build_last_scan(scan, vulnerabilities) -> ContainerLastScan:
+    """Build a ContainerLastScan from a scan and its vulnerabilities."""
+    finished_at = None
+    if scan.scan_date:
+        finished_at = scan.scan_date
+        if scan.scan_duration_seconds is not None:
+            finished_at = scan.scan_date + timedelta(seconds=scan.scan_duration_seconds)
+
+    sorted_vulns = sorted(
+        vulnerabilities,
+        key=lambda v: (
+            _SEVERITY_RANK.get((v.severity or "").upper(), 9),
+            v.cve_id or "",
+        ),
+    )
+
+    seen_cves: set[str] = set()
+    cves: list[str] = []
+    vuln_summaries: list[ContainerScanVulnerability] = []
+
+    for vuln in sorted_vulns[:_MAX_VULNS]:
+        vuln_summaries.append(
+            ContainerScanVulnerability(
+                cve_id=vuln.cve_id,
+                severity=vuln.severity,
+                package_name=vuln.package_name,
+                installed_version=vuln.installed_version,
+                fixed_version=vuln.fixed_version,
+                is_fixable=vuln.is_fixable,
+                cvss_score=vuln.cvss_score,
+                title=vuln.title,
+            )
+        )
+        if vuln.cve_id and vuln.cve_id not in seen_cves:
+            cves.append(vuln.cve_id)
+            seen_cves.add(vuln.cve_id)
+
+    return ContainerLastScan(
+        id=scan.id,
+        status=scan.scan_status,
+        started_at=scan.scan_date,
+        finished_at=finished_at,
+        total_vulns=scan.total_vulns,
+        critical=scan.critical_count,
+        high=scan.high_count,
+        medium=scan.medium_count,
+        low=scan.low_count,
+        vulnerabilities=vuln_summaries,
+        cves=cves,
+    )
+
+
+def _build_vuln_summary(container) -> ContainerVulnerabilitySummary:
+    """Build a vulnerability summary from a container's denormalized counts."""
+    return ContainerVulnerabilitySummary(
+        total=container.total_vulns,
+        fixable=container.fixable_vulns,
+        critical=container.critical_count,
+        high=container.high_count,
+        medium=container.medium_count,
+        low=container.low_count,
+    )
+
 
 @router.get("/", response_model=ContainerList)
 async def list_containers(
@@ -46,71 +113,12 @@ async def list_containers(
     summaries: list[ContainerSummary] = []
     for container in containers:
         summary = ContainerSummary.model_validate(container)
-        summary.vulnerability_summary = ContainerVulnerabilitySummary(
-            total=container.total_vulns,
-            fixable=container.fixable_vulns,
-            critical=container.critical_count,
-            high=container.high_count,
-            medium=container.medium_count,
-            low=container.low_count,
-        )
+        summary.vulnerability_summary = _build_vuln_summary(container)
 
         scan_tuple = latest_scans.get(container.id)
         if scan_tuple:
             scan, vulnerabilities = scan_tuple
-
-            finished_at = None
-            if scan.scan_date:
-                finished_at = scan.scan_date
-                if scan.scan_duration_seconds is not None:
-                    finished_at = scan.scan_date + timedelta(seconds=scan.scan_duration_seconds)
-
-            seen_cves: set[str] = set()
-            cves: list[str] = []
-            vuln_summaries: list[ContainerScanVulnerability] = []
-
-            # Sort vulnerabilities by severity (critical -> low) then CVE for stable ordering
-            severity_rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
-            sorted_vulns = sorted(
-                vulnerabilities,
-                key=lambda v: (
-                    severity_rank.get((v.severity or "").upper(), 9),
-                    v.cve_id or "",
-                ),
-            )
-
-            max_vulns = 200
-            for vuln in sorted_vulns[:max_vulns]:
-                vuln_summaries.append(
-                    ContainerScanVulnerability(
-                        cve_id=vuln.cve_id,
-                        severity=vuln.severity,
-                        package_name=vuln.package_name,
-                        installed_version=vuln.installed_version,
-                        fixed_version=vuln.fixed_version,
-                        is_fixable=vuln.is_fixable,
-                        cvss_score=vuln.cvss_score,
-                        title=vuln.title,
-                    )
-                )
-
-                if vuln.cve_id and vuln.cve_id not in seen_cves:
-                    cves.append(vuln.cve_id)
-                    seen_cves.add(vuln.cve_id)
-
-            summary.last_scan = ContainerLastScan(
-                id=scan.id,
-                status=scan.scan_status,
-                started_at=scan.scan_date,
-                finished_at=finished_at,
-                total_vulns=scan.total_vulns,
-                critical=scan.critical_count,
-                high=scan.high_count,
-                medium=scan.medium_count,
-                low=scan.low_count,
-                vulnerabilities=vuln_summaries,
-                cves=cves,
-            )
+            summary.last_scan = _build_last_scan(scan, vulnerabilities)
 
         summaries.append(summary)
 
@@ -134,72 +142,13 @@ async def get_container(
         raise HTTPException(status_code=404, detail="Container not found")
 
     container_schema = ContainerSchema.model_validate(container)
-
-    container_schema.vulnerability_summary = ContainerVulnerabilitySummary(
-        total=container.total_vulns,
-        fixable=container.fixable_vulns,
-        critical=container.critical_count,
-        high=container.high_count,
-        medium=container.medium_count,
-        low=container.low_count,
-    )
+    container_schema.vulnerability_summary = _build_vuln_summary(container)
 
     latest_scan = await container_repo.get_latest_scans_with_vulnerabilities([container.id])
     scan_tuple = latest_scan.get(container.id)
     if scan_tuple:
         scan, vulnerabilities = scan_tuple
-
-        finished_at = None
-        if scan.scan_date:
-            finished_at = scan.scan_date
-            if scan.scan_duration_seconds is not None:
-                finished_at = scan.scan_date + timedelta(seconds=scan.scan_duration_seconds)
-
-        seen_cves: set[str] = set()
-        cves: list[str] = []
-        severity_rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
-
-        sorted_vulns = sorted(
-            vulnerabilities,
-            key=lambda v: (
-                severity_rank.get((v.severity or "").upper(), 9),
-                v.cve_id or "",
-            ),
-        )
-
-        vuln_summaries: list[ContainerScanVulnerability] = []
-        max_vulns = 200
-        for vuln in sorted_vulns[:max_vulns]:
-            vuln_summaries.append(
-                ContainerScanVulnerability(
-                    cve_id=vuln.cve_id,
-                    severity=vuln.severity,
-                    package_name=vuln.package_name,
-                    installed_version=vuln.installed_version,
-                    fixed_version=vuln.fixed_version,
-                    is_fixable=vuln.is_fixable,
-                    cvss_score=vuln.cvss_score,
-                    title=vuln.title,
-                )
-            )
-
-            if vuln.cve_id and vuln.cve_id not in seen_cves:
-                cves.append(vuln.cve_id)
-                seen_cves.add(vuln.cve_id)
-
-        container_schema.last_scan = ContainerLastScan(
-            id=scan.id,
-            status=scan.scan_status,
-            started_at=scan.scan_date,
-            finished_at=finished_at,
-            total_vulns=scan.total_vulns,
-            critical=scan.critical_count,
-            high=scan.high_count,
-            medium=scan.medium_count,
-            low=scan.low_count,
-            vulnerabilities=vuln_summaries,
-            cves=cves,
-        )
+        container_schema.last_scan = _build_last_scan(scan, vulnerabilities)
 
     return container_schema
 

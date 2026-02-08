@@ -7,6 +7,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **System Info Endpoint** - New `/api/v1/system/info` returns `{"name": "VulnForge", "version": "..."}`
+  - About page now fetches version dynamically instead of hardcoded "3.3.0"
+- **Frontend Unit Tests** - 110 tests across 7 files (0 → 110)
+  - `api.test.ts` (8): ApiError class coverage
+  - `utils.test.ts` (32): cn, formatDate, formatRelativeDate, getSeverityColor, formatBytes
+  - `errorHandler.test.ts` (28): getStatusMessage, formatErrorDetails, isRetryableError, handleApiError
+  - `Toggle.test.tsx` (9): Render, accessibility, disabled state
+  - `ContainerCard.test.tsx` (18): Badges, vuln counts, dive efficiency, scan states
+  - `ProtectedRoute.test.tsx` (7): Auth modes, redirects, returnUrl
+  - `ErrorBoundary.test.tsx` (8): Error display, clipboard copy, action buttons
+- **Backend Tests** - 122 new tests across 6 files (527 → 649)
+  - `test_api_api_keys.py` (15): CRUD, validation, auth
+  - `test_services_scan_queue.py` (24): Priority ordering, queue operations, helpers
+  - `test_services_oidc.py` (18): SSRF validation, state management, config
+  - `test_services_dispatcher.py` (18): Event routing, service discovery, tags
+  - `test_services_scanner_health.py` (8): Enums, dataclass, abstract contract
+  - `test_services_docker_bench_unit.py` (39): Parsing, categories, severity, scoring
+- **Playwright E2E Tests** - 17 tests across 6 spec files
+  - `auth.spec.ts` (4): Redirect, login, invalid login, returnUrl
+  - `dashboard.spec.ts` (3): Page load, discover, summary cards
+  - `navigation.spec.ts` (2): Full nav traversal, about page
+  - `settings.spec.ts` (2): Tab visibility, tab switching
+  - `containers.spec.ts` (3): Page load, discover button, search filter
+  - `compliance.spec.ts` (2): Page load, tabs
+- **CI Quality Gates** - Comprehensive CI pipeline
+  - Added ruff lint + format check to backend job
+  - Added pyright type checking to backend job
+  - Added pytest coverage with Codecov upload
+  - Added frontend test coverage with Codecov upload
+  - Added E2E test job with Playwright report artifacts
+  - Removed hacky `timeout 120` wrapper with proper `timeout-minutes: 15`
+- **Shared Components**
+  - `Toggle.tsx` (30 lines) - Accessible switch with `role="switch"`, `aria-checked`
+  - `TestConnectionButton.tsx` (32 lines) - Unified test button with Loader2 spinner
+  - `ContainerCard.tsx` (122 lines) - Container display card for Containers page
+- **Typed Notification Settings** - `NotificationSettings` interface (52 lines)
+  - Replaced `Record<string, unknown>` on all 8 notification component props
+  - Eliminated ~20 `as string` casts and ~15 dead dual-checks
+- **API Client Namespaces** - All `fetch()` consolidated into `api.ts`
+  - `complianceApi` (9 methods), `imageComplianceApi` (10 methods)
+  - `maintenanceApi` (5 methods), `secretsApi.export()`
+- **Auto-Save Hook** - `useAutoSave.ts` (51 lines)
+  - Debounced auto-save with initialization guard and payload diffing
+
+### Changed
+- **Settings Page Decomposed** - 1503 → 103 lines (thin shell)
+  - Extracted 5 tab components: SystemTab, ScanningTab, NotificationsTab, SecurityTab, DataTab
+  - Each tab owns its own state and auto-save (scoped deps instead of 60-dep monolithic effect)
+- **Compliance Page Decomposed** - 1052 → 317 lines
+  - Extracted 7 sub-components: ScanProgress, ScoreCard, CategoryBreakdown, TrendChart, FindingsFilters, FindingsTable, IgnoreModal
+  - Shared types in `compliance/types.ts`, utilities in `compliance/complianceUtils.tsx`
+- **Containers Page** - 467 → 274 lines via ContainerCard extraction
+- **scan_queue._process_scan() Decomposed** - 550 → 180 lines orchestrator
+  - Extracted: `_store_vulnerabilities_with_kev()`, `_store_secrets_with_fp_matching()`, `_notify_secrets_detected()`, `_run_dive_analysis()`, `_log_scan_activity()`, `_log_scan_failure()`
+  - Added `_as_int()` / `_as_bool()` static helpers
+- **Version Sourcing** - Switched from `tomllib` + `pyproject.toml` path to `importlib.metadata.version("vulnforge")`
+  - Fixes crash in Docker/installed environments where `pyproject.toml` doesn't exist
+- **Migration 006 Fixed** - Replaced synchronous `create_engine` with async `upgrade(connection)` pattern, `print()` with `logging`
+- **Auth Middleware** - JWT cookie presence log downgraded INFO → DEBUG
+- **database.py** - Migrated to `pathlib` from `os.path`; removed dead legacy migration code (~150 lines)
+- **Pyright** - 193 → 0 errors at `standard` mode
+  - Converted 2 remaining legacy models to `Mapped[T]`/`mapped_column()` (api_key, oidc_state)
+  - Fixed 44 route errors, 46 service errors, 8 repository errors, 56 test errors
+  - 6 justified type suppressions (slowapi, SQLAlchemy rowcount, mock attributes)
+- **Image Compliance Summary API** - Fixed field names to match frontend interface
+  - `average_compliance_score` → `compliance_score`
+  - `critical_findings` → `fatal_count`
+  - `total_active_failures` → `failed_checks`
+  - Added missing fields: `total_checks`, `passed_checks`, `warn_count`, `last_scan_date`, `last_scan_status`, `image_name`, `category_breakdown`
+- **Dependency Floors Bumped** - fastapi (0.128.2), granian (2.7.0), sqlalchemy (2.0.46), httpx (0.28.1), apscheduler (3.11.2), aiosqlite (0.22.1), croniter (6.0.0), aiosmtplib (5.1.0), authlib (1.6.6), argon2-cffi (25.1.0), pyjwt (2.11.0), python-multipart (0.0.22), ruff (0.15.0)
+- **oven/bun**: 1.3.7-alpine → 1.3.8-alpine
+- **CI Bun version**: 1.3.4 → 1.3.8 (matches Dockerfile)
+- **package.json version**: 4.0.1 → 4.1.0
+
+### Fixed
+- **Image Security Dashboard Card** - Critical and Failures tiles showing empty
+  - Backend summary endpoint returned `critical_findings` and `total_active_failures` but frontend expected `fatal_count` and `failed_checks`
+- **VulnerabilityCharts.tsx** - Wrong field names for compliance data (pre-existing bug)
+  - `average_compliance_score` → `compliance_score`, `critical_findings` → `fatal_count`, `total_active_failures` → `failed_checks`
+- **Duplicate formatRelativeTime** in DatabaseBackupSection.tsx → uses shared `formatRelativeDate` from utils.ts
+- **Dead computation** in scan_queue.py - Removed unused `sum(r["fixable_count"] ...)` expression
+- **ESLint coverage conflict** - Added `coverage/` to ESLint ignores and `.gitignore`
+- **Vite cache permission** - Added `cacheDir` to avoid root-owned `.vite` directory conflict
+
+### Removed
+- **Dead legacy migration code** from database.py - `_run_migrations_legacy()` and `_log_migration_summary()` (~150 lines)
+- **Duplicate vulnerability building** in containers.py - Extracted to shared `_build_last_scan()` and `_build_vuln_summary()` helpers
+- **Inline toggle CSS** - ~15 identical 200-char Tailwind toggle strings replaced by Toggle component
+- **Loader2 imports** - Removed from 7 notification config files (uses TestConnectionButton)
+- **Frontend test skip logic** - Removed `find src -name "*.test.ts*"` guard from CI (tests now exist)
+
 ## [4.1.0] - 2025-01-27
 
 ### Added

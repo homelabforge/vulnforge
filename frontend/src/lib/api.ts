@@ -412,6 +412,27 @@ export const secretsApi = {
     });
     return handleResponse(res);
   },
+
+  export: async (format: "csv" | "json", filters?: {
+    severity?: string;
+    category?: string;
+  }): Promise<Blob> => {
+    const params = new URLSearchParams();
+    if (filters?.severity) params.append("severity", filters.severity);
+    if (filters?.category) params.append("category", filters.category);
+    params.append("format", format);
+    const res = await fetch(`${API_BASE}/secrets/export?${params}`);
+    if (!res.ok) {
+      let errorData: ApiErrorResponse;
+      try {
+        errorData = await res.json();
+      } catch {
+        errorData = { detail: `HTTP ${res.status}: ${res.statusText}` };
+      }
+      throw new ApiError(res, errorData);
+    }
+    return res.blob();
+  },
 };
 
 // Widget
@@ -448,7 +469,17 @@ export interface ScannersInfoResponse {
   scanners: ScannerInfo[];
 }
 
+export interface AppInfo {
+  name: string;
+  version: string;
+}
+
 export const systemApi = {
+  getAppInfo: async (): Promise<AppInfo> => {
+    const res = await fetch(`${API_BASE}/system/info`);
+    return handleResponse(res);
+  },
+
   getTrivyDbInfo: async (): Promise<TrivyDbInfo> => {
     const res = await fetch(`${API_BASE}/system/trivy-db-info`);
     return handleResponse(res);
@@ -815,6 +846,315 @@ export const apiKeysApi = {
   revoke: async (id: number): Promise<APIKey> => {
     const res = await fetch(`${API_BASE}/api-keys/${id}`, {
       method: "DELETE",
+    });
+    return handleResponse(res);
+  },
+};
+
+// Host Compliance
+export interface ComplianceSummary {
+  last_scan_date: string | null;
+  last_scan_status: string | null;
+  compliance_score: number | null;
+  total_checks: number;
+  passed_checks: number;
+  warned_checks: number;
+  failed_checks: number;
+  info_checks: number;
+  note_checks: number;
+  high_severity_failures: number;
+  medium_severity_failures: number;
+  low_severity_failures: number;
+  ignored_findings_count: number;
+  category_breakdown: { [key: string]: number } | null;
+}
+
+export interface ComplianceFinding {
+  id: number;
+  check_id: string;
+  check_number: string | null;
+  title: string;
+  description: string | null;
+  status: string;
+  severity: string;
+  category: string;
+  target: string | null;
+  remediation: string | null;
+  actual_value: string | null;
+  expected_value: string | null;
+  is_ignored: boolean;
+  ignored_reason: string | null;
+  ignored_by: string | null;
+  ignored_at: string | null;
+  first_seen: string;
+  last_seen: string;
+  scan_date: string;
+}
+
+export interface ComplianceCurrentScan {
+  status: string;
+  scan_id: number | null;
+  started_at: string | null;
+  progress: string | null;
+  current_check: string | null;
+  current_check_id: string | null;
+  progress_current: number | null;
+  progress_total: number | null;
+}
+
+export interface ComplianceTrendPoint {
+  date: string;
+  compliance_score: number;
+  passed_checks: number;
+  warned_checks: number;
+  failed_checks: number;
+  total_checks: number;
+  category_scores: { [key: string]: number };
+}
+
+export const complianceApi = {
+  getSummary: async (): Promise<ComplianceSummary> => {
+    const res = await fetch(`${API_BASE}/compliance/summary`);
+    return handleResponse(res);
+  },
+
+  getCurrentScan: async (): Promise<ComplianceCurrentScan> => {
+    const res = await fetch(`${API_BASE}/compliance/current`);
+    return handleResponse(res);
+  },
+
+  getFindings: async (params?: {
+    status_filter?: string;
+    category_filter?: string;
+    include_ignored?: boolean;
+  }): Promise<ComplianceFinding[]> => {
+    const query = new URLSearchParams();
+    if (params?.status_filter) query.append("status_filter", params.status_filter);
+    if (params?.category_filter) query.append("category_filter", params.category_filter);
+    if (params?.include_ignored !== undefined) query.append("include_ignored", String(params.include_ignored));
+    const res = await fetch(`${API_BASE}/compliance/findings?${query}`);
+    return handleResponse(res);
+  },
+
+  getTrend: async (days = 30): Promise<ComplianceTrendPoint[]> => {
+    const res = await fetch(`${API_BASE}/compliance/scans/trend?days=${days}`);
+    return handleResponse(res);
+  },
+
+  triggerScan: async (): Promise<{ message: string }> => {
+    const res = await fetch(`${API_BASE}/compliance/scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trigger_type: "manual" }),
+    });
+    return handleResponse(res);
+  },
+
+  ignoreFinding: async (findingId: number, reason: string): Promise<void> => {
+    const res = await fetch(`${API_BASE}/compliance/findings/ignore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ finding_id: findingId, reason, ignored_by: "user" }),
+    });
+    return handleResponse(res);
+  },
+
+  unignoreFinding: async (findingId: number): Promise<void> => {
+    const res = await fetch(`${API_BASE}/compliance/findings/unignore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ finding_id: findingId }),
+    });
+    return handleResponse(res);
+  },
+
+  getExportUrl: (params?: {
+    status_filter?: string;
+    category_filter?: string;
+    include_ignored?: boolean;
+  }): string => {
+    const query = new URLSearchParams();
+    if (params?.status_filter) query.append("status_filter", params.status_filter);
+    if (params?.category_filter) query.append("category_filter", params.category_filter);
+    if (params?.include_ignored !== undefined) query.append("include_ignored", String(params.include_ignored));
+    return `${API_BASE}/compliance/export/csv?${query}`;
+  },
+};
+
+// Image Compliance
+export interface ImageComplianceSummary {
+  last_scan_date: string | null;
+  last_scan_status: string | null;
+  image_name: string | null;
+  compliance_score: number | null;
+  total_images_scanned: number;
+  total_checks: number;
+  passed_checks: number;
+  failed_checks: number;
+  fatal_count: number;
+  warn_count: number;
+  category_breakdown: { [key: string]: number } | null;
+}
+
+export interface ImageComplianceImageSummary {
+  image_name: string;
+  compliance_score: number;
+  total_checks: number;
+  passed_checks: number;
+  failed_checks: number;
+  active_failures: number;
+  fatal_count: number;
+  warn_count: number;
+  last_scan_date: string;
+  affected_containers: string[];
+}
+
+export interface ImageComplianceFinding {
+  id: number;
+  check_id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  severity: string;
+  category: string;
+  remediation: string | null;
+  alerts: Array<{ code: string; line: number }>;
+  is_ignored: boolean;
+  ignored_reason: string | null;
+  ignored_by: string | null;
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface ImageScanStatus {
+  status: "idle" | "scanning";
+  mode?: "single" | "batch";
+  current_image?: string | null;
+  progress_current?: number | null;
+  progress_total?: number | null;
+  started_at?: string | null;
+  targets?: string[];
+  last_result?: {
+    image_name: string;
+    success: boolean;
+    error?: string | null;
+    finished_at?: string;
+  } | null;
+}
+
+export const imageComplianceApi = {
+  getSummary: async (): Promise<ImageComplianceSummary> => {
+    const res = await fetch(`${API_BASE}/image-compliance/summary`);
+    return handleResponse(res);
+  },
+
+  getImages: async (): Promise<ImageComplianceImageSummary[]> => {
+    const res = await fetch(`${API_BASE}/image-compliance/images`);
+    return handleResponse(res);
+  },
+
+  getFindings: async (imageName: string, params?: {
+    status_filter?: string;
+    include_ignored?: boolean;
+  }): Promise<ImageComplianceFinding[]> => {
+    const query = new URLSearchParams();
+    if (params?.status_filter) query.append("status_filter", params.status_filter);
+    if (params?.include_ignored !== undefined) query.append("include_ignored", String(params.include_ignored));
+    const res = await fetch(`${API_BASE}/image-compliance/findings/${encodeURIComponent(imageName)}?${query}`);
+    return handleResponse(res);
+  },
+
+  getCurrentScan: async (): Promise<ImageScanStatus> => {
+    const res = await fetch(`${API_BASE}/image-compliance/current`);
+    return handleResponse(res);
+  },
+
+  scanImage: async (imageName: string): Promise<{ image_name: string }> => {
+    const res = await fetch(`${API_BASE}/image-compliance/scan?image_name=${encodeURIComponent(imageName)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    return handleResponse(res);
+  },
+
+  scanAll: async (): Promise<{ image_count: number }> => {
+    const res = await fetch(`${API_BASE}/image-compliance/scan-all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    return handleResponse(res);
+  },
+
+  ignoreFinding: async (findingId: number, reason: string): Promise<void> => {
+    const res = await fetch(`${API_BASE}/image-compliance/findings/${findingId}/ignore`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    });
+    return handleResponse(res);
+  },
+
+  unignoreFinding: async (findingId: number): Promise<void> => {
+    const res = await fetch(`${API_BASE}/image-compliance/findings/${findingId}/unignore`, {
+      method: "POST",
+    });
+    return handleResponse(res);
+  },
+
+  getExportUrl: (imageName?: string): string => {
+    if (imageName) {
+      return `${API_BASE}/image-compliance/export/csv?image_name=${encodeURIComponent(imageName)}`;
+    }
+    return `${API_BASE}/image-compliance/export/csv`;
+  },
+};
+
+// Maintenance / Backup
+export interface BackupEntry {
+  filename: string;
+  path: string;
+  size_bytes: number;
+  size_mb: number;
+  created_at: string;
+}
+
+export const maintenanceApi = {
+  listBackups: async (): Promise<{ backups: BackupEntry[] }> => {
+    const res = await fetch(`${API_BASE}/maintenance/backup/list`);
+    return handleResponse(res);
+  },
+
+  createBackup: async (): Promise<{ filename: string; size_mb: number }> => {
+    const res = await fetch(`${API_BASE}/maintenance/backup`, {
+      method: "POST",
+    });
+    return handleResponse(res);
+  },
+
+  downloadBackup: async (filename: string): Promise<Blob> => {
+    const res = await fetch(`${API_BASE}/maintenance/backup/download/${filename}`);
+    if (!res.ok) {
+      let errorData: ApiErrorResponse;
+      try {
+        errorData = await res.json();
+      } catch {
+        errorData = { detail: `HTTP ${res.status}: ${res.statusText}` };
+      }
+      throw new ApiError(res, errorData);
+    }
+    return res.blob();
+  },
+
+  deleteBackup: async (filename: string): Promise<void> => {
+    const res = await fetch(`${API_BASE}/maintenance/backup/${filename}`, {
+      method: "DELETE",
+    });
+    return handleResponse(res);
+  },
+
+  restoreBackup: async (filename: string): Promise<{ safety_backup: string }> => {
+    const res = await fetch(`${API_BASE}/maintenance/backup/restore/${filename}`, {
+      method: "POST",
     });
     return handleResponse(res);
   },

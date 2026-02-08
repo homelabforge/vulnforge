@@ -60,7 +60,7 @@ async def get_user_auth_status(
     setup_complete = await is_user_auth_setup_complete(db)
     auth_mode = await get_user_auth_mode(db)
     settings_manager = SettingsManager(db)
-    oidc_enabled_str = await settings_manager.get("user_auth_oidc_enabled", default="false")
+    oidc_enabled_str = (await settings_manager.get("user_auth_oidc_enabled", default="false")) or ""
     oidc_enabled = oidc_enabled_str.lower() == "true"
 
     return {
@@ -263,6 +263,8 @@ async def update_admin_profile_endpoint(
 
     # Get updated profile
     updated_profile = await get_user_admin_profile(db)
+    if not updated_profile:
+        raise HTTPException(status_code=500, detail="Failed to get updated profile")
 
     logger.info("User auth admin profile updated")
 
@@ -496,15 +498,16 @@ async def oidc_callback(
         oidc_sub = claims.get("sub")
         provider_name = config.get("provider_name", "OIDC Provider")
 
-        await settings_manager.set("user_auth_admin_oidc_subject", oidc_sub)
+        await settings_manager.set("user_auth_admin_oidc_subject", oidc_sub or "")
         await settings_manager.set("user_auth_admin_oidc_provider", provider_name)
 
         # Update admin profile if we got username/email from OIDC
         admin_profile = await get_user_admin_profile(db)
-        if username and username != admin_profile.get("username"):
-            await settings_manager.set("user_auth_admin_username", username)
-        if email and email != admin_profile.get("email"):
-            await settings_manager.set("user_auth_admin_email", email or "")
+        if admin_profile:
+            if username and username != admin_profile.get("username"):
+                await settings_manager.set("user_auth_admin_username", username)
+            if email and email != admin_profile.get("email"):
+                await settings_manager.set("user_auth_admin_email", email or "")
 
         # Update last login
         await settings_manager.set(
@@ -516,6 +519,8 @@ async def oidc_callback(
 
         # GET UPDATED ADMIN PROFILE
         admin_profile = await get_user_admin_profile(db)
+        if not admin_profile:
+            raise HTTPException(status_code=500, detail="Admin profile not found")
 
         # CREATE JWT TOKEN
         access_token_expires = timedelta(minutes=24 * 60)  # 24 hours
@@ -580,7 +585,7 @@ async def test_oidc_connection(
 
         # Check for SSRF
         try:
-            oidc_service.check_ssrf(discovery_url)
+            oidc_service.validate_oidc_url(discovery_url)
         except oidc_service.SSRFProtectionError as e:
             return {
                 "success": False,

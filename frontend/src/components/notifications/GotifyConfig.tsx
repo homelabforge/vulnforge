@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { Radio, Eye, EyeOff, ExternalLink, Loader2 } from 'lucide-react';
+import { Radio, Eye, EyeOff, ExternalLink } from 'lucide-react';
 import { HelpTooltip } from '@/components/HelpTooltip';
+import { Toggle } from '@/components/Toggle';
+import { TestConnectionButton } from './TestConnectionButton';
+import type { NotificationSettings } from './types';
 
 interface GotifyConfigProps {
-  settings: Record<string, unknown>;
+  settings: NotificationSettings;
   onSettingChange: (key: string, value: boolean) => void;
   onTextChange: (key: string, value: string) => void;
   onTest: () => Promise<void>;
@@ -21,9 +24,9 @@ export function GotifyConfig({
 }: GotifyConfigProps) {
   const [showToken, setShowToken] = useState(false);
 
-  const isEnabled = settings.gotify_enabled === 'true' || settings.gotify_enabled === true;
-  const serverUrl = (settings.gotify_server as string) || '';
-  const token = (settings.gotify_token as string) || '';
+  const isEnabled = settings.gotify_enabled;
+  const serverUrl = settings.gotify_server;
+  const token = settings.gotify_token;
 
   return (
     <div className="bg-vuln-surface border border-vuln-border rounded-lg p-6">
@@ -52,16 +55,7 @@ export function GotifyConfig({
                 Send notifications via Gotify server
               </p>
             </div>
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={isEnabled}
-                onChange={(e) => onSettingChange('gotify_enabled', e.target.checked)}
-                disabled={saving}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </div>
+            <Toggle checked={isEnabled} onChange={(v) => onSettingChange('gotify_enabled', v)} disabled={saving} />
           </label>
         </div>
 
@@ -113,21 +107,7 @@ export function GotifyConfig({
           </p>
         </div>
 
-        {/* Test Button */}
-        <button
-          onClick={onTest}
-          disabled={!isEnabled || testing || !serverUrl || !token}
-          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {testing ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Testing...
-            </>
-          ) : (
-            'Test Connection'
-          )}
-        </button>
+        <TestConnectionButton onTest={onTest} testing={testing} disabled={!isEnabled || !serverUrl || !token} />
 
         {/* Info Box */}
         <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">

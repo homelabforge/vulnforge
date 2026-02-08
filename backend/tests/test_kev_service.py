@@ -40,6 +40,7 @@ class TestKEVCatalogFetching:
         assert success is True
         assert service.is_kev("CVE-2024-0001")
         info = service.get_kev_info("CVE-2024-0001")
+        assert info is not None
         assert info["vendor_project"] == "Test Vendor"
 
     @patch("httpx.AsyncClient.get")

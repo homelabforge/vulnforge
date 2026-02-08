@@ -319,7 +319,7 @@ async def restore_backup(filename: str, user: User = Depends(require_admin)):
 
 
 @router.post("/backup/upload")
-async def upload_backup(file: bytes = None):
+async def upload_backup(file: bytes | None = None):
     """
     Upload and restore a backup file from user's computer.
 
@@ -357,9 +357,10 @@ async def refresh_kev_catalog(
 
         # Update last refresh timestamp in settings
         settings_manager = SettingsManager(db)
+        last_refresh = kev_service.get_last_refresh()
         await settings_manager.set(
             "kev_last_refresh",
-            kev_service.get_last_refresh().isoformat() if kev_service.get_last_refresh() else "",
+            last_refresh.isoformat() if last_refresh else "",
         )
 
         # Re-check all existing vulnerabilities against updated KEV catalog
@@ -396,9 +397,7 @@ async def refresh_kev_catalog(
             "status": "success",
             "message": "KEV catalog refreshed successfully",
             "kev_catalog_size": kev_service.get_catalog_size(),
-            "last_refresh": kev_service.get_last_refresh().isoformat()
-            if kev_service.get_last_refresh()
-            else None,
+            "last_refresh": last_refresh.isoformat() if last_refresh else None,
             "vulnerabilities_checked": len(vulnerabilities),
             "vulnerabilities_updated": updated_count,
             "newly_flagged_as_kev": newly_flagged,

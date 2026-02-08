@@ -3,6 +3,7 @@
 import json
 import logging
 from contextlib import asynccontextmanager
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -136,7 +137,7 @@ async def lifespan(app: FastAPI):
         logger.info("Default settings initialized")
 
         # Get parallel_scans setting for queue workers
-        parallel_scans = await settings_manager.get_int("parallel_scans", default=3)
+        parallel_scans = await settings_manager.get_int("parallel_scans", default=3) or 3
 
     # Auto-discover containers on startup
     await discover_containers_startup()
@@ -174,7 +175,7 @@ async def lifespan(app: FastAPI):
         scheduler.start(
             scan_schedule=scan_schedule,
             compliance_schedule=compliance_schedule if compliance_enabled else None,
-            kev_enabled=kev_enabled,
+            kev_enabled=kev_enabled if kev_enabled is not None else True,
         )
         logger.info(f"Scheduler started with vulnerability scan schedule: {scan_schedule}")
 
@@ -199,18 +200,24 @@ async def lifespan(app: FastAPI):
         logger.info("Scheduler stopped")
 
 
+# Read version from installed package metadata (works in Docker / site-packages)
+try:
+    _APP_VERSION = pkg_version("vulnforge")
+except Exception:
+    _APP_VERSION = "0.0.0"
+
 # Create FastAPI app
 app = FastAPI(
     title="VulnForge",
     description="Docker vulnerability scanner and remediation dashboard powered by Trivy",
-    version="1.0.0",
+    version=_APP_VERSION,
     lifespan=lifespan,
 )
 
 # Rate limiter setup
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 # Authentication middleware (must be before CORS)
 app.add_middleware(AuthenticationMiddleware)

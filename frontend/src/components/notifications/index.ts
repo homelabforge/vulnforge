@@ -1,3 +1,4 @@
+export type { NotificationSettings } from './types';
 export { NotificationSubTabs, type NotificationSubTab } from './NotificationSubTabs';
 export { EventNotificationsCard } from './EventNotificationsCard';
 export { NtfyConfig } from './NtfyConfig';
@@ -7,3 +8,4 @@ export { SlackConfig } from './SlackConfig';
 export { DiscordConfig } from './DiscordConfig';
 export { TelegramConfig } from './TelegramConfig';
 export { EmailConfig } from './EmailConfig';
+export { TestConnectionButton } from './TestConnectionButton';

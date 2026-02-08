@@ -284,7 +284,10 @@ async def scan_containers(
 @router.get("/history/{container_id}", response_model=list[ScanSchema])
 @limiter.limit("60/minute")
 async def get_scan_history(
-    container_id: int, limit: int = 10, request: Request = None, db: AsyncSession = Depends(get_db)
+    request: Request,
+    container_id: int,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db),
 ):
     """Get scan history for a container."""
     result = await db.execute(
@@ -300,7 +303,7 @@ async def get_scan_history(
 
 @router.get("/current")
 @limiter.limit("120/minute")
-async def get_current_scan(request: Request = None):
+async def get_current_scan(request: Request):
     """
     Get currently running scan status with queue information.
 
@@ -349,8 +352,8 @@ async def stream_scan_status(request: Request):
 @router.get("/trends")
 @limiter.limit("30/minute")
 async def get_scan_trends(
+    request: Request,
     window_days: int = Query(30, ge=1, le=90),
-    request: Request = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Return aggregated scan trends for dashboards."""
@@ -359,7 +362,7 @@ async def get_scan_trends(
 
 @router.get("/queue/status")
 @limiter.limit("120/minute")
-async def get_queue_status(request: Request = None):
+async def get_queue_status(request: Request):
     """Get scan queue status."""
     scan_queue = get_scan_queue()
     return scan_queue.get_status()
@@ -367,7 +370,7 @@ async def get_queue_status(request: Request = None):
 
 @router.get("/scanner/health")
 @limiter.limit("30/minute")
-async def get_scanner_health(request: Request = None):
+async def get_scanner_health(request: Request):
     """
     Get health status of Trivy scanner.
 
@@ -380,7 +383,7 @@ async def get_scanner_health(request: Request = None):
 
 @router.post("/{scan_id}/abort")
 @limiter.limit("20/minute")
-async def abort_scan(scan_id: int, request: Request = None, db: AsyncSession = Depends(get_db)):
+async def abort_scan(scan_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     """
     Abort a running or queued scan.
 
@@ -420,7 +423,7 @@ async def abort_scan(scan_id: int, request: Request = None, db: AsyncSession = D
 
 @router.post("/{scan_id}/retry")
 @limiter.limit("20/minute")
-async def retry_scan(scan_id: int, request: Request = None, db: AsyncSession = Depends(get_db)):
+async def retry_scan(scan_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     """
     Retry a failed scan.
 

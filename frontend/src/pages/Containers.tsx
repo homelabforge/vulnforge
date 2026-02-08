@@ -3,13 +3,12 @@
  */
 
 import { useState, useMemo, useCallback } from "react";
-import { Link } from "react-router-dom";
-import { Container, Play, RefreshCw, Shield, Circle, Loader2, Search, X } from "lucide-react";
+import { Container, RefreshCw, Shield, Circle, Search, X } from "lucide-react";
 import { useContainers, useTriggerScan, useDiscoverContainers, useScanStatus } from "@/hooks/useVulnForge";
-import { formatRelativeDate } from "@/lib/utils";
 import { useTimezone } from "@/contexts/SettingsContext";
 import { toast } from "sonner";
 import { handleApiError } from "@/lib/errorHandler";
+import { ContainerCard } from "@/components/ContainerCard";
 
 type FilterType = "all" | "running" | "stopped" | "never_scanned" | "clean";
 
@@ -220,110 +219,14 @@ export function Containers() {
               <h2 className="text-xl font-bold text-vuln-text mb-4">My Projects</h2>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {myProjects.map((container) => (
-                  <div
+                  <ContainerCard
                     key={container.id}
-                    className="bg-vuln-surface border border-vuln-border rounded-lg p-6 hover:border-vuln-border transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <Link
-                        to={`/containers/${container.id}`}
-                        className="flex-1 hover:opacity-80 transition-opacity"
-                      >
-                        <div className="flex items-center gap-3 mb-2">
-                          <Container className="w-5 h-5 text-blue-400" />
-                          <h3 className="text-lg font-semibold text-vuln-text">{container.name}</h3>
-                          {container.is_running ? (
-                            <span className="flex items-center gap-1 text-xs px-2 py-1 bg-green-500/10 text-green-500 rounded">
-                              <Circle className="w-2 h-2 fill-green-500" />
-                              Running
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 text-xs px-2 py-1 bg-vuln-text-disabled/10 text-vuln-text-disabled rounded">
-                              <Circle className="w-2 h-2" />
-                              Stopped
-                            </span>
-                          )}
-                          {container.last_scan_date && container.total_vulns === 0 && (
-                            <span className="text-xs px-2 py-1 rounded bg-green-500/10 text-green-400 flex items-center gap-1">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                              Clean
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="space-y-1 text-sm">
-                          <p className="text-vuln-text-muted">
-                            <span className="text-vuln-text-disabled">Image:</span>{" "}
-                            <span className="text-vuln-text">{container.image}:{container.image_tag}</span>
-                          </p>
-                          {container.last_scan_date ? (
-                            <>
-                              <p className="text-vuln-text-muted">
-                                <span className="text-vuln-text-disabled">Last Scan:</span>{" "}
-                                <span className="text-vuln-text">{formatRelativeDate(container.last_scan_date, timezone)}</span>
-                              </p>
-                              <div className="flex items-end gap-2 flex-wrap">
-                                <span className="text-vuln-text-muted">
-                                  Total: <span className="text-vuln-text font-medium">{container.total_vulns || 0}</span>
-                                </span>
-                                <span className="text-vuln-text-muted">
-                                  Fixable: <span className="text-green-500 font-medium">{container.fixable_vulns || 0}</span>
-                                </span>
-                                <span className="text-vuln-text-muted">
-                                  Critical: <span className="text-red-500 font-medium">{container.critical_count || 0}</span>
-                                </span>
-                                <span className="text-vuln-text-muted">
-                                  High: <span className="text-orange-500 font-medium">{container.high_count || 0}</span>
-                                </span>
-                                <span className="text-vuln-text-muted">
-                                  Medium: <span className="text-yellow-500 font-medium">{container.medium_count || 0}</span>
-                                </span>
-                                <span className="text-vuln-text-muted">
-                                  Low: <span className="text-lime-500 font-medium">{container.low_count || 0}</span>
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-4 mt-2 flex-wrap">
-                                {container.dive_efficiency_score !== null && (
-                                  <span className={`text-xs px-2 py-1 rounded ${
-                                    container.dive_efficiency_score >= 0.9
-                                      ? 'bg-green-500/10 text-green-500' :
-                                    container.dive_efficiency_score >= 0.7
-                                      ? 'bg-yellow-500/10 text-yellow-500' :
-                                    'bg-red-500/10 text-red-500'
-                                  }`}>
-                                    {(container.dive_efficiency_score * 100).toFixed(0)}% efficient
-                                  </span>
-                                )}
-                              </div>
-                            </>
-                          ) : (
-                            <p className="text-yellow-500 text-sm">Never scanned</p>
-                          )}
-                        </div>
-                      </Link>
-
-                      <button
-                        onClick={() => handleScanContainer(container.id, container.name)}
-                        disabled={scanMutation.isPending || isContainerScanning(container.name)}
-                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50 flex-shrink-0"
-                      >
-                        {isContainerScanning(container.name) ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Scanning...
-                          </>
-                        ) : (
-                          <>
-                            <Play className="w-4 h-4" />
-                            Scan
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
+                    container={container}
+                    timezone={timezone}
+                    onScan={handleScanContainer}
+                    scanPending={scanMutation.isPending}
+                    scanning={isContainerScanning(container.name)}
+                  />
                 ))}
               </div>
             </div>
@@ -335,110 +238,14 @@ export function Containers() {
               <h2 className="text-xl font-bold text-vuln-text mb-4">Community Images</h2>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {communityImages.map((container) => (
-                  <div
+                  <ContainerCard
                     key={container.id}
-                    className="bg-vuln-surface border border-vuln-border rounded-lg p-6 hover:border-vuln-border transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <Link
-                        to={`/containers/${container.id}`}
-                        className="flex-1 hover:opacity-80 transition-opacity"
-                      >
-                        <div className="flex items-center gap-3 mb-2">
-                          <Container className="w-5 h-5 text-blue-400" />
-                          <h3 className="text-lg font-semibold text-vuln-text">{container.name}</h3>
-                          {container.is_running ? (
-                            <span className="flex items-center gap-1 text-xs px-2 py-1 bg-green-500/10 text-green-500 rounded">
-                              <Circle className="w-2 h-2 fill-green-500" />
-                              Running
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1 text-xs px-2 py-1 bg-vuln-text-disabled/10 text-vuln-text-disabled rounded">
-                              <Circle className="w-2 h-2" />
-                              Stopped
-                            </span>
-                          )}
-                          {container.last_scan_date && container.total_vulns === 0 && (
-                            <span className="text-xs px-2 py-1 rounded bg-green-500/10 text-green-400 flex items-center gap-1">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                              Clean
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="space-y-1 text-sm">
-                          <p className="text-vuln-text-muted">
-                            <span className="text-vuln-text-disabled">Image:</span>{" "}
-                            <span className="text-vuln-text">{container.image}:{container.image_tag}</span>
-                          </p>
-                          {container.last_scan_date ? (
-                            <>
-                              <p className="text-vuln-text-muted">
-                                <span className="text-vuln-text-disabled">Last Scan:</span>{" "}
-                                <span className="text-vuln-text">{formatRelativeDate(container.last_scan_date, timezone)}</span>
-                              </p>
-                              <div className="flex items-end gap-2 flex-wrap">
-                                <span className="text-vuln-text-muted">
-                                  Total: <span className="text-vuln-text font-medium">{container.total_vulns || 0}</span>
-                                </span>
-                                <span className="text-vuln-text-muted">
-                                  Fixable: <span className="text-green-500 font-medium">{container.fixable_vulns || 0}</span>
-                                </span>
-                                <span className="text-vuln-text-muted">
-                                  Critical: <span className="text-red-500 font-medium">{container.critical_count || 0}</span>
-                                </span>
-                                <span className="text-vuln-text-muted">
-                                  High: <span className="text-orange-500 font-medium">{container.high_count || 0}</span>
-                                </span>
-                                <span className="text-vuln-text-muted">
-                                  Medium: <span className="text-yellow-500 font-medium">{container.medium_count || 0}</span>
-                                </span>
-                                <span className="text-vuln-text-muted">
-                                  Low: <span className="text-lime-500 font-medium">{container.low_count || 0}</span>
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-4 mt-2 flex-wrap">
-                                {container.dive_efficiency_score !== null && (
-                                  <span className={`text-xs px-2 py-1 rounded ${
-                                    container.dive_efficiency_score >= 0.9
-                                      ? 'bg-green-500/10 text-green-500' :
-                                    container.dive_efficiency_score >= 0.7
-                                      ? 'bg-yellow-500/10 text-yellow-500' :
-                                    'bg-red-500/10 text-red-500'
-                                  }`}>
-                                    {(container.dive_efficiency_score * 100).toFixed(0)}% efficient
-                                  </span>
-                                )}
-                              </div>
-                            </>
-                          ) : (
-                            <p className="text-yellow-500 text-sm">Never scanned</p>
-                          )}
-                        </div>
-                      </Link>
-
-                      <button
-                        onClick={() => handleScanContainer(container.id, container.name)}
-                        disabled={scanMutation.isPending || isContainerScanning(container.name)}
-                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50 flex-shrink-0"
-                      >
-                        {isContainerScanning(container.name) ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Scanning...
-                          </>
-                        ) : (
-                          <>
-                            <Play className="w-4 h-4" />
-                            Scan
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
+                    container={container}
+                    timezone={timezone}
+                    onScan={handleScanContainer}
+                    scanPending={scanMutation.isPending}
+                    scanning={isContainerScanning(container.name)}
+                  />
                 ))}
               </div>
             </div>

@@ -1,6 +1,11 @@
 """API Key model for secure API authentication."""
 
-from sqlalchemy import Column, DateTime, Integer, String
+from __future__ import annotations
+
+from datetime import datetime
+
+from sqlalchemy import DateTime, Index, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
@@ -10,15 +15,17 @@ class APIKey(Base):
 
     __tablename__ = "api_keys"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(255), nullable=False)
-    description = Column(String(512))
-    key_hash = Column(String(64), nullable=False, unique=True)  # SHA256 hash
-    key_prefix = Column(String(8), nullable=False)  # First 8 chars for display (vf_abc12)
-    created_at = Column(DateTime(timezone=True), nullable=False)
-    last_used_at = Column(DateTime(timezone=True))
-    revoked_at = Column(DateTime(timezone=True))
-    created_by = Column(String(255), default="admin")
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(512))
+    key_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)  # SHA256 hash
+    key_prefix: Mapped[str] = mapped_column(String(8), nullable=False)  # First 8 chars (vf_abc12)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str | None] = mapped_column(String(255), default="admin")
+
+    __table_args__ = (Index("idx_api_keys_key_hash", "key_hash"),)
 
     def is_active(self) -> bool:
         """Check if API key is active (not revoked)."""

@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { Mail, Eye, EyeOff, ExternalLink, Loader2 } from 'lucide-react';
+import { Mail, Eye, EyeOff, ExternalLink } from 'lucide-react';
 import { HelpTooltip } from '@/components/HelpTooltip';
+import { Toggle } from '@/components/Toggle';
+import { TestConnectionButton } from './TestConnectionButton';
+import type { NotificationSettings } from './types';
 
 interface EmailConfigProps {
-  settings: Record<string, unknown>;
+  settings: NotificationSettings;
   onSettingChange: (key: string, value: boolean) => void;
   onTextChange: (key: string, value: string) => void;
   onTest: () => Promise<void>;
@@ -21,14 +24,14 @@ export function EmailConfig({
 }: EmailConfigProps) {
   const [showPassword, setShowPassword] = useState(false);
 
-  const isEnabled = settings.email_enabled === 'true' || settings.email_enabled === true;
-  const smtpHost = (settings.email_smtp_host as string) || '';
-  const smtpPort = (settings.email_smtp_port as string) || '587';
-  const smtpUser = (settings.email_smtp_user as string) || '';
-  const smtpPassword = (settings.email_smtp_password as string) || '';
-  const smtpTls = settings.email_smtp_tls === 'true' || settings.email_smtp_tls === true;
-  const fromAddress = (settings.email_from as string) || '';
-  const toAddress = (settings.email_to as string) || '';
+  const isEnabled = settings.email_enabled;
+  const smtpHost = settings.email_smtp_host;
+  const smtpPort = settings.email_smtp_port || '587';
+  const smtpUser = settings.email_smtp_user;
+  const smtpPassword = settings.email_smtp_password;
+  const smtpTls = settings.email_smtp_tls;
+  const fromAddress = settings.email_from;
+  const toAddress = settings.email_to;
 
   return (
     <div className="bg-vuln-surface border border-vuln-border rounded-lg p-6">
@@ -57,16 +60,7 @@ export function EmailConfig({
                 Send notifications via SMTP email
               </p>
             </div>
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={isEnabled}
-                onChange={(e) => onSettingChange('email_enabled', e.target.checked)}
-                disabled={saving}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </div>
+            <Toggle checked={isEnabled} onChange={(v) => onSettingChange('email_enabled', v)} disabled={saving} />
           </label>
         </div>
 
@@ -155,16 +149,7 @@ export function EmailConfig({
                 Enable TLS encryption (recommended)
               </p>
             </div>
-            <div className="relative">
-              <input
-                type="checkbox"
-                checked={smtpTls}
-                onChange={(e) => onSettingChange('email_smtp_tls', e.target.checked)}
-                disabled={!isEnabled || saving}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-red-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
-            </div>
+            <Toggle checked={smtpTls} onChange={(v) => onSettingChange('email_smtp_tls', v)} disabled={!isEnabled || saving} />
           </label>
         </div>
 
@@ -200,21 +185,7 @@ export function EmailConfig({
           </div>
         </div>
 
-        {/* Test Button */}
-        <button
-          onClick={onTest}
-          disabled={!isEnabled || testing || !smtpHost || !smtpUser || !smtpPassword || !fromAddress || !toAddress}
-          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {testing ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Testing...
-            </>
-          ) : (
-            'Test Connection'
-          )}
-        </button>
+        <TestConnectionButton onTest={onTest} testing={testing} disabled={!isEnabled || !smtpHost || !smtpUser || !smtpPassword || !fromAddress || !toAddress} />
 
         {/* Info Box */}
         <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">

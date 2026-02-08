@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  cacheDir: path.resolve(__dirname, "node_modules/.vite-cache"),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

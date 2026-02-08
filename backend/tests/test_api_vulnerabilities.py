@@ -134,7 +134,7 @@ class TestVulnerabilitiesBulkUpdate:
 
         class DummyActivityLogger:
             async def log_bulk_vulnerability_status_changed(
-                self, vuln_count, old_status, new_status, username, notes
+                self, vuln_ids, new_status, username, notes=None
             ):
                 return None
 

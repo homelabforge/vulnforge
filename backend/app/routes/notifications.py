@@ -268,7 +268,7 @@ async def send_test_notification():
             message="This is a test notification from VulnForge Settings. If you received this, your notification configuration is working correctly!",
             title="VulnForge Test Notification",
             priority=3,
-            tags="test,VulnForge",
+            tags=["test", "VulnForge"],
         )
         return {"status": "success", "message": "Test notification sent successfully"}
     except httpx.TimeoutException:
@@ -573,13 +573,13 @@ async def test_email_connection(db: AsyncSession = Depends(get_db)):
         from app.services.notifications.email import EmailNotificationService
 
         email_service = EmailNotificationService(
-            smtp_host=smtp_host,
-            smtp_port=smtp_port,
-            smtp_user=smtp_user,
-            smtp_password=smtp_password,
-            from_address=from_address,
-            to_address=to_address,
-            use_tls=use_tls,
+            smtp_host=smtp_host or "",
+            smtp_port=smtp_port or 587,
+            smtp_user=smtp_user or "",
+            smtp_password=smtp_password or "",
+            from_address=from_address or "",
+            to_address=to_address or "",
+            use_tls=use_tls if use_tls is not None else True,
         )
 
         success, message = await email_service.test_connection()

@@ -260,7 +260,7 @@ def _resolve_unique_images(docker_service: DockerService) -> dict[str, list[str]
         image_ref = _normalize_image_reference(container)
         if not image_ref:
             continue
-        image_map.setdefault(image_ref, []).append(container.get("name"))
+        image_map.setdefault(image_ref, []).append(container.get("name", ""))
 
     return image_map
 
@@ -480,9 +480,16 @@ async def get_image_compliance_summary(db: AsyncSession = Depends(get_db)):
     if not latest_scans:
         return {
             "total_images_scanned": 0,
-            "average_compliance_score": None,
-            "critical_findings": 0,
-            "total_active_failures": 0,
+            "compliance_score": None,
+            "total_checks": 0,
+            "passed_checks": 0,
+            "failed_checks": 0,
+            "fatal_count": 0,
+            "warn_count": 0,
+            "last_scan_date": None,
+            "last_scan_status": None,
+            "image_name": None,
+            "category_breakdown": None,
         }
 
     # Calculate aggregated metrics
@@ -492,15 +499,28 @@ async def get_image_compliance_summary(db: AsyncSession = Depends(get_db)):
     )
     avg_compliance = total_compliance / total_images if total_images > 0 else 0
 
-    # Sum up critical findings and active failures across all images
+    # Sum up check counts across all images
     total_critical = sum(scan.fatal_count for scan in latest_scans)
     total_failures = sum(scan.failed_checks for scan in latest_scans)
+    total_checks = sum(scan.total_checks for scan in latest_scans)
+    total_passed = sum(scan.passed_checks for scan in latest_scans)
+    total_warn = sum(scan.warn_count for scan in latest_scans)
+
+    # Most recent scan info
+    most_recent = max(latest_scans, key=lambda s: s.scan_date or "")
 
     return {
         "total_images_scanned": total_images,
-        "average_compliance_score": avg_compliance,
-        "critical_findings": total_critical,
-        "total_active_failures": total_failures,
+        "compliance_score": avg_compliance,
+        "total_checks": total_checks,
+        "passed_checks": total_passed,
+        "failed_checks": total_failures,
+        "fatal_count": total_critical,
+        "warn_count": total_warn,
+        "last_scan_date": str(most_recent.scan_date) if most_recent.scan_date else None,
+        "last_scan_status": most_recent.scan_status,
+        "image_name": most_recent.image_name,
+        "category_breakdown": None,
     }
 
 
@@ -540,7 +560,7 @@ async def list_scanned_images(db: AsyncSession = Depends(get_db)):
             select(func.count(ImageComplianceFinding.id)).where(
                 ImageComplianceFinding.image_name == scan.image_name,
                 ImageComplianceFinding.status == "FAIL",
-                not ImageComplianceFinding.is_ignored,
+                ~ImageComplianceFinding.is_ignored,
             )
         )
         active_failures = result.scalar() or 0

@@ -25,66 +25,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { handleApiError } from "@/lib/errorHandler";
 import { validateIgnoreReason, validateImageName } from "@/schemas/modals";
-
-interface ImageSummary {
-  image_name: string;
-  compliance_score: number;
-  total_checks: number;
-  passed_checks: number;
-  failed_checks: number;
-  active_failures: number;
-  fatal_count: number;
-  warn_count: number;
-  last_scan_date: string;
-  affected_containers: string[];
-}
-
-interface ImageFinding {
-  id: number;
-  check_id: string;
-  title: string;
-  description: string | null;
-  status: string; // PASS, FAIL, INFO, SKIP
-  severity: string; // CRITICAL, HIGH, MEDIUM, LOW, INFO
-  category: string;
-  remediation: string | null;
-  alerts: Array<{ code: string; line: number }>;
-  is_ignored: boolean;
-  ignored_reason: string | null;
-  ignored_by: string | null;
-  first_seen: string;
-  last_seen: string;
-}
-
-interface ImageComplianceSummary {
-  last_scan_date: string | null;
-  last_scan_status: string | null;
-  image_name: string | null;
-  compliance_score: number | null;
-  total_images_scanned: number;
-  total_checks: number;
-  passed_checks: number;
-  failed_checks: number;
-  fatal_count: number;
-  warn_count: number;
-  category_breakdown: { [key: string]: number } | null;
-}
-
-interface ImageScanStatus {
-  status: "idle" | "scanning";
-  mode?: "single" | "batch";
-  current_image?: string | null;
-  progress_current?: number | null;
-  progress_total?: number | null;
-  started_at?: string | null;
-  targets?: string[];
-  last_result?: {
-    image_name: string;
-    success: boolean;
-    error?: string | null;
-    finished_at?: string;
-  } | null;
-}
+import {
+  imageComplianceApi,
+  type ImageComplianceSummary,
+  type ImageComplianceImageSummary,
+  type ImageComplianceFinding,
+  type ImageScanStatus,
+} from "@/lib/api";
 
 interface ImageComplianceProps {
   onActionsChange?: (actions: ReactNode | null) => void;
@@ -95,7 +42,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [showIgnored, setShowIgnored] = useState(false);
   const [ignoreModalOpen, setIgnoreModalOpen] = useState(false);
-  const [selectedFinding, setSelectedFinding] = useState<ImageFinding | null>(null);
+  const [selectedFinding, setSelectedFinding] = useState<ImageComplianceFinding | null>(null);
   const [ignoreReason, setIgnoreReason] = useState("");
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [imageInput, setImageInput] = useState("");
@@ -105,50 +52,32 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
   // Fetch overall summary
   const { data: summary } = useQuery<ImageComplianceSummary>({
     queryKey: ["image-compliance-summary"],
-    queryFn: async () => {
-      const res = await fetch("/api/v1/image-compliance/summary");
-      return res.json();
-    },
+    queryFn: imageComplianceApi.getSummary,
     refetchInterval: 10000,
   });
 
   // Fetch scanned images
-  const { data: images = [] } = useQuery<ImageSummary[]>({
+  const { data: images = [] } = useQuery<ImageComplianceImageSummary[]>({
     queryKey: ["image-compliance-images"],
-    queryFn: async () => {
-      const res = await fetch("/api/v1/image-compliance/images");
-      return res.json();
-    },
+    queryFn: imageComplianceApi.getImages,
     refetchInterval: 10000,
   });
 
   // Fetch findings for selected image
-  const { data: findings = [], isFetching: isFindingFetching } = useQuery<ImageFinding[]>({
+  const { data: findings = [], isFetching: isFindingFetching } = useQuery<ImageComplianceFinding[]>({
     queryKey: ["image-compliance-findings", selectedImage, statusFilter, showIgnored],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (statusFilter) params.append("status_filter", statusFilter);
-      params.append("include_ignored", showIgnored.toString());
-
-      const res = await fetch(
-        `/api/v1/image-compliance/findings/${encodeURIComponent(selectedImage!)}?${params}`
-      );
-      return res.json();
-    },
+    queryFn: () =>
+      imageComplianceApi.getFindings(selectedImage!, {
+        status_filter: statusFilter || undefined,
+        include_ignored: showIgnored,
+      }),
     enabled: !!selectedImage,
   });
 
   // Mutation to ignore a finding
   const ignoreMutation = useMutation({
-    mutationFn: async ({ findingId, reason }: { findingId: number; reason: string }) => {
-      const res = await fetch(`/api/v1/image-compliance/findings/${findingId}/ignore`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason }),
-      });
-      if (!res.ok) throw new Error("Failed to ignore finding");
-      return res.json();
-    },
+    mutationFn: ({ findingId, reason }: { findingId: number; reason: string }) =>
+      imageComplianceApi.ignoreFinding(findingId, reason),
     onSuccess: () => {
       toast.success("Finding marked as ignored");
       queryClient.invalidateQueries({ queryKey: ["image-compliance-findings"] });
@@ -162,13 +91,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
 
   // Mutation to unignore a finding
   const unignoreMutation = useMutation({
-    mutationFn: async (findingId: number) => {
-      const res = await fetch(`/api/v1/image-compliance/findings/${findingId}/unignore`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error("Failed to unignore finding");
-      return res.json();
-    },
+    mutationFn: imageComplianceApi.unignoreFinding,
     onSuccess: () => {
       toast.success("Finding unmarked as ignored");
       queryClient.invalidateQueries({ queryKey: ["image-compliance-findings"] });
@@ -177,7 +100,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
     onError: (error) => handleApiError(error, "Failed to unignore finding"),
   });
 
-  const handleIgnoreFinding = (finding: ImageFinding) => {
+  const handleIgnoreFinding = (finding: ImageComplianceFinding) => {
     setSelectedFinding(finding);
     setIgnoreModalOpen(true);
   };
@@ -229,32 +152,13 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
 
   const { data: currentScan } = useQuery<ImageScanStatus>({
     queryKey: ["image-compliance-current"],
-    queryFn: async () => {
-      const res = await fetch("/api/v1/image-compliance/current");
-      if (!res.ok) {
-        throw new Error("Failed to load image scan status");
-      }
-      return res.json();
-    },
+    queryFn: imageComplianceApi.getCurrentScan,
     refetchInterval: 1000,
     refetchIntervalInBackground: true,
   });
 
   const scanImageMutation = useMutation({
-    mutationFn: async (imageName: string) => {
-      const res = await fetch(
-        `/api/v1/image-compliance/scan?image_name=${encodeURIComponent(imageName)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-      if (!res.ok) {
-        const detail = await res.json().catch(() => ({}));
-        throw new Error(detail.detail || "Failed to start image scan");
-      }
-      return res.json();
-    },
+    mutationFn: imageComplianceApi.scanImage,
     onSuccess: (data) => {
       toast.success(`Started scan for ${data.image_name}`);
       setScanModalOpen(false);
@@ -269,17 +173,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
   });
 
   const scanAllMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/v1/image-compliance/scan-all", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!res.ok) {
-        const detail = await res.json().catch(() => ({}));
-        throw new Error(detail.detail || "Failed to start batch scan");
-      }
-      return res.json();
-    },
+    mutationFn: imageComplianceApi.scanAll,
     onSuccess: (data) => {
       toast.success(`Started batch scan for ${data.image_count} images`);
       queryClient.invalidateQueries({ queryKey: ["image-compliance-summary"] });
@@ -305,7 +199,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
   }, [currentScan?.status, queryClient, selectedImage]);
 
   const handleExportAll = useCallback(() => {
-    window.location.href = "/api/v1/image-compliance/export/csv";
+    window.location.href = imageComplianceApi.getExportUrl();
     toast.success("Exporting image compliance report...");
   }, []);
 
@@ -635,7 +529,7 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                 </label>
                 <button
                   onClick={() => {
-                    window.location.href = `/api/v1/image-compliance/export/csv?image_name=${encodeURIComponent(selectedImage)}`;
+                    window.location.href = imageComplianceApi.getExportUrl(selectedImage);
                     toast.success("Exporting image findings...");
                   }}
                   className="px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm flex items-center gap-2"

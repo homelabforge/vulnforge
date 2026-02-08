@@ -132,6 +132,7 @@ class TestCreateSetting:
         # Verify in database
         result = await db_session.execute(select(Setting).where(Setting.key == "scan_interval"))
         updated_setting = result.scalar_one_or_none()
+        assert updated_setting is not None
         assert updated_setting.value == "7200"
 
     @pytest.mark.asyncio
@@ -219,6 +220,7 @@ class TestDeleteSetting:
         # Verify in database
         result = await db_session.execute(select(Setting).where(Setting.key == "setting1"))
         setting1 = result.scalar_one_or_none()
+        assert setting1 is not None
         assert setting1.value == "new1"
 
     @pytest.mark.asyncio
@@ -320,6 +322,7 @@ class TestSettingsCategories:
         # Verify in database
         result = await db_session.execute(select(Setting).where(Setting.key == "auth_provider"))
         updated_setting = result.scalar_one_or_none()
+        assert updated_setting is not None
         assert updated_setting.value == "authentik"
 
     @pytest.mark.asyncio
@@ -414,6 +417,7 @@ class TestNotificationSettings:
         # Verify in database
         result = await db_session.execute(select(Setting).where(Setting.key == "ntfy_enabled"))
         ntfy_enabled = result.scalar_one_or_none()
+        assert ntfy_enabled is not None
         assert ntfy_enabled.value == "true"
 
 
@@ -471,4 +475,5 @@ class TestScanningSettings:
         # Verify in database
         result = await db_session.execute(select(Setting).where(Setting.key == "scan_interval"))
         updated_setting = result.scalar_one_or_none()
+        assert updated_setting is not None
         assert updated_setting.value == "7200"

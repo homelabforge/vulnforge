@@ -48,7 +48,7 @@ async def create_api_key(
             key=plaintext_key,
             key_prefix=api_key.key_prefix,
             created_at=api_key.created_at,
-            created_by=api_key.created_by,
+            created_by=api_key.created_by or "admin",
         )
     except Exception as e:
         logger.error(f"Failed to create API key: {e}")
@@ -86,7 +86,7 @@ async def list_api_keys(
                 last_used_at=key.last_used_at,
                 revoked_at=key.revoked_at,
                 is_active=key.is_active(),
-                created_by=key.created_by,
+                created_by=key.created_by or "admin",
             )
             for key in keys
         ]
@@ -127,7 +127,7 @@ async def get_api_key(
             last_used_at=api_key.last_used_at,
             revoked_at=api_key.revoked_at,
             is_active=api_key.is_active(),
-            created_by=api_key.created_by,
+            created_by=api_key.created_by or "admin",
         )
     except HTTPException:
         raise
@@ -169,7 +169,7 @@ async def revoke_api_key(
             last_used_at=api_key.last_used_at,
             revoked_at=api_key.revoked_at,
             is_active=api_key.is_active(),
-            created_by=api_key.created_by,
+            created_by=api_key.created_by or "admin",
         )
     except HTTPException:
         raise

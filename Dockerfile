@@ -48,7 +48,7 @@ LABEL org.opencontainers.image.description="Container vulnerability scanning and
 
 # HTTP server metadata
 LABEL http.server.name="granian"
-LABEL http.server.version="2.6.1"
+LABEL http.server.version="2.7.0"
 LABEL http.server.type="asgi"
 
 WORKDIR /app

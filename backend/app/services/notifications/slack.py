@@ -1,6 +1,7 @@
 """Slack notification service."""
 
 import logging
+from typing import Any
 
 import httpx
 
@@ -49,7 +50,7 @@ class SlackNotificationService(NotificationService):
                 tag_text = " ".join(f"`{tag}`" for tag in tags)
 
             # Build attachment
-            attachment = {
+            attachment: dict[str, Any] = {
                 "color": color,
                 "title": title,
                 "text": message,

@@ -108,6 +108,7 @@ class TestCompleteScanWorkflow:
 
             scan_result = await scanner.scan_image(f"{container.image}:{container.image_tag}")
 
+        assert scan_result is not None
         # Store scan result
         scan = Scan(
             container_id=container.id,
@@ -311,7 +312,7 @@ class TestKEVIntegration:
         with patch.object(kev_service, "is_kev", new_callable=AsyncMock) as mock_is_kev:
             mock_is_kev.return_value = True
 
-            is_kev = await kev_service.is_kev(vuln.cve_id)
+            is_kev = await kev_service.is_kev(vuln.cve_id)  # type: ignore[misc]
 
             if is_kev:
                 vuln.in_kev = True
@@ -355,9 +356,7 @@ class TestKEVIntegration:
         dispatcher = NotificationDispatcher(db_session)
 
         with patch.object(dispatcher, "notify_kev_detected", new_callable=AsyncMock) as mock_notify:
-            await dispatcher.notify_kev_detected(
-                container_name=container.name, cve_id=kev_vuln.cve_id, severity=kev_vuln.severity
-            )
+            await dispatcher.notify_kev_detected(container_name=container.name, kev_count=1)
 
             # Assert
             mock_notify.assert_called_once()
@@ -451,13 +450,14 @@ class TestNotificationIntegration:
         dispatcher = NotificationDispatcher(db_session)
 
         with patch.object(
-            dispatcher, "notify_scan_completed", new_callable=AsyncMock
+            dispatcher, "notify_scan_complete", new_callable=AsyncMock
         ) as mock_notify:
-            await dispatcher.notify_scan_completed(
-                container_name=container.name,
-                scan_id=scan.id,
-                total_vulns=scan.total_vulns,
-                critical_count=scan.critical_count,
+            await dispatcher.notify_scan_complete(
+                total_containers=1,
+                critical=scan.critical_count or 0,
+                high=scan.high_count or 0,
+                fixable_critical=0,
+                fixable_high=0,
             )
 
             # Assert
@@ -495,7 +495,7 @@ class TestNotificationIntegration:
             dispatcher, "notify_critical_vulnerabilities", new_callable=AsyncMock
         ) as mock_notify:
             await dispatcher.notify_critical_vulnerabilities(
-                container_name=container.name, critical_count=5
+                container_name=container.name, critical_count=5, fixable_count=0
             )
 
             # Assert

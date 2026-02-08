@@ -85,7 +85,7 @@ class TrivyScanner:
         base_cmd: list[str],
         image: str,
         skip_db_update: bool,
-    ) -> tuple[int, bytes | str | None]:
+    ) -> tuple[int, bytes | bytearray | str | None]:
         """
         Execute the Trivy scan, retrying on database errors (corruption, locking).
         Allows multiple retries for locking (with backoff), one retry for corruption.
@@ -243,7 +243,12 @@ class TrivyScanner:
 
             if exit_code != 0:
                 logger.error(f"Trivy scan failed with exit code {exit_code}")
-                logger.error(f"Output: {output[:500]}")  # First 500 chars
+                if output is not None:
+                    logger.error(f"Output: {output[:500]}")  # First 500 chars
+                return None
+
+            if output is None:
+                logger.error("Trivy scan returned no output")
                 return None
 
             # Parse JSON output
@@ -275,7 +280,7 @@ class TrivyScanner:
         timeout: int | None = None,
         skip_db_update: bool = False,
         extra_args: list[str] | None = None,
-    ) -> tuple[int, bytes | str | None, float]:
+    ) -> tuple[int, bytes | bytearray | str | None, float]:
         """
         Scan an image with Trivy using client mode pointing to server.
 
@@ -303,7 +308,7 @@ class TrivyScanner:
                 docker_service = DockerService()
             except DockerException as exc:
                 logger.error(f"Failed to initialize DockerService for Trivy client scan: {exc}")
-                return None, None, 0.0
+                return 1, None, 0.0
 
         try:
             trivy_container = docker_service.get_trivy_container()
@@ -311,7 +316,7 @@ class TrivyScanner:
                 logger.error("Trivy container not available for client mode")
                 if self.docker_service is None and docker_service is not None:
                     docker_service.close()
-                return None, None, 0.0
+                return 1, None, 0.0
 
             logger.info(
                 f"Scanning image: {image} (mode: client, secrets: {scan_secrets}, skip_db_update: {skip_db_update})"
@@ -323,7 +328,7 @@ class TrivyScanner:
             base_cmd = ["trivy"]
             if extra_args:
                 base_cmd.extend(extra_args)
-            else:
+            elif self.server_url:
                 base_cmd.extend(
                     [
                         "image",
@@ -477,6 +482,9 @@ class TrivyScanner:
             _ = timeout  # Acknowledge parameter to suppress unused warning
 
             try:
+                if self.docker_service is None:
+                    logger.error("DockerService not available for compliance scan")
+                    return None
                 trivy_container = self.docker_service.get_trivy_container()
                 if not trivy_container:
                     logger.error("Trivy container not available for compliance scan")
@@ -803,22 +811,23 @@ class TrivyScanner:
             except ValueError:
                 # Try Go timestamp format: "2025-10-28 06:30:22.195426703 +0000 UTC"
                 # Remove " UTC" suffix and parse
-                if " UTC" in updated_at_str:
-                    updated_at_str = updated_at_str.replace(" UTC", "")
-                    # Format: "2025-10-28 06:30:22.195426703 +0000"
-                    # Truncate nanoseconds to microseconds (Python only supports 6 digits)
-                    import re
+                if " UTC" not in updated_at_str:
+                    raise
+                updated_at_str = updated_at_str.replace(" UTC", "")
+                # Format: "2025-10-28 06:30:22.195426703 +0000"
+                # Truncate nanoseconds to microseconds (Python only supports 6 digits)
+                import re
 
-                    # Match: date time.nanoseconds timezone
-                    match = re.match(
-                        r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.(\d+) (.+)", updated_at_str
-                    )
-                    if match:
-                        date_time = match.group(1)
-                        nanos = match.group(2)[:6]  # Truncate to microseconds
-                        tz = match.group(3)
-                        updated_at_str = f"{date_time}.{nanos} {tz}"
-                    updated_at = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S.%f %z")
+                # Match: date time.nanoseconds timezone
+                match = re.match(
+                    r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.(\d+) (.+)", updated_at_str
+                )
+                if match:
+                    date_time = match.group(1)
+                    nanos = match.group(2)[:6]  # Truncate to microseconds
+                    tz = match.group(3)
+                    updated_at_str = f"{date_time}.{nanos} {tz}"
+                updated_at = datetime.strptime(updated_at_str, "%Y-%m-%d %H:%M:%S.%f %z")
 
             # Calculate age
             now = datetime.now(UTC)
@@ -844,6 +853,9 @@ class TrivyScanner:
             Scanner version string or None on error
         """
         try:
+            if self.docker_service is None:
+                logger.error("DockerService not available for version check")
+                return None
             trivy_container = self.docker_service.get_trivy_container()
             if not trivy_container:
                 logger.error("Trivy container not available")

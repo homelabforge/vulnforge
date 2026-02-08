@@ -9,8 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -151,7 +150,9 @@ async def db_engine():
     # Override the global async_session_maker so middleware and services use test database
 
     original_maker = database.async_session_maker
-    database.async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    database.async_session_maker = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
 
     try:
         yield engine
@@ -172,7 +173,7 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession]:
     """Create test database session."""
     from app.services.settings_manager import SettingsManager
 
-    async_session = sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
+    async_session = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
 
     session = async_session()
     try:

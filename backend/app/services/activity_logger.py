@@ -112,7 +112,7 @@ class ActivityLogger:
 
             metadata = {"error_message": error_message}
             if scan_id:
-                metadata["scan_id"] = scan_id
+                metadata["scan_id"] = str(scan_id)
 
             await self.repository.create(
                 event_type="scan_failed",

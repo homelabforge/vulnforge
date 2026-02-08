@@ -130,7 +130,7 @@ class FalsePositivePatternRepository:
             delete(FalsePositivePattern).where(FalsePositivePattern.id == pattern_id)
         )
         await self.db.commit()
-        return result.rowcount > 0
+        return result.rowcount > 0  # type: ignore[union-attr]
 
     async def matches_pattern(
         self, secret: Secret, container_name: str

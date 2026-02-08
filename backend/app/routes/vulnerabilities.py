@@ -75,7 +75,7 @@ async def bulk_update_vulnerabilities(
         raise HTTPException(status_code=400, detail="No vulnerability IDs provided")
 
     updated_count = await vuln_repo.bulk_update_status(
-        vuln_ids=vuln_ids, status=update.status, notes=update.notes
+        vuln_ids=vuln_ids, status=update.status or "to_fix", notes=update.notes
     )
 
     if updated_count == 0:
@@ -83,9 +83,8 @@ async def bulk_update_vulnerabilities(
 
     # Log bulk vulnerability status change for audit trail
     await activity_logger.log_bulk_vulnerability_status_changed(
-        vuln_count=updated_count,
-        old_status="to_fix",  # Assume default
-        new_status=update.status,
+        vuln_ids=vuln_ids,
+        new_status=update.status or "to_fix",
         username=user.username,
         notes=update.notes,
     )
@@ -194,7 +193,9 @@ async def update_vulnerability(
     user: User = Depends(require_admin),
 ):
     """Update vulnerability status/notes. Admin only."""
-    vuln = await vuln_repo.update_status(vuln_id=vuln_id, status=update.status, notes=update.notes)
+    vuln = await vuln_repo.update_status(
+        vuln_id=vuln_id, status=update.status or "to_fix", notes=update.notes
+    )
 
     if not vuln:
         raise HTTPException(status_code=404, detail="Vulnerability not found")
@@ -203,8 +204,9 @@ async def update_vulnerability(
     await activity_logger.log_vulnerability_status_changed(
         vuln_id=vuln.id,
         cve_id=vuln.cve_id,
+        container_name="",
         old_status="to_fix",  # Assume default
-        new_status=update.status,
+        new_status=update.status or "to_fix",
         username=user.username,
         notes=update.notes,
     )

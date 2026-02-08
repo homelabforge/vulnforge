@@ -60,9 +60,9 @@ def validate_oidc_url(url: str) -> None:
         raise SSRFProtectionError(f"Unsupported scheme: {parsed.scheme}")
 
     # Try to resolve hostname to IP
-    try:
-        import socket
+    import socket
 
+    try:
         ip_str = socket.gethostbyname(hostname)
         ip = ipaddress.ip_address(ip_str)
 
@@ -204,8 +204,9 @@ async def _cleanup_expired_states(db: AsyncSession) -> None:
     result = await db.execute(stmt)
     await db.commit()
 
-    if result.rowcount > 0:
-        logger.info(f"Cleaned up {result.rowcount} expired OIDC states")
+    deleted = result.rowcount or 0  # type: ignore[union-attr]
+    if deleted > 0:
+        logger.info(f"Cleaned up {deleted} expired OIDC states")
 
 
 async def validate_and_consume_state(
@@ -322,6 +323,9 @@ async def exchange_code_for_tokens(
         Tokens dict with access_token, refresh_token, id_token, etc.
     """
     token_endpoint = metadata.get("token_endpoint")
+    if not token_endpoint:
+        logger.error("Token endpoint not found in provider metadata")
+        return None
 
     # SECURITY: Validate token endpoint against SSRF attacks
     try:
@@ -390,6 +394,9 @@ async def verify_id_token(
         Verified claims dict, or None if verification fails
     """
     jwks_uri = metadata.get("jwks_uri")
+    if not jwks_uri:
+        logger.error("JWKS URI not found in provider metadata")
+        return None
 
     # SECURITY: Validate JWKS URI against SSRF
     try:
@@ -446,6 +453,9 @@ async def get_userinfo(
         Userinfo dict with claims (sub, email, name, etc.)
     """
     userinfo_endpoint = metadata.get("userinfo_endpoint")
+    if not userinfo_endpoint:
+        logger.error("Userinfo endpoint not found in provider metadata")
+        return None
 
     # SECURITY: Validate userinfo endpoint against SSRF
     try:

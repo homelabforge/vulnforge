@@ -152,6 +152,7 @@ class TestSettingsJSONHandling:
         await db_session.commit()
 
         value = await manager.get("test_list")
+        assert value is not None
         parsed = json.loads(value)
         assert isinstance(parsed, list)
         assert len(parsed) == 3
@@ -169,6 +170,7 @@ class TestSettingsJSONHandling:
         await db_session.commit()
 
         value = await manager.get("test_dict")
+        assert value is not None
         parsed = json.loads(value)
         assert isinstance(parsed, dict)
         assert parsed["key1"] == "value1"

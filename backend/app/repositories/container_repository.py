@@ -214,6 +214,16 @@ class ContainerRepository:
         )
         stats = result.first()
 
+        if stats is None:
+            return {
+                "total_vulnerabilities": 0,
+                "fixable_vulnerabilities": 0,
+                "critical_count": 0,
+                "high_count": 0,
+                "medium_count": 0,
+                "low_count": 0,
+            }
+
         return {
             "total_vulnerabilities": stats[0] or 0,
             "fixable_vulnerabilities": stats[1] or 0,
@@ -360,6 +370,10 @@ class ContainerRepository:
     async def create_or_update(self, container_data: dict) -> Container:
         """
         Create a new container or update existing one.
+
+        NOTE: Uses commit() instead of flush() because the primary caller
+        (container discovery in containers.py) has no outer transaction
+        management — switching to flush() would silently lose data.
 
         Args:
             container_data: Dictionary with container data
