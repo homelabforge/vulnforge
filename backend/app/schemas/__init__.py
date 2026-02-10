@@ -16,7 +16,7 @@ from app.schemas.container import (
     ContainerUpdate,
     ContainerVulnerabilitySummary,
 )
-from app.schemas.scan import Scan, ScanCreate, ScanProgress, ScanRequest, ScanSummary
+from app.schemas.scan import Scan, ScanCreate, ScanJobSchema, ScanProgress, ScanRequest, ScanSummary
 from app.schemas.setting import Setting, SettingUpdate
 from app.schemas.vulnerability import (
     PaginatedVulnerabilities,
@@ -54,6 +54,7 @@ __all__ = [
     "RemediationItem",
     "Scan",
     "ScanCreate",
+    "ScanJobSchema",
     "ScanRequest",
     "ScanProgress",
     "ScanSummary",

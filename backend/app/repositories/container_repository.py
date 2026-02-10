@@ -173,6 +173,57 @@ class ContainerRepository:
         result = await self.db.execute(select(Container).where(Container.name == name))
         return result.scalar_one_or_none()
 
+    @staticmethod
+    def _image_query_candidates(image: str) -> list[str]:
+        """Generate candidate image strings for registry-agnostic matching.
+
+        VulnForge stores images as Docker reports them (e.g. "nginx" for
+        docker.io/library/nginx, "ghcr.io/homelabforge/app" for GHCR). This
+        method generates multiple candidate forms so the query matches
+        regardless of how the caller specifies the image.
+
+        Returns:
+            List of candidate image strings (lowercased, deduplicated).
+        """
+        lowered = image.lower()
+        candidates = {lowered}
+
+        parts = lowered.split("/")
+        if len(parts) > 1 and ("." in parts[0] or ":" in parts[0]):
+            # Has explicit registry: "ghcr.io/foo/bar" → also try "foo/bar"
+            candidates.add("/".join(parts[1:]))
+        else:
+            # No explicit registry: "nginx" → also try "library/nginx"
+            if "/" not in lowered:
+                candidates.add(f"library/{lowered}")
+
+        return list(candidates)
+
+    async def get_by_image(self, image: str, tag: str | None = None) -> list[Container]:
+        """Get containers matching an image name and optional tag.
+
+        Uses candidate generation for registry-agnostic matching. Returns
+        results ordered by most recently scanned first.
+
+        Args:
+            image: Image repository name (e.g. "nginx", "ghcr.io/org/app").
+            tag: Optional image tag filter. If None, returns all tags.
+
+        Returns:
+            List of matching containers, ordered by last_scan_date DESC.
+        """
+        candidates = self._image_query_candidates(image)
+
+        query = select(Container).where(Container.image.in_(candidates))
+
+        if tag:
+            query = query.where(Container.image_tag == tag)
+
+        query = query.order_by(Container.last_scan_date.desc().nullslast())
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
     async def count_total(self) -> int:
         """
         Count total containers.

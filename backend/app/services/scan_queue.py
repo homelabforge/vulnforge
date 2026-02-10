@@ -11,7 +11,7 @@ from functools import total_ordering
 from sqlalchemy import select
 
 from app.database import db_session
-from app.models import Container, FalsePositivePattern, Scan, Secret, Vulnerability
+from app.models import Container, FalsePositivePattern, Scan, ScanJob, Secret, Vulnerability
 from app.services.activity_logger import ActivityLogger
 from app.services.cache_manager import get_cache
 from app.services.dive_service import DiveError, DiveService
@@ -37,8 +37,8 @@ class ScanPriority(Enum):
 
 @total_ordering
 @dataclass
-class ScanJob:
-    """Represents a scan job in the queue."""
+class QueuedScanJob:
+    """In-memory representation of a scan job in the priority queue."""
 
     container_id: int
     container_name: str
@@ -140,7 +140,7 @@ class ScanQueue:
             logger.info(f"Container {container_name} already queued")
             return False
 
-        job = ScanJob(
+        job = QueuedScanJob(
             container_id=container_id,
             container_name=container_name,
             priority=priority,
@@ -479,10 +479,62 @@ class ScanQueue:
         except Exception as e:
             logger.error(f"Failed to log scan failure activity: {e}", exc_info=True)
 
-    async def _process_scan(self, job: ScanJob, docker_service: DockerService):
+    @staticmethod
+    async def _link_scan_job(db, container_id: int, scan_id: int) -> "ScanJob | None":
+        """Find the oldest queued ScanJob for this container and link it to the Scan.
+
+        Retries once after 0.5s if the row is not found, to handle the rare case
+        where the API commit hasn't fully propagated yet (e.g., WAL checkpoint delay).
+        """
+        for attempt in range(2):
+            result = await db.execute(
+                select(ScanJob)
+                .where(ScanJob.container_id == container_id, ScanJob.status == "queued")
+                .order_by(ScanJob.created_at.asc(), ScanJob.id.asc())
+                .limit(1)
+            )
+            scan_job_row = result.scalar_one_or_none()
+            if scan_job_row:
+                scan_job_row.status = "processing"
+                scan_job_row.scan_id = scan_id
+                await db.commit()
+                logger.debug(f"Linked ScanJob {scan_job_row.id} → Scan {scan_id}")
+                return scan_job_row
+
+            if attempt == 0:
+                logger.debug(
+                    f"ScanJob not found for container {container_id} on first attempt, "
+                    f"retrying in 0.5s"
+                )
+                await asyncio.sleep(0.5)
+
+        return None
+
+    @staticmethod
+    async def _fail_scan_job(db, container_id: int, error_message: str) -> None:
+        """Mark the oldest processing ScanJob for a container as failed."""
+        result = await db.execute(
+            select(ScanJob)
+            .where(ScanJob.container_id == container_id, ScanJob.status == "processing")
+            .order_by(ScanJob.created_at.asc(), ScanJob.id.asc())
+            .limit(1)
+        )
+        scan_job_row = result.scalar_one_or_none()
+        if scan_job_row:
+            from app.utils.timezone import get_now as _get_now
+
+            scan_job_row.status = "failed"
+            scan_job_row.error_message = error_message[:500] if error_message else None
+            scan_job_row.completed_at = _get_now()
+            await db.commit()
+            logger.debug(f"Marked ScanJob {scan_job_row.id} as failed")
+
+    async def _process_scan(self, job: QueuedScanJob, docker_service: DockerService):
         """Process a single scan job — orchestrator for scan lifecycle."""
 
         result_payload: dict | None = None
+        scan_job_row: ScanJob | None = None
+        timeout = 300  # default, overridden by settings below
 
         try:
             async with db_session() as db:
@@ -538,6 +590,9 @@ class ScanQueue:
                     db.add(scan)
                     await db.commit()
                     await db.refresh(scan)
+
+                    # --- Link ScanJob (if one exists) → Scan ---
+                    scan_job_row = await self._link_scan_job(db, container.id, scan.id)
 
                     container.last_scan_status = "in_progress"
                     await db.commit()
@@ -755,14 +810,27 @@ class ScanQueue:
                         )
                         raise
 
-                    # Finalize
+                    # Finalize — update ScanJob status to match scan outcome
                     container.last_scan_date = get_now()
+                    if scan_job_row:
+                        if scan.scan_status == "completed":
+                            scan_job_row.status = "completed"
+                            scan_job_row.completed_at = get_now()
+                        else:
+                            scan_job_row.status = "failed"
+                            scan_job_row.error_message = scan.error_message
+                            scan_job_row.completed_at = get_now()
                     await db.commit()
                     result_payload = {
                         "duration": duration,
                         "status": scan.scan_status,
                     }
                 except TimeoutError:
+                    if scan_job_row:
+                        scan_job_row.status = "failed"
+                        scan_job_row.error_message = f"Scan timeout after {timeout}s"
+                        scan_job_row.completed_at = get_now()
+                        await db.commit()
                     raise
 
         except TimeoutError:
@@ -770,15 +838,32 @@ class ScanQueue:
 
         except Exception as e:
             logger.error(f"Scan processing error for {job.container_name}: {e}", exc_info=True)
+            # Best-effort: mark ScanJob as failed
+            try:
+                async with db_session() as err_db:
+                    await self._fail_scan_job(err_db, job.container_id, str(e))
+            except Exception:
+                logger.debug("Could not update ScanJob on error", exc_info=True)
             raise
 
         return result_payload
 
-    def start_batch(self, total: int):
-        """Start a new scan batch."""
-        self._batch_total = total
-        self._batch_completed = 0
-        self._batch_results = []  # Clear previous results
+    def register_batch(self, total: int, source: str = "api") -> None:
+        """Register additional containers for batch tracking.
+
+        Unlike the previous start_batch(), this is ADDITIVE — it never resets
+        counters mid-flight. This is safe for overlapping batches (e.g. scheduler
+        enqueuing while an API batch is still running).
+
+        Args:
+            total: Number of containers being enqueued in this batch.
+            source: Origin of the batch ("api" or "scheduler") for logging.
+        """
+        self._batch_total += total
+        logger.info(
+            f"Registered batch ({source}): +{total} containers "
+            f"(total pending: {self._batch_total - self._batch_completed})"
+        )
         self._emit_status_update()
 
     async def increment_completed(self):

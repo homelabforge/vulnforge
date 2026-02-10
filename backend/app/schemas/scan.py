@@ -58,6 +58,21 @@ class ScanProgress(BaseModel):
     completed_at: datetime | None
 
 
+class ScanJobSchema(BaseModel):
+    """Schema for scan job status responses."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    container_id: int
+    container_name: str
+    status: str  # queued, processing, completed, failed
+    scan_id: int | None = None
+    error_message: str | None = None
+    created_at: datetime
+    completed_at: datetime | None = None
+
+
 class ScanSummary(BaseModel):
     """Summary of scan results."""
 

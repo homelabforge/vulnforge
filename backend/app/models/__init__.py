@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from app.models.notification_log import NotificationLog
     from app.models.notification_rule import NotificationRule
     from app.models.scan import Scan
+    from app.models.scan_job import ScanJob
     from app.models.secret import Secret
     from app.models.setting import Setting
     from app.models.user import User
@@ -36,6 +37,7 @@ __all__ = [
     "NotificationLog",
     "NotificationRule",
     "Scan",
+    "ScanJob",
     "ScanResult",  # Legacy alias
     "Secret",
     "Setting",
@@ -90,6 +92,10 @@ def __getattr__(name: str):
         from app.models.scan import Scan
 
         return Scan
+    if name == "ScanJob":
+        from app.models.scan_job import ScanJob
+
+        return ScanJob
     if name == "ScanResult":
         # Compatibility alias: ScanResult is now Scan
         from app.models.scan import Scan

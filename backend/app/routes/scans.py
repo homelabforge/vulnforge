@@ -13,16 +13,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Container, Scan, Vulnerability
+from app.models import Container, Scan, ScanJob, Vulnerability
 from app.schemas import Scan as ScanSchema
-from app.schemas import ScanRequest
+from app.schemas import ScanJobSchema, ScanRequest
 from app.services.docker_client import DockerService
 from app.services.kev import get_kev_service
 from app.services.notifications import NotificationDispatcher
 from app.services.scan_errors import get_error_classifier
 from app.services.scan_events import scan_events
 from app.services.scan_queue import ScanPriority, get_scan_queue
-from app.services.scan_state import scan_state
 from app.services.scan_trends import build_scan_trends
 from app.services.settings_manager import SettingsManager
 from app.services.trivy_scanner import TrivyScanner
@@ -42,7 +41,18 @@ def _format_sse(payload: dict, event: str = "scan-status") -> str:
 
 
 async def perform_scan(container_id: int, db: AsyncSession, docker_service: DockerService):
-    """Perform a single container scan."""
+    """Perform a single container scan.
+
+    .. deprecated::
+        This legacy synchronous scan path is deprecated. Use
+        :class:`~app.services.scan_orchestrator.ScanOrchestrator` instead,
+        which routes through the scan queue and provides ScanJob correlation,
+        CVE delta, Dive analysis, secret scanning, and batch notifications.
+        This function will be removed in the next major release.
+    """
+    logger.warning(
+        "perform_scan() is deprecated — use ScanOrchestrator.enqueue_containers() instead"
+    )
     # Get container
     result = await db.execute(select(Container).where(Container.id == container_id))
     container = result.scalar_one_or_none()
@@ -201,83 +211,35 @@ async def perform_scan(container_id: int, db: AsyncSession, docker_service: Dock
         await dispatcher.notify_scan_failed(container.name, classified.user_message)
 
 
-async def run_scans_sequentially(container_ids: list[int], db: AsyncSession):
-    """Run scans sequentially with progress tracking."""
-    docker_service = DockerService()
-
-    # Start scan tracking
-    scan_state.start_scan(len(container_ids))
-
-    try:
-        for idx, container_id in enumerate(container_ids, 1):
-            # Get container name for progress
-            result = await db.execute(select(Container).where(Container.id == container_id))
-            container = result.scalar_one_or_none()
-
-            if container:
-                # Update progress
-                scan_state.update_progress(container.name, idx - 1)
-
-                # Perform scan
-                await perform_scan(container_id, db, docker_service)
-
-                # Update progress after completion
-                scan_state.update_progress(container.name, idx)
-    finally:
-        # Always finish scan state
-        scan_state.finish_scan()
-        docker_service.close()
-
-
 @router.post("/scan", response_model=dict)
 @limiter.limit("10/minute")
 async def scan_containers(
     scan_request: ScanRequest, request: Request, db: AsyncSession = Depends(get_db)
 ):
-    """
-    Trigger a scan of containers using the scan queue.
+    """Trigger a scan of containers using the scan queue.
 
     Rate limit: 10 requests per minute to prevent scan spam.
+
+    Delegates to ScanOrchestrator which handles ScanJob creation, batch
+    registration, and enqueuing in a single two-phase commit.
     """
-    container_ids = scan_request.container_ids
-    scan_queue = get_scan_queue()
+    from app.services.scan_orchestrator import ScanOrchestrator
 
-    # Get containers to scan
-    if not container_ids:
-        # Scan all containers
-        result = await db.execute(select(Container.id, Container.name))
-        containers = result.fetchall()
-    else:
-        # Scan specific containers
-        result = await db.execute(
-            select(Container.id, Container.name).where(Container.id.in_(container_ids))
-        )
-        containers = result.fetchall()
+    orchestrator = ScanOrchestrator(db)
+    result = await orchestrator.enqueue_containers(
+        container_ids=scan_request.container_ids,
+        source="api",
+    )
 
-    if not containers:
+    if result.total_requested == 0:
         raise HTTPException(status_code=404, detail="No containers found to scan")
 
-    # Determine priority based on number of containers
-    priority = ScanPriority.HIGH if len(containers) <= 3 else ScanPriority.NORMAL
-
-    # Start batch tracking for progress
-    scan_queue.start_batch(len(containers))
-
-    # Enqueue all containers
-    queued_count = 0
-    skipped_count = 0
-
-    for container_id, container_name in containers:
-        if await scan_queue.enqueue(container_id, container_name, priority):
-            queued_count += 1
-        else:
-            skipped_count += 1
-
     return {
-        "message": f"Queued {queued_count} containers for scanning",
-        "queued": queued_count,
-        "skipped": skipped_count,
-        "total_requested": len(containers),
+        "message": f"Queued {result.queued} containers for scanning",
+        "queued": result.queued,
+        "skipped": result.skipped,
+        "total_requested": result.total_requested,
+        "job_ids": result.job_ids,
     }
 
 
@@ -477,6 +439,7 @@ async def get_cve_delta(
         default=24, ge=1, le=720, description="Hours to look back for scan deltas"
     ),
     container_name: str | None = Query(default=None, description="Filter by container name"),
+    scan_id: int | None = Query(default=None, description="Filter by specific scan ID"),
 ):
     """
     Get CVE delta information from recent scans.
@@ -487,14 +450,11 @@ async def get_cve_delta(
     Args:
         since_hours: Number of hours to look back (default 24, max 720/30 days)
         container_name: Optional filter for specific container
+        scan_id: Optional filter for a specific scan (deterministic retrieval)
 
     Returns:
         List of scan deltas with container info, cves_fixed, and cves_introduced
     """
-    from datetime import timedelta
-
-    cutoff_time = get_now() - timedelta(hours=since_hours)
-
     # Build query for completed scans with delta info
     query = (
         select(
@@ -508,12 +468,20 @@ async def get_cve_delta(
             Container.image_tag,
         )
         .join(Container, Scan.container_id == Container.id)
-        .where(
-            Scan.scan_status == "completed",
-            Scan.scan_date >= cutoff_time,
-        )
+        .where(Scan.scan_status == "completed")
         .order_by(Scan.scan_date.desc())
     )
+
+    from datetime import timedelta
+
+    cutoff_time = get_now() - timedelta(hours=since_hours)
+
+    # When scan_id is provided, skip the time window — it's a deterministic lookup.
+    # This prevents delayed scans (crash recovery, outages) from returning empty results.
+    if scan_id:
+        query = query.where(Scan.id == scan_id)
+    else:
+        query = query.where(Scan.scan_date >= cutoff_time)
 
     if container_name:
         query = query.where(Container.name == container_name)
@@ -558,3 +526,22 @@ async def get_cve_delta(
         },
         "scans": deltas,
     }
+
+
+@router.get("/jobs/{job_id}", response_model=ScanJobSchema)
+@limiter.limit("120/minute")
+async def get_scan_job_status(job_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """Get status of a scan job by its correlation ID.
+
+    External consumers (TideWatch) poll this endpoint to track scan progress
+    and retrieve the linked scan_id once processing completes.
+
+    Rate limit: 120 requests per minute (read endpoint, consistent with /current).
+    """
+    result = await db.execute(select(ScanJob).where(ScanJob.id == job_id))
+    scan_job = result.scalar_one_or_none()
+
+    if not scan_job:
+        raise HTTPException(status_code=404, detail="Scan job not found")
+
+    return ScanJobSchema.model_validate(scan_job)

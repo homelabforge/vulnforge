@@ -55,6 +55,8 @@ def _mock_background_services(monkeypatch):
             self.batch_total = 0
             self.batch_completed = 0
             self._queued_containers = set()
+            self.active_scans: set[int] = set()
+            self.queued_scans: set[int] = set()
 
         async def start(self, num_workers: int = 0):
             self.started = True
@@ -63,10 +65,9 @@ def _mock_background_services(monkeypatch):
             self.started = False
             self._queued_containers.clear()
 
-        def start_batch(self, total: int):
-            """Start a batch scan operation."""
-            self.batch_total = total
-            self.batch_completed = 0
+        def register_batch(self, total: int, source: str = "api") -> None:
+            """Register a batch scan operation (additive)."""
+            self.batch_total += total
 
         def get_status(self):
             return {

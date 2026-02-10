@@ -28,8 +28,10 @@ class TestSchedulerStartup:
 
         mock_scheduler.start.assert_called_once()
         add_job_calls = mock_scheduler.add_job.call_args_list
-        assert len(add_job_calls) == 1
+        # 2 jobs: vulnerability scan + ScanJob cleanup
+        assert len(add_job_calls) == 2
         assert add_job_calls[0].args[0] is scheduler_module.scheduled_scan_task
+        assert add_job_calls[1].args[0] is scheduler_module.scheduled_scan_job_cleanup
 
     @patch("app.services.scheduler.AsyncIOScheduler")
     def test_scheduler_stops_gracefully(self, mock_scheduler_class):

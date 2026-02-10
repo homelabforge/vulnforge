@@ -7,7 +7,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import db_session
-from app.models import Scan, Vulnerability
+from app.models import Scan, ScanJob, Vulnerability
 from app.services.settings_manager import SettingsManager
 from app.utils.timezone import get_now
 
@@ -87,6 +87,71 @@ class CleanupService:
 
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
+            await db.rollback()
+            raise
+
+    @staticmethod
+    async def cleanup_old_scan_jobs(db: AsyncSession | None = None, retention_days: int = 30):
+        """Delete completed/failed ScanJob rows older than retention period.
+
+        Also marks orphaned 'queued' ScanJob rows (older than 1 hour) as failed.
+
+        Args:
+            db: Optional database session. If None, creates its own.
+            retention_days: Days to retain completed/failed jobs (default 30).
+        """
+        if db is not None:
+            return await CleanupService._cleanup_scan_jobs_with_session(db, retention_days)
+        else:
+            async with db_session() as session:
+                return await CleanupService._cleanup_scan_jobs_with_session(session, retention_days)
+
+    @staticmethod
+    async def _cleanup_scan_jobs_with_session(db: AsyncSession, retention_days: int):
+        """Internal method to clean up ScanJob rows."""
+        try:
+            cutoff = get_now() - timedelta(days=retention_days)
+            orphan_cutoff = get_now() - timedelta(hours=1)
+
+            # Delete terminal ScanJob rows older than retention period
+            old_jobs = await db.execute(
+                delete(ScanJob)
+                .where(
+                    ScanJob.status.in_(["completed", "failed"]),
+                    ScanJob.completed_at < cutoff,
+                )
+                .returning(ScanJob.id)
+            )
+            deleted_count = len(old_jobs.fetchall())
+
+            # Mark orphaned "queued" jobs (stuck > 1 hour) as failed
+            orphan_result = await db.execute(
+                select(ScanJob).where(
+                    ScanJob.status == "queued",
+                    ScanJob.created_at < orphan_cutoff,
+                )
+            )
+            orphans = orphan_result.scalars().all()
+            for orphan in orphans:
+                orphan.status = "failed"
+                orphan.error_message = "Orphaned: stuck in queued state for over 1 hour"
+                orphan.completed_at = get_now()
+
+            await db.commit()
+
+            if deleted_count or orphans:
+                logger.info(
+                    f"ScanJob cleanup: deleted {deleted_count} old jobs, "
+                    f"marked {len(orphans)} orphans as failed"
+                )
+
+            return {
+                "deleted": deleted_count,
+                "orphans_failed": len(orphans),
+                "retention_days": retention_days,
+            }
+        except Exception as e:
+            logger.error(f"Error during ScanJob cleanup: {e}")
             await db.rollback()
             raise
 

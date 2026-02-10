@@ -64,11 +64,13 @@ router = APIRouter()
 
 @router.post("/cleanup")
 async def trigger_cleanup(db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)):
-    """Manually trigger cleanup of old scan history."""
+    """Manually trigger cleanup of old scan history and completed scan jobs."""
     result = await CleanupService.cleanup_old_scans(db)
+    scan_job_result = await CleanupService.cleanup_old_scan_jobs(db)
     return {
         "status": "completed",
         **result,
+        "scan_jobs": scan_job_result,
     }
 
 

@@ -221,7 +221,7 @@ class TestBatchScanWorkflow:
         await queue.start(num_workers=3)
 
         try:
-            queue.start_batch(len(containers))
+            queue.register_batch(len(containers), source="test")
 
             for container in containers:
                 await queue.enqueue(

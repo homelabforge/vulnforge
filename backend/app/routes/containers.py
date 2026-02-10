@@ -130,6 +130,75 @@ async def list_containers(
     )
 
 
+@router.get("/by-name/{name}", response_model=ContainerSchema)
+async def get_container_by_name(
+    name: str,
+    container_repo: ContainerRepository = Depends(get_container_repository),
+):
+    """Get container by name (O(1) lookup).
+
+    Used by TideWatch for efficient container ID resolution without
+    fetching the full container list.
+    """
+    container = await container_repo.get_by_name(name)
+
+    if not container:
+        raise HTTPException(status_code=404, detail="Container not found")
+
+    container_schema = ContainerSchema.model_validate(container)
+    container_schema.vulnerability_summary = _build_vuln_summary(container)
+
+    latest_scan = await container_repo.get_latest_scans_with_vulnerabilities([container.id])
+    scan_tuple = latest_scan.get(container.id)
+    if scan_tuple:
+        scan, vulnerabilities = scan_tuple
+        container_schema.last_scan = _build_last_scan(scan, vulnerabilities)
+
+    return container_schema
+
+
+@router.get("/by-image", response_model=list[ContainerSchema])
+async def get_containers_by_image(
+    image: str,
+    tag: str | None = None,
+    container_repo: ContainerRepository = Depends(get_container_repository),
+):
+    """Get containers matching an image name and optional tag.
+
+    Returns a list because multiple containers may share the same image+tag
+    (e.g. two containers running nginx:latest). Results are ordered by
+    last_scan_date DESC so the most recently scanned container is first.
+
+    Used by TideWatch for image-based vulnerability lookups.
+
+    Args:
+        image: Image repository name (e.g. "nginx", "ghcr.io/org/app").
+        tag: Optional image tag filter. If omitted, returns all tags.
+    """
+    containers = await container_repo.get_by_image(image, tag)
+
+    if not containers:
+        raise HTTPException(
+            status_code=404,
+            detail="No containers found for this image",
+        )
+
+    result = []
+    container_ids = [c.id for c in containers]
+    latest_scans = await container_repo.get_latest_scans_with_vulnerabilities(container_ids)
+
+    for container in containers:
+        schema = ContainerSchema.model_validate(container)
+        schema.vulnerability_summary = _build_vuln_summary(container)
+        scan_tuple = latest_scans.get(container.id)
+        if scan_tuple:
+            scan, vulnerabilities = scan_tuple
+            schema.last_scan = _build_last_scan(scan, vulnerabilities)
+        result.append(schema)
+
+    return result
+
+
 @router.get("/{container_id}", response_model=ContainerSchema)
 async def get_container(
     container_id: int,

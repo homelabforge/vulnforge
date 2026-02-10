@@ -23,6 +23,7 @@ class Container(Base):
         # Composite indexes for common query patterns
         Index("ix_container_running_vulns", "is_running", "total_vulns"),
         Index("ix_container_critical_count", "critical_count"),
+        Index("ix_container_image_tag", "image", "image_tag"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

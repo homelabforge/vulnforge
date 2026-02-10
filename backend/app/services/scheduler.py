@@ -57,31 +57,26 @@ async def scheduled_scan_task():
         # Log and continue to the actual scan.
         logger.error(f"Error during pre-scan discovery: {e}")
 
-    # Now trigger the scan
+    # Enqueue all containers through ScanOrchestrator (same path as API)
     try:
-        from app.routes.scans import perform_scan
+        from app.services.scan_orchestrator import ScanOrchestrator
+        from app.services.scan_queue import ScanPriority
 
         async with async_session_maker() as db:
-            # Get all container IDs
-            result = await db.execute(select(Container.id))
-            container_ids = [row[0] for row in result.fetchall()]
-
-            docker_service = DockerService()
-
-            # Queue scans for all containers
-            for cid in container_ids:
-                try:
-                    await perform_scan(cid, db, docker_service)
-                except Exception as e:
-                    # INTENTIONAL: One container failure should not stop other scans.
-                    logger.error(f"Error scanning container {cid}: {e}")
-
-            docker_service.close()
-            logger.info(f"Scheduled scan complete: {len(container_ids)} containers scanned")
+            orchestrator = ScanOrchestrator(db)
+            result = await orchestrator.enqueue_containers(
+                container_ids=None,
+                priority=ScanPriority.NORMAL,
+                source="scheduler",
+            )
+            logger.info(
+                f"Scheduled scan enqueued: {result.queued} containers "
+                f"(skipped {result.skipped}, total {result.total_requested})"
+            )
 
     except Exception as e:
         # INTENTIONAL: Scheduled scan errors should be logged but not crash the scheduler.
-        logger.error(f"Error during scheduled scan: {e}")
+        logger.error(f"Error during scheduled scan enqueue: {e}")
 
 
 async def scheduled_compliance_scan_task():
@@ -161,6 +156,19 @@ async def scheduled_kev_refresh_task():
         logger.error(f"Error during KEV refresh: {e}")
 
 
+async def scheduled_scan_job_cleanup():
+    """Clean up old completed/failed ScanJob rows and mark orphans."""
+    try:
+        from app.services.cleanup_service import CleanupService
+
+        result = await CleanupService.cleanup_old_scan_jobs()
+        if result["deleted"] or result["orphans_failed"]:
+            logger.info(f"ScanJob cleanup: {result}")
+    except Exception as e:
+        # INTENTIONAL: Cleanup errors should not crash the scheduler.
+        logger.error(f"Error during ScanJob cleanup: {e}")
+
+
 class ScanScheduler:
     """Service for scheduling automated scans."""
 
@@ -212,6 +220,16 @@ class ScanScheduler:
                     replace_existing=True,
                 )
                 logger.info(f"Compliance scan scheduled: {compliance_schedule}")
+
+            # Add ScanJob cleanup (daily at 2 AM)
+            self.scheduler.add_job(
+                scheduled_scan_job_cleanup,
+                trigger=CronTrigger.from_crontab("0 2 * * *"),
+                id="scan_job_cleanup",
+                name="ScanJob retention cleanup",
+                replace_existing=True,
+            )
+            logger.info("ScanJob cleanup scheduled: 0 2 * * * (daily at 2 AM)")
 
             # Add KEV refresh job (daily at 1 AM)
             if kev_enabled:
