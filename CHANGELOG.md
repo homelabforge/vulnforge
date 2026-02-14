@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.2.1] - 2026-02-14
+
 ### Dev Dependencies
 - **@eslint/js**: 9.39.2 → 10.0.1
 - **@types/react**: 19.2.10 → 19.2.14
