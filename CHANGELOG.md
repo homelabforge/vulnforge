@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dev Dependencies
+- **@eslint/js**: 9.39.2 → 10.0.1
+- **@types/react**: 19.2.10 → 19.2.14
+- **@typescript-eslint/eslint-plugin**: 8.54.0 → 8.55.0
+- **@typescript-eslint/parser**: 8.54.0 → 8.55.0
+- **@vitejs/plugin-react-swc**: 4.2.2 → 4.2.3
+- **eslint**: 9.39.2 → 10.0.0
+- **jsdom**: 27.4.0 → 28.0.0
+- **ruff**: 0.15.0 → 0.15.1
+- **typescript-eslint**: 8.54.0 → 8.55.0
+
+### App Dependencies
+- **@tanstack/react-query**: 5.90.20 → 5.90.21
+- **authlib**: 1.6.6 → 1.6.8
+- **fastapi**: 0.128.2 → 0.129.0
+- **lucide-react**: 0.563.0 → 0.564.0
+
+### Dockerfile Dependencies
+- **oven/bun**: 1.3.8-alpine → 1.3.9-alpine
+
+### HTTP Servers
+- **granian**: 2.7.0 → 2.7.1
+
 ### Added
 - **ScanOrchestrator Service** — Extracts the two-phase commit pattern (create ScanJob → commit → enqueue) into a reusable service used by both the API and scheduler
 - **GET /api/v1/containers/by-image** — Image-based container lookup with registry-agnostic matching for TideWatch integration
