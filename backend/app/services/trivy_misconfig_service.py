@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from typing import Any
 
 from docker.errors import DockerException
@@ -11,6 +12,12 @@ from app.services.docker_client import DockerService
 from app.services.trivy_scanner import TrivyScanner
 from app.utils.log_redaction import sanitize_for_log
 from app.utils.timezone import get_now
+
+# Matches Dockerfile ENV/ARG lines that assign values to sensitive-looking variable names
+_SENSITIVE_ASSIGNMENT = re.compile(
+    r"(?:ENV|ARG)\s+\w*(?:PASSWORD|SECRET|TOKEN|KEY|CREDENTIAL|API_KEY)\w*\s*=",
+    re.IGNORECASE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +104,12 @@ class TrivyMisconfigService:
             if exit_code != 0:
                 logger.error(f"Trivy misconfiguration scan failed with exit code {exit_code}")
                 if output:
-                    logger.error(f"Output: {output[:500]}")
+                    output_text = (
+                        output.decode("utf-8", errors="replace")
+                        if isinstance(output, (bytes, bytearray))
+                        else str(output)
+                    )
+                    logger.error("Output: %s", sanitize_for_log(output_text))
                 return None
 
             # Parse JSON output
@@ -109,7 +121,12 @@ class TrivyMisconfigService:
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse Trivy JSON output: {e}")
                 if output:
-                    logger.error(f"Output: {output[:500]}")
+                    output_text = (
+                        output.decode("utf-8", errors="replace")
+                        if isinstance(output, (bytes, bytearray))
+                        else str(output)
+                    )
+                    logger.error("Output: %s", sanitize_for_log(output_text))
                 return None
 
         except DockerException as e:
@@ -165,16 +182,19 @@ class TrivyMisconfigService:
                 end_line = cause_metadata.get("EndLine")
                 code = cause_metadata.get("Code", {})
 
-                # Extract code lines if available
+                # Extract code lines if available (redact sensitive assignments)
                 code_lines = code.get("Lines", [])
                 code_snippet = None
                 if code_lines:
-                    code_snippet = "\n".join(
-                        [
-                            f"Line {line.get('Number', '?')}: {line.get('Content', '')}"
-                            for line in code_lines
-                        ]
-                    )
+                    snippet_lines = []
+                    for line in code_lines:
+                        line_num = line.get("Number", "?")
+                        content = line.get("Content", "")
+                        if _SENSITIVE_ASSIGNMENT.search(content):
+                            snippet_lines.append(f"Line {line_num}: ***REDACTED***")
+                        else:
+                            snippet_lines.append(f"Line {line_num}: {content}")
+                    code_snippet = "\n".join(snippet_lines)
 
                 findings.append(
                     {

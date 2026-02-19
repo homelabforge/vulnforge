@@ -21,6 +21,7 @@ class FPPatternSchema(BaseModel):
     container_name: str
     file_path: str
     rule_id: str
+    start_line: int | None = None
     reason: str | None
     created_by: str
     created_at: str
@@ -52,6 +53,7 @@ async def list_fp_patterns(
             container_name=p.container_name,
             file_path=p.file_path,
             rule_id=p.rule_id,
+            start_line=p.start_line,
             reason=p.reason,
             created_by=p.created_by,
             created_at=p.created_at.isoformat(),
@@ -83,6 +85,7 @@ async def list_container_fp_patterns(
             container_name=p.container_name,
             file_path=p.file_path,
             rule_id=p.rule_id,
+            start_line=p.start_line,
             reason=p.reason,
             created_by=p.created_by,
             created_at=p.created_at.isoformat(),
@@ -132,6 +135,7 @@ async def create_fp_pattern(
         container_name=pattern.container_name,
         file_path=pattern.file_path,
         rule_id=pattern.rule_id,
+        start_line=pattern.start_line,
         reason=pattern.reason,
         created_by=pattern.created_by,
         created_at=pattern.created_at.isoformat(),
@@ -144,20 +148,46 @@ async def create_fp_pattern(
 async def delete_fp_pattern(
     pattern_id: int,
     fp_repo: FalsePositivePatternRepository = Depends(get_fp_pattern_repository),
+    activity_logger: ActivityLogger = Depends(get_activity_logger),
     user: User = Depends(require_admin),
 ):
     """
-    Delete a false positive pattern. Admin only.
+    Delete a false positive pattern and unsuppress affected secrets. Admin only.
 
     Args:
         pattern_id: Pattern ID
 
     Returns:
-        Success message
+        Success message with unsuppressed count
     """
-    deleted = await fp_repo.delete(pattern_id)
+    # Read pattern details before deletion for audit trail
+    pattern = await fp_repo.get_by_id(pattern_id)
+    if not pattern:
+        raise HTTPException(status_code=404, detail="Pattern not found")
+
+    pattern_info = {
+        "container_name": pattern.container_name,
+        "file_path": pattern.file_path,
+        "rule_id": pattern.rule_id,
+        "start_line": pattern.start_line,
+    }
+
+    deleted, unsuppressed = await fp_repo.delete_and_unsuppress(pattern_id)
 
     if not deleted:
         raise HTTPException(status_code=404, detail="Pattern not found")
 
-    return {"message": "Pattern deleted successfully"}
+    # Audit: log the deletion
+    await activity_logger.log_false_positive_deleted(
+        pattern_id=pattern_id,
+        container_name=pattern_info["container_name"],
+        file_path=pattern_info["file_path"],
+        rule_id=pattern_info["rule_id"],
+        username=user.username,
+        unsuppressed_count=unsuppressed,
+    )
+
+    return {
+        "message": "Pattern deleted successfully",
+        "unsuppressed_secrets": unsuppressed,
+    }

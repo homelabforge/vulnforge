@@ -121,7 +121,7 @@ async def export_secrets(
                 "file_path": s.file_path,
                 "start_line": s.start_line,
                 "end_line": s.end_line,
-                "match": s.match,
+                "match": "***REDACTED***",
                 "layer_digest": s.layer_digest,
                 "status": s.status,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
@@ -165,7 +165,7 @@ async def export_secrets(
                     "File Path": s.file_path or "",
                     "Start Line": s.start_line or "",
                     "End Line": s.end_line or "",
-                    "Match": s.match,
+                    "Match": "***REDACTED***",
                     "Layer Digest": s.layer_digest or "",
                     "Status": s.status,
                     "Created At": s.created_at.isoformat() if s.created_at else "",
@@ -257,6 +257,12 @@ async def update_secret(
     if update.status is None:
         raise HTTPException(status_code=400, detail="Status is required")
 
+    # Read current status BEFORE updating so audit log captures the real transition
+    existing = await secret_repo.get_by_id(secret_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Secret not found")
+    old_status = existing.status
+
     secret = await secret_repo.update_status(
         secret_id=secret_id, status=update.status, notes=update.notes
     )
@@ -264,12 +270,10 @@ async def update_secret(
     if not secret:
         raise HTTPException(status_code=404, detail="Secret not found")
 
-    # Log the status change for audit trail
-    # Get container name from secret's scan
+    # Get container name from secret's scan for audit trail
     container_name = "unknown"
     if secret.scan_id:
         try:
-            # Get scan to find container
             from sqlalchemy import select
 
             from app.models import Scan
@@ -291,7 +295,7 @@ async def update_secret(
     await activity_logger.log_secret_status_changed(
         secret_id=secret.id,
         container_name=container_name,
-        old_status="active",  # Assume active before update
+        old_status=old_status,
         new_status=update.status,
         username=user.username,
         notes=update.notes,
@@ -329,15 +333,19 @@ async def bulk_update_secrets(
     if update.status is None:
         raise HTTPException(status_code=400, detail="Status is required")
 
+    # Capture per-secret old statuses before bulk update (single query)
+    existing_secrets = await secret_repo.get_by_ids(secret_ids)
+    old_statuses: dict[int, str] = {s.id: s.status for s in existing_secrets}
+
     updated_count = await secret_repo.bulk_update_status(
         secret_ids=secret_ids, status=update.status, notes=update.notes
     )
 
-    # Log bulk status change for audit trail
+    # Log bulk status change with per-secret old status tracking
     await activity_logger.log_secret_status_changed(
         secret_id=0,  # Bulk operation
         container_name=f"bulk_{len(secret_ids)}_secrets",
-        old_status="active",
+        old_status=json.dumps(old_statuses),
         new_status=update.status,
         username=user.username,
         notes=f"Bulk update of {updated_count} secrets: {update.notes or 'No reason provided'}",

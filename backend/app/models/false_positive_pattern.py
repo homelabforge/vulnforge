@@ -20,7 +20,13 @@ class FalsePositivePattern(Base):
 
     __tablename__ = "false_positive_patterns"
     __table_args__ = (
-        UniqueConstraint("container_name", "file_path", "rule_id", name="uix_fp_pattern"),
+        UniqueConstraint(
+            "container_name",
+            "file_path",
+            "rule_id",
+            "start_line",
+            name="uix_fp_pattern_v2",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -29,6 +35,9 @@ class FalsePositivePattern(Base):
     container_name: Mapped[str] = mapped_column(String(255))  # Container name pattern
     file_path: Mapped[str] = mapped_column(String(500))  # Exact file path
     rule_id: Mapped[str] = mapped_column(String(100))  # Trivy rule ID
+    start_line: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )  # NULL = wildcard (matches any line)
 
     # Metadata
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # Why it's a FP

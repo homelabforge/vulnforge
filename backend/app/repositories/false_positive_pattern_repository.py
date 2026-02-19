@@ -1,6 +1,6 @@
 """Repository for managing persistent false positive patterns."""
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Container, FalsePositivePattern, Scan, Secret
@@ -47,24 +47,26 @@ class FalsePositivePatternRepository:
 
         secret, container_name = row
 
-        # Check if pattern already exists
+        # Check if exact pattern already exists (including start_line)
         existing = await self.db.execute(
             select(FalsePositivePattern).where(
                 FalsePositivePattern.container_name == container_name,
                 FalsePositivePattern.file_path == (secret.file_path or ""),
                 FalsePositivePattern.rule_id == secret.rule_id,
+                FalsePositivePattern.start_line == secret.start_line,
             )
         )
         if existing.scalar_one_or_none():
             return None  # Pattern already exists
 
-        # Create new pattern
+        # Create new pattern with precise start_line
         pattern = FalsePositivePattern(
             container_name=container_name,
             file_path=secret.file_path or "",
             rule_id=secret.rule_id,
+            start_line=secret.start_line,
             reason=reason or f"Auto-created from secret #{secret_id}",
-            created_by=created_by,  # Use parameter instead of hardcoded value
+            created_by=created_by,
         )
         self.db.add(pattern)
         await self.db.commit()
@@ -132,11 +134,77 @@ class FalsePositivePatternRepository:
         await self.db.commit()
         return result.rowcount > 0  # type: ignore[union-attr]
 
+    async def delete_and_unsuppress(self, pattern_id: int) -> tuple[bool, int]:
+        """Delete a pattern and reset secrets no longer covered by any FP pattern.
+
+        For each secret that was suppressed by this pattern, checks if any OTHER
+        pattern still covers it (including wildcard patterns). Only resets secrets
+        to 'to_review' if no other pattern matches.
+
+        Args:
+            pattern_id: Pattern ID to delete
+
+        Returns:
+            Tuple of (was_deleted, unsuppressed_count)
+        """
+        pattern = await self.get_by_id(pattern_id)
+        if not pattern:
+            return False, 0
+
+        # Find secrets that match this pattern's key and are currently false_positive
+        # Join through Scan -> Container to match container_name
+        candidates_query = (
+            select(Secret)
+            .join(Scan, Secret.scan_id == Scan.id)
+            .join(Container, Scan.container_id == Container.id)
+            .where(
+                Container.name == pattern.container_name,
+                Secret.file_path == pattern.file_path,
+                Secret.rule_id == pattern.rule_id,
+                Secret.status == "false_positive",
+            )
+        )
+        # If pattern has a specific start_line, only consider secrets at that line
+        if pattern.start_line is not None:
+            candidates_query = candidates_query.where(Secret.start_line == pattern.start_line)
+
+        result = await self.db.execute(candidates_query)
+        candidate_secrets = list(result.scalars().all())
+
+        unsuppressed = 0
+        for secret in candidate_secrets:
+            # Check if any OTHER pattern still covers this secret
+            other_pattern = await self.db.execute(
+                select(FalsePositivePattern).where(
+                    FalsePositivePattern.id != pattern.id,
+                    FalsePositivePattern.container_name == pattern.container_name,
+                    FalsePositivePattern.file_path == pattern.file_path,
+                    FalsePositivePattern.rule_id == pattern.rule_id,
+                    or_(
+                        FalsePositivePattern.start_line.is_(None),
+                        FalsePositivePattern.start_line == secret.start_line,
+                    ),
+                )
+            )
+            if not other_pattern.scalars().first():
+                secret.status = "to_review"
+                secret.updated_at = get_now()
+                unsuppressed += 1
+
+        # Delete the pattern
+        await self.db.execute(
+            delete(FalsePositivePattern).where(FalsePositivePattern.id == pattern_id)
+        )
+        await self.db.commit()
+        return True, unsuppressed
+
     async def matches_pattern(
         self, secret: Secret, container_name: str
     ) -> FalsePositivePattern | None:
-        """
-        Check if a secret matches any false positive pattern.
+        """Check if a secret matches any false positive pattern (hybrid mode).
+
+        NULL start_line patterns act as wildcards (match any line).
+        Precise patterns only match their specific start_line.
 
         Args:
             secret: Secret to check
@@ -150,9 +218,13 @@ class FalsePositivePatternRepository:
                 FalsePositivePattern.container_name == container_name,
                 FalsePositivePattern.file_path == (secret.file_path or ""),
                 FalsePositivePattern.rule_id == secret.rule_id,
+                or_(
+                    FalsePositivePattern.start_line.is_(None),
+                    FalsePositivePattern.start_line == secret.start_line,
+                ),
             )
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def record_match(self, pattern_id: int) -> None:
         """

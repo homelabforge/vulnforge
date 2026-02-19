@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Redact raw Trivy output in error logs (Match/Content JSON keys, 7 logging sites)
+- Defensive redaction at API/export boundaries for secret match values
+- Redact sensitive ENV/ARG assignments in misconfig code snippets
+
+### Fixed
+- False positive key too broad — added `start_line` for precise matching (NULL = wildcard for legacy)
+- Secret status accepted arbitrary strings — now validated against enum
+- Audit log hardcoded `old_status="active"` — now captures actual prior status
+- Severity sort was lexicographic — now uses CRITICAL > HIGH > MEDIUM > LOW ordering
+- Bulk status update did N queries — replaced with single `WHERE id IN (...)` query
+
+### Added
+- FP pattern deletion unsuppresses affected secrets (with overlap guard)
+- Audit logging for FP pattern deletion with unsuppress count
+- Migration 009: FP table rebuild for `start_line` column + invalid status cleanup
+
 ## [4.2.1] - 2026-02-14
 
 ### Dev Dependencies

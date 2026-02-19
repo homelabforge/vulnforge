@@ -11,7 +11,8 @@ from functools import total_ordering
 from sqlalchemy import select
 
 from app.database import db_session
-from app.models import Container, FalsePositivePattern, Scan, ScanJob, Secret, Vulnerability
+from app.models import Container, Scan, ScanJob, Secret, Vulnerability
+from app.repositories.false_positive_pattern_repository import FalsePositivePatternRepository
 from app.services.activity_logger import ActivityLogger
 from app.services.cache_manager import get_cache
 from app.services.dive_service import DiveError, DiveService
@@ -323,22 +324,26 @@ class ScanQueue:
         secrets_data: list[dict],
     ) -> list[dict]:
         """Store secrets with false-positive pattern matching. Returns non-FP secrets."""
+        fp_repo = FalsePositivePatternRepository(db)
         non_fp_secrets: list[dict] = []
         for secret_data in secrets_data:
-            fp_patterns_query = await db.execute(
-                select(FalsePositivePattern).where(
-                    FalsePositivePattern.container_name == container.name,
-                    FalsePositivePattern.file_path == secret_data.get("file_path", ""),
-                    FalsePositivePattern.rule_id == secret_data["rule_id"],
-                )
+            # Build a lightweight Secret-like object for pattern matching
+            probe = Secret(
+                scan_id=scan.id,
+                rule_id=secret_data["rule_id"],
+                category=secret_data["category"],
+                title=secret_data["title"],
+                severity=secret_data["severity"],
+                match=secret_data["match"],
+                file_path=secret_data.get("file_path"),
+                start_line=secret_data.get("start_line"),
             )
-            fp_pattern_match = fp_patterns_query.scalar_one_or_none()
+            fp_pattern_match = await fp_repo.matches_pattern(probe, container.name)
 
             initial_status = "to_review"
             if fp_pattern_match:
                 initial_status = "false_positive"
-                fp_pattern_match.match_count += 1
-                fp_pattern_match.last_matched = get_now()
+                await fp_repo.record_match(fp_pattern_match.id)
 
             secret = Secret(
                 scan_id=scan.id,

@@ -75,6 +75,31 @@ def validate_url(url: str, allowed_schemes: list[str] | None = None) -> str:
     return url
 
 
+VALID_SECRET_STATUSES = ("to_review", "false_positive", "confirmed", "accepted_risk")
+
+
+def validate_secret_status(status: str) -> str:
+    """Validate secret status value.
+
+    Args:
+        status: Status to validate
+
+    Returns:
+        Validated status (lowercase)
+
+    Raises:
+        ValidationError: If status is invalid
+    """
+    if not status or not isinstance(status, str):
+        raise ValidationError("Status must be a non-empty string")
+
+    status_lower = status.lower()
+    if status_lower not in VALID_SECRET_STATUSES:
+        raise ValidationError(f"Invalid status. Must be one of: {', '.join(VALID_SECRET_STATUSES)}")
+
+    return status_lower
+
+
 def validate_severity(severity: str) -> str:
     """
     Validate vulnerability severity level.

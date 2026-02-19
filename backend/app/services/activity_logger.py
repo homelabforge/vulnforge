@@ -413,6 +413,60 @@ class ActivityLogger:
         except Exception as e:
             logger.error(f"Failed to log false positive creation: {e}", exc_info=True)
 
+    async def log_false_positive_deleted(
+        self,
+        pattern_id: int,
+        container_name: str,
+        file_path: str,
+        rule_id: str,
+        username: str,
+        unsuppressed_count: int = 0,
+    ) -> None:
+        """Log deletion of false positive pattern and any unsuppressed secrets.
+
+        Args:
+            pattern_id: ID of deleted pattern
+            container_name: Container name
+            file_path: File path where secret was found
+            rule_id: Secret detection rule ID
+            username: Username of admin who deleted pattern
+            unsuppressed_count: Number of secrets reverted to to_review
+        """
+        try:
+            title = f"False positive pattern deleted by {username}"
+            description = f"Pattern #{pattern_id} for {rule_id} in {container_name}:{file_path}"
+            if unsuppressed_count > 0:
+                description += f" — {unsuppressed_count} secret(s) reverted to to_review"
+
+            metadata = {
+                "pattern_id": pattern_id,
+                "file_path": file_path,
+                "rule_id": rule_id,
+                "username": username,
+                "unsuppressed_count": unsuppressed_count,
+                "action": "delete_false_positive_pattern",
+            }
+
+            severity = "warning" if unsuppressed_count > 0 else "info"
+
+            await self.repository.create(
+                event_type="admin_action",
+                severity=severity,
+                title=title,
+                description=description,
+                container_id=None,
+                container_name=container_name,
+                metadata=metadata,
+            )
+
+            logger.info(
+                f"Logged false positive pattern deletion by {sanitize_for_log(username)}"
+                f" (unsuppressed: {unsuppressed_count})"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to log false positive deletion: {e}", exc_info=True)
+
     async def log_compliance_finding_ignored(
         self,
         finding_id: int,

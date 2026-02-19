@@ -1,6 +1,6 @@
 """Secret repository for centralized secret queries with false positive filtering."""
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Container, Scan, Secret
@@ -18,6 +18,20 @@ class SecretRepository:
             db: AsyncSession database session
         """
         self.db = db
+
+    @staticmethod
+    def _severity_order():
+        """Return a case expression for proper risk-based severity ordering.
+
+        Orders: CRITICAL (1) > HIGH (2) > MEDIUM (3) > LOW (4) > UNKNOWN (5).
+        """
+        return case(
+            (Secret.severity == "CRITICAL", 1),
+            (Secret.severity == "HIGH", 2),
+            (Secret.severity == "MEDIUM", 3),
+            (Secret.severity == "LOW", 4),
+            else_=5,
+        )
 
     def _get_active_secrets_query(self):
         """
@@ -162,7 +176,7 @@ class SecretRepository:
         if not include_false_positives:
             query = query.where(Secret.status != "false_positive")
 
-        query = query.order_by(Secret.severity.desc(), Secret.category).limit(limit)
+        query = query.order_by(self._severity_order(), Secret.category).limit(limit)
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -186,7 +200,7 @@ class SecretRepository:
         if not include_false_positives:
             query = query.where(Secret.status != "false_positive")
 
-        query = query.order_by(Secret.severity.desc(), Secret.category).limit(limit)
+        query = query.order_by(self._severity_order(), Secret.category).limit(limit)
 
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -203,6 +217,20 @@ class SecretRepository:
         """
         result = await self.db.execute(select(Secret).where(Secret.id == secret_id))
         return result.scalar_one_or_none()
+
+    async def get_by_ids(self, secret_ids: list[int]) -> list[Secret]:
+        """Get multiple secrets by ID in a single query.
+
+        Args:
+            secret_ids: List of secret IDs
+
+        Returns:
+            List of found secrets (may be fewer than requested if some IDs don't exist)
+        """
+        if not secret_ids:
+            return []
+        result = await self.db.execute(select(Secret).where(Secret.id.in_(secret_ids)))
+        return list(result.scalars().all())
 
     async def get_summary(self) -> dict:
         """
@@ -287,7 +315,7 @@ class SecretRepository:
         if category:
             query = query.where(Secret.category == category)
 
-        query = query.order_by(Secret.severity.desc(), Secret.created_at.desc())
+        query = query.order_by(self._severity_order(), Secret.created_at.desc())
 
         # Execute query
         result = await self.db.execute(query)

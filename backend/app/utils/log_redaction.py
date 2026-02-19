@@ -111,9 +111,9 @@ def _redact_string(text: str) -> str:
         flags=re.IGNORECASE,
     )
 
-    # Redact JSON-like strings with sensitive keys
+    # Redact JSON-like strings with sensitive keys (includes Trivy's "Match" and "Content" fields)
     text = re.sub(
-        r'("(?:password|passwd|pwd|api_key|apikey|token|secret|auth|authorization|bearer)":\s*")[^"]*(")',
+        r'("(?:password|passwd|pwd|api_key|apikey|token|secret|auth|authorization|bearer|match|content)":\s*")[^"]*(")',
         r"\1***REDACTED***\2",
         text,
         flags=re.IGNORECASE,

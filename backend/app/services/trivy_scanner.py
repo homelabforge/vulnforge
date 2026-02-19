@@ -248,7 +248,12 @@ class TrivyScanner:
             if exit_code != 0:
                 logger.error(f"Trivy scan failed with exit code {exit_code}")
                 if output is not None:
-                    logger.error(f"Output: {output[:500]}")  # First 500 chars
+                    output_text = (
+                        output.decode("utf-8", errors="replace")
+                        if isinstance(output, (bytes, bytearray))
+                        else str(output)
+                    )
+                    logger.error("Output: %s", sanitize_for_log(output_text))
                 return None
 
             if output is None:
@@ -263,7 +268,12 @@ class TrivyScanner:
 
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse Trivy JSON output: {e}")
-                logger.error(f"Output: {output[:500]}")
+                output_text = (
+                    output.decode("utf-8", errors="replace")
+                    if isinstance(output, (bytes, bytearray))
+                    else str(output)
+                )
+                logger.error("Output: %s", sanitize_for_log(output_text))
                 return None
 
         except DockerException as e:
@@ -422,7 +432,12 @@ class TrivyScanner:
                     return self._parse_trivy_output(scan_data, scan_duration)
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse Trivy JSON output: {e}")
-                    logger.error(f"Output: {output[:500]}")
+                    output_text = (
+                        output.decode("utf-8", errors="replace")
+                        if isinstance(output, (bytes, bytearray))
+                        else str(output)
+                    )
+                    logger.error("Output: %s", sanitize_for_log(output_text))
             else:
                 logger.warning("Client mode returned no results, falling back to exec mode")
 
@@ -523,14 +538,24 @@ class TrivyScanner:
         if exit_code != 0 or not output:
             logger.error(f"Trivy compliance scan failed with exit code {exit_code}")
             if output:
-                logger.error(f"Output: {output[:500]}")
+                output_text = (
+                    output.decode("utf-8", errors="replace")
+                    if isinstance(output, (bytes, bytearray))
+                    else str(output)
+                )
+                logger.error("Output: %s", sanitize_for_log(output_text))
             return None
 
         try:
             data = json.loads(output)
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse Trivy compliance JSON output: {e}")
-            logger.error(f"Output: {output[:500]}")
+            output_text = (
+                output.decode("utf-8", errors="replace")
+                if isinstance(output, (bytes, bytearray))
+                else str(output)
+            )
+            logger.error("Output: %s", sanitize_for_log(output_text))
             return None
 
         logger.info(f"Compliance scan completed in {scan_duration:.2f}s")
