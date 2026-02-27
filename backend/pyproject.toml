@@ -4,11 +4,11 @@ version = "4.2.1"
 description = "Docker vulnerability scanner and remediation dashboard powered by Trivy"
 requires-python = ">=3.13"
 dependencies = [
-    "fastapi>=0.129.0",
-    "granian>=2.7.1",
-    "sqlalchemy>=2.0.46",
+    "fastapi>=0.133.1",
+    "granian>=2.7.2",
+    "sqlalchemy>=2.0.47",
     "pydantic>=2.12.5",
-    "pydantic-settings>=2.12.0",
+    "pydantic-settings>=2.13.1",
     "docker>=7.1.0",
     "httpx>=0.28.1",
     "apscheduler>=3.11.2",
@@ -32,7 +32,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "pytest-xdist>=3.8.0",
     "pytest-timeout>=2.4.0",
-    "ruff>=0.15.1",
+    "ruff>=0.15.4",
 ]
 
 [build-system]

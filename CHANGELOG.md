@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Defensive redaction at API/export boundaries for secret match values
 - Redact sensitive ENV/ARG assignments in misconfig code snippets
 
+### Changed
+- Redesigned About page: hero, Why VulnForge section, Learn More links, refreshed Built with AI attribution
+
 ### Fixed
 - Notification event toggles were non-interactive (clicks on the visible track had no effect due to missing input overlay)
 - Advanced retry settings (attempts, delay) were never saved — missing state and auto-save payload entries
