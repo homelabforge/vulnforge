@@ -14,35 +14,28 @@ export function useAutoSave(
 ): void {
   const hasInitializedRef = useRef(false);
   const lastPayloadRef = useRef<string | null>(null);
+  // Keep onSave current to avoid stale closure inside the debounce timer.
+  const onSaveRef = useRef(onSave);
+  onSaveRef.current = onSave;
 
-  // Mark as initialized after first render with enabled=true
   useEffect(() => {
     if (!enabled) return;
 
-    // Use a small delay to let all state settle after initial hydration
-    const timer = window.setTimeout(() => {
-      const initialPayload = buildPayload();
-      lastPayloadRef.current = JSON.stringify(initialPayload);
+    if (!hasInitializedRef.current) {
+      // First run: capture initial snapshot synchronously — no save, no timer.
+      // Synchronous init avoids the race where a user interaction fires before
+      // a delayed init completes, silently dropping the save.
+      lastPayloadRef.current = JSON.stringify(buildPayload());
       hasInitializedRef.current = true;
-    }, 100);
-
-    return () => window.clearTimeout(timer);
-    // Only run on mount/enable change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled]);
-
-  // Auto-save on changes (debounced)
-  useEffect(() => {
-    if (!enabled || !hasInitializedRef.current) return;
+      return;
+    }
 
     const timer = window.setTimeout(() => {
       const payload = buildPayload();
       const serialized = JSON.stringify(payload);
-
       if (lastPayloadRef.current === serialized) return;
-
       lastPayloadRef.current = serialized;
-      onSave(payload);
+      onSaveRef.current(payload);
     }, 800);
 
     return () => window.clearTimeout(timer);

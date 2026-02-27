@@ -23,7 +23,7 @@ export function About() {
         <h1 className="text-4xl font-bold text-vuln-text mb-3">VulnForge</h1>
         <p className="text-xl text-vuln-text-muted">Container security insights for your homelab</p>
         <div className="mt-4 inline-block px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-full">
-          <span className="text-blue-500 font-semibold">v{version}</span>
+          <span className="text-blue-500 font-semibold">Version v{version}</span>
         </div>
       </div>
 
