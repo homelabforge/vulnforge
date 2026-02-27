@@ -13,13 +13,13 @@ const trackStyle =
 
 export function Toggle({ checked, onChange, disabled }: ToggleProps): React.ReactElement {
   return (
-    <div className="relative">
+    <div className={`relative w-11 h-6 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         disabled={disabled}
-        className="sr-only peer"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer peer z-10 disabled:cursor-not-allowed"
         role="switch"
         aria-checked={checked}
       />

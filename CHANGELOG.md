@@ -7,12 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dev Dependencies
+- **@tailwindcss/vite**: 4.1.18 → 4.2.1
+- **@typescript-eslint/eslint-plugin**: 8.55.0 → 8.56.1
+- **@typescript-eslint/parser**: 8.55.0 → 8.56.1
+- **autoprefixer**: 10.4.24 → 10.4.27
+- **eslint**: 10.0.0 → 10.0.2
+- **eslint-plugin-react-refresh**: 0.5.0 → 0.5.2
+- **jsdom**: 28.0.0 → 28.1.0
+- **ruff**: 0.15.1 → 0.15.4
+- **tailwindcss**: 4.1.18 → 4.2.1
+- **typescript-eslint**: 8.55.0 → 8.56.1
+
+### App Dependencies
+- **fastapi**: 0.129.0 → 0.133.1
+- **lucide-react**: 0.564.0 → 0.575.0
+- **pydantic-settings**: 2.12.0 → 2.13.1
+- **react-router-dom**: 7.13.0 → 7.13.1
+- **sqlalchemy**: 2.0.46 → 2.0.47
+- **tailwind-merge**: 3.4.0 → 3.5.0
+
+### Dockerfile Dependencies
+- **oven/bun**: 1.3.9-alpine → 1.3.10-alpine
+
+### HTTP Servers
+- **granian**: 2.7.1 → 2.7.2
+
 ### Security
 - Redact raw Trivy output in error logs (Match/Content JSON keys, 7 logging sites)
 - Defensive redaction at API/export boundaries for secret match values
 - Redact sensitive ENV/ARG assignments in misconfig code snippets
 
 ### Fixed
+- Notification event toggles were non-interactive (clicks on the visible track had no effect due to missing input overlay)
+- Advanced retry settings (attempts, delay) were never saved — missing state and auto-save payload entries
 - False positive key too broad — added `start_line` for precise matching (NULL = wildcard for legacy)
 - Secret status accepted arbitrary strings — now validated against enum
 - Audit log hardcoded `old_status="active"` — now captures actual prior status

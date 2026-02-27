@@ -81,6 +81,8 @@ export function NotificationsTab({ settingsMap, onSave, isSaving }: Notification
   const [notifySystemEnabled, setNotifySystemEnabled] = useState(settingsMap.notify_system_enabled === "true");
   const [notifySystemKevRefresh, setNotifySystemKevRefresh] = useState(settingsMap.notify_system_kev_refresh === "true");
   const [notifySystemBackup, setNotifySystemBackup] = useState(settingsMap.notify_system_backup === "true");
+  const [notificationRetryAttempts, setNotificationRetryAttempts] = useState(settingsMap.notification_retry_attempts || "3");
+  const [notificationRetryDelay, setNotificationRetryDelay] = useState(settingsMap.notification_retry_delay || "2.0");
 
   // --- Test button states ---
   const [testingNtfy, setTestingNtfy] = useState(false);
@@ -135,6 +137,8 @@ export function NotificationsTab({ settingsMap, onSave, isSaving }: Notification
       notify_system_enabled: notifySystemEnabled.toString(),
       notify_system_kev_refresh: notifySystemKevRefresh.toString(),
       notify_system_backup: notifySystemBackup.toString(),
+      notification_retry_attempts: notificationRetryAttempts,
+      notification_retry_delay: notificationRetryDelay,
     }),
     onSave,
     [
@@ -150,6 +154,7 @@ export function NotificationsTab({ settingsMap, onSave, isSaving }: Notification
       notifyScansEnabled, notifyScansComplete, notifyScansFailed,
       notifyScansComplianceComplete, notifyScansComplianceFailures,
       notifySystemEnabled, notifySystemKevRefresh, notifySystemBackup,
+      notificationRetryAttempts, notificationRetryDelay,
     ],
     true,
   );
@@ -191,6 +196,8 @@ export function NotificationsTab({ settingsMap, onSave, isSaving }: Notification
     notify_scans_compliance_failures: notifyScansComplianceFailures,
     notify_system_enabled: notifySystemEnabled, notify_system_kev_refresh: notifySystemKevRefresh,
     notify_system_backup: notifySystemBackup,
+    notification_retry_attempts: notificationRetryAttempts,
+    notification_retry_delay: notificationRetryDelay,
   };
 
   const handleBoolChange = (key: string, value: boolean): void => {
@@ -221,6 +228,8 @@ export function NotificationsTab({ settingsMap, onSave, isSaving }: Notification
       email_smtp_host: setEmailSmtpHost, email_smtp_port: setEmailSmtpPort,
       email_smtp_user: setEmailSmtpUser, email_smtp_password: setEmailSmtpPassword,
       email_from: setEmailFrom, email_to: setEmailTo,
+      notification_retry_attempts: setNotificationRetryAttempts,
+      notification_retry_delay: setNotificationRetryDelay,
     };
     setters[key]?.(value);
   };
