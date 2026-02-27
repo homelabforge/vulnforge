@@ -65,7 +65,7 @@ async def upgrade(connection):
         logger.info("  -> start_line column already exists, skipping table rebuild")
 
     # --- 2. Fix any invalid secret statuses ---
-    result = await connection.execute(
+    await connection.execute(
         text(
             "UPDATE secrets SET status = 'to_review' "
             "WHERE status NOT IN ('to_review', 'false_positive', 'confirmed', 'accepted_risk')"
