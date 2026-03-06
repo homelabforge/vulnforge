@@ -65,7 +65,7 @@ jobs:
       if: matrix.language == 'javascript'
       run: |
         cd frontend
-        bun install --frozen-lockfile
+        if [ "${{ github.actor }}" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
 
     # Initialize CodeQL
     - name: Initialize CodeQL
