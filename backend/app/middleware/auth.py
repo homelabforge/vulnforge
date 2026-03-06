@@ -62,6 +62,11 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             request.state.user = User(username="anonymous", provider="none", is_admin=False)
             return await call_next(request)
 
+        # Exempt widget endpoints (public aggregate stats for Homepage)
+        if normalized_path_lower.startswith("/api/v1/widget/"):
+            request.state.user = User(username="anonymous", provider="none", is_admin=False)
+            return await call_next(request)
+
         # Allow unauthenticated access to frontend (non-API routes)
         # Only protect /api/* endpoints with authentication
         if not (normalized_path_lower.startswith("/api/") or normalized_path_lower == "/api"):
