@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dev Dependencies
+- **eslint**: 10.0.2 → 10.0.3
+- **globals**: 17.3.0 → 17.4.0
+- **postcss**: 8.5.6 → 8.5.8
+- **ruff**: 0.15.4 → 0.15.5
+
+### App Dependencies
+- **authlib**: 1.6.8 → 1.6.9
+- **fastapi**: 0.133.1 → 0.135.1
+- **lucide-react**: 0.575.0 → 0.577.0
+- **python-dotenv**: 1.2.1 → 1.2.2
+- **recharts**: 3.7.0 → 3.8.0
+- **sqlalchemy**: 2.0.47 → 2.0.48
+
 ### Changed
 - Secrets page redesigned: compact two-column card layout, container name shown on each secret, summary stat cards removed
 - Select All moved from bottom of page into the filter bar

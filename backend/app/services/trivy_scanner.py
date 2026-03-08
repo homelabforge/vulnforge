@@ -272,18 +272,18 @@ class TrivyScanner:
                 logger.error("Trivy container not available")
                 return None
 
-            logger.info(
-                "Scanning image: %s (secrets: %s, skip_db_update: %s)",
-                sanitize_for_log(image),
-                scan_secrets,
-                skip_db_update,
-            )
-            start_time = get_now()
-
             # Build scanner list
             scanners = ["vuln"]
             if scan_secrets:
                 scanners.append("secret")
+
+            logger.info(
+                "Scanning image: %s (scanners: %s, skip_db_update: %s)",
+                sanitize_for_log(image),
+                ",".join(scanners),
+                skip_db_update,
+            )
+            start_time = get_now()
 
             # Execute Trivy scan with both vulnerability and secret scanning
             # Command: trivy image --scanners vuln,secret --format json --quiet [--skip-db-update] <image>
@@ -368,6 +368,7 @@ class TrivyScanner:
         Returns:
             Parsed scan results or None on error
         """
+        _ = scan_secrets  # Scanners controlled via extra_args by callers
         if timeout is None:
             timeout = settings.scan_timeout
 
@@ -394,9 +395,8 @@ class TrivyScanner:
                 return 1, None, 0.0
 
             logger.info(
-                "Scanning image: %s (mode: client, secrets: %s, skip_db_update: %s)",
+                "Scanning image: %s (mode: client, skip_db_update: %s)",
                 sanitize_for_log(image),
-                scan_secrets,
                 skip_db_update,
             )
             start_time = get_now()
