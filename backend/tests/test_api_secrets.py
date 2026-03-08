@@ -1,6 +1,7 @@
 """Tests for secrets API endpoints."""
 
-from datetime import UTC
+from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 
@@ -84,6 +85,116 @@ class TestSecretsList:
         response = await authenticated_client.get("/api/v1/secrets/containers/1/secrets")
 
         assert response.status_code in [200, 404]
+
+        app.dependency_overrides.clear()
+
+    async def test_list_secrets_returns_container_name(
+        self, authenticated_client, db_with_settings
+    ):
+        """Test that list endpoint returns container_name in response."""
+        from app.dependencies.auth import require_admin
+        from app.main import app
+        from app.repositories.dependencies import get_secret_repository
+
+        async def override_require_admin(request=None):
+            return User(username="admin", provider="test", is_admin=True)
+
+        class DummySecretRepo:
+            async def get_all(self, severity=None, category=None, status=None, limit=100, offset=0):
+                secret = SimpleNamespace(
+                    id=1,
+                    scan_id=1,
+                    rule_id="private-key",
+                    category="AsymmetricPrivateKey",
+                    title="Asymmetric Private Key",
+                    severity="HIGH",
+                    match="***REDACTED***",
+                    file_path="/ak-root/.venv/lib/python3.14/site-packages/docs/x509/ocsp.rst",
+                    start_line=84,
+                    end_line=86,
+                    code_snippet="Line 84: ***REDACTED***",
+                    layer_digest="sha256:abc123",
+                    status="to_review",
+                    notes=None,
+                    created_at=datetime.now(UTC),
+                    updated_at=None,
+                )
+                return [(secret, "authentik-server")]
+
+        app.dependency_overrides[require_admin] = override_require_admin
+        app.dependency_overrides[get_secret_repository] = lambda: DummySecretRepo()
+
+        response = await authenticated_client.get("/api/v1/secrets/")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["container_name"] == "authentik-server"
+
+        app.dependency_overrides.clear()
+
+    async def test_list_secrets_invalid_status_returns_400(
+        self, authenticated_client, db_with_settings
+    ):
+        """Test that invalid status filter returns 400."""
+        from app.dependencies.auth import require_admin
+        from app.main import app
+
+        async def override_require_admin(request=None):
+            return User(username="admin", provider="test", is_admin=True)
+
+        app.dependency_overrides[require_admin] = override_require_admin
+
+        response = await authenticated_client.get("/api/v1/secrets/?status=bogus")
+
+        assert response.status_code == 400
+
+        app.dependency_overrides.clear()
+
+    async def test_list_secrets_redaction_with_container(
+        self, authenticated_client, db_with_settings
+    ):
+        """Test that match and code_snippet remain redacted in SecretWithContainer."""
+        from app.dependencies.auth import require_admin
+        from app.main import app
+        from app.repositories.dependencies import get_secret_repository
+
+        async def override_require_admin(request=None):
+            return User(username="admin", provider="test", is_admin=True)
+
+        class DummySecretRepo:
+            async def get_all(self, severity=None, category=None, status=None, limit=100, offset=0):
+                secret = SimpleNamespace(
+                    id=1,
+                    scan_id=1,
+                    rule_id="generic-api-key",
+                    category="Generic",
+                    title="API Key",
+                    severity="HIGH",
+                    match="sk_live_SHOULD_NOT_APPEAR",
+                    file_path="/app/config.py",
+                    start_line=10,
+                    end_line=10,
+                    code_snippet="api_key=sk_live_SHOULD_NOT_APPEAR",
+                    layer_digest=None,
+                    status="to_review",
+                    notes=None,
+                    created_at=datetime.now(UTC),
+                    updated_at=None,
+                )
+                return [(secret, "test-container")]
+
+        app.dependency_overrides[require_admin] = override_require_admin
+        app.dependency_overrides[get_secret_repository] = lambda: DummySecretRepo()
+
+        response = await authenticated_client.get("/api/v1/secrets/")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["match"] == "***REDACTED***"
+        assert "sk_live" not in data[0].get("code_snippet", "")
+        assert data[0]["container_name"] == "test-container"
 
         app.dependency_overrides.clear()
 

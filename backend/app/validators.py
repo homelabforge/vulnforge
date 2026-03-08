@@ -15,6 +15,36 @@ class ValidationError(HTTPException):
         super().__init__(status_code=400, detail=detail)
 
 
+def validate_status_filter(status: str) -> str:
+    """Validate secret status filter scope for list endpoints.
+
+    Allowed filter scopes (distinct from VALID_SECRET_STATUSES which are record statuses):
+    - "active": exclude false_positive and accepted_risk
+    - "false_positive": only false positives
+    - "accepted_risk": only accepted risks
+    - "all": no status filter
+
+    Args:
+        status: Status filter to validate
+
+    Returns:
+        Validated status filter (lowercase)
+
+    Raises:
+        ValidationError: If status filter is invalid
+    """
+    if not status or not isinstance(status, str):
+        raise ValidationError("Status filter must be a non-empty string")
+
+    status_lower = status.lower()
+    if status_lower not in VALID_STATUS_FILTERS:
+        raise ValidationError(
+            f"Invalid status filter. Must be one of: {', '.join(VALID_STATUS_FILTERS)}"
+        )
+
+    return status_lower
+
+
 def validate_cron_expression(cron_expr: str) -> str:
     """
     Validate cron expression format.
@@ -76,6 +106,7 @@ def validate_url(url: str, allowed_schemes: list[str] | None = None) -> str:
 
 
 VALID_SECRET_STATUSES = ("to_review", "false_positive", "confirmed", "accepted_risk")
+VALID_STATUS_FILTERS = ("active", "false_positive", "accepted_risk", "all")
 
 
 def validate_secret_status(status: str) -> str:

@@ -122,6 +122,10 @@ export interface Secret {
   updated_at: string | null;
 }
 
+export interface SecretListItem extends Secret {
+  container_name: string;
+}
+
 export interface SecretSummary {
   total_secrets: number;
   critical_count: number;
@@ -382,12 +386,14 @@ export const secretsApi = {
   getAll: async (filters?: {
     severity?: string;
     category?: string;
+    status?: string;
     limit?: number;
     offset?: number;
-  }): Promise<Secret[]> => {
+  }): Promise<SecretListItem[]> => {
     const query = new URLSearchParams();
     if (filters?.severity) query.append("severity", filters.severity);
     if (filters?.category) query.append("category", filters.category);
+    if (filters?.status) query.append("status", filters.status);
     if (filters?.limit) query.append("limit", filters.limit.toString());
     if (filters?.offset) query.append("offset", filters.offset.toString());
 

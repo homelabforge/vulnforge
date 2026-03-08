@@ -3,7 +3,7 @@
  */
 
 import { useState } from "react";
-import { Download, Filter, Key, AlertTriangle, CheckCircle, FileCode } from "lucide-react";
+import { Download, Filter, Key, CheckCircle, FileCode, Box } from "lucide-react";
 import { useAllSecrets, useSecretsSummary, useBulkUpdateSecrets } from "@/hooks/useVulnForge";
 import { getSeverityBadge } from "@/lib/utils";
 import { toast } from "sonner";
@@ -16,29 +16,31 @@ export function Secrets() {
     severity: "",
     category: "",
   });
-  const [showStatus, setShowStatus] = useState<string>("active"); // "active", "false_positive", "all"
+  const [showStatus, setShowStatus] = useState<string>("active");
 
-  const { data: secrets, isLoading } = useAllSecrets(filters);
+  const { data: secrets, isLoading } = useAllSecrets({
+    severity: filters.severity || undefined,
+    category: filters.category || undefined,
+    status: showStatus,
+  });
   const { data: summary } = useSecretsSummary();
   const bulkUpdateMutation = useBulkUpdateSecrets();
 
-  // Filter secrets by status
-  const filteredSecrets = secrets?.filter((secret) => {
-    if (showStatus === "active") {
-      return secret.status !== "false_positive" && secret.status !== "accepted_risk";
-    } else if (showStatus === "false_positive") {
-      return secret.status === "false_positive";
-    } else if (showStatus === "accepted_risk") {
-      return secret.status === "accepted_risk";
-    }
-    return true; // "all" - show everything
-  });
+  const updateFilters = (newFilters: typeof filters) => {
+    setFilters(newFilters);
+    setSelectedIds([]);
+  };
+
+  const updateStatus = (newStatus: string) => {
+    setShowStatus(newStatus);
+    setSelectedIds([]);
+  };
 
   const handleSelectAll = () => {
-    if (selectedIds.length === filteredSecrets?.length) {
+    if (selectedIds.length === secrets?.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filteredSecrets?.map((s) => s.id) || []);
+      setSelectedIds(secrets?.map((s) => s.id) || []);
     }
   };
 
@@ -83,7 +85,7 @@ export function Secrets() {
             Secret Detection
           </h1>
           <p className="text-sm text-vuln-text-muted mt-0.5">
-            {filteredSecrets?.length || 0} of {secrets?.length || 0} secrets shown • {summary?.affected_containers || 0} containers affected
+            {secrets?.length || 0} secrets shown • {summary?.affected_containers || 0} containers affected
           </p>
         </div>
         <div className="flex gap-2">
@@ -104,58 +106,23 @@ export function Secrets() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      {summary && summary.total_secrets > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4">
-          <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4">
-            <p className="text-2xl font-bold text-vuln-text">{summary.total_secrets}</p>
-            <p className="text-xs text-sm text-vuln-text-muted mt-0.5">Total Secrets</p>
-          </div>
-          <div className="bg-vuln-surface border border-red-500/30 rounded-lg p-4">
-            <p className="text-2xl font-bold text-red-500">{summary.critical_count}</p>
-            <p className="text-xs text-sm text-vuln-text-muted mt-0.5">Critical</p>
-          </div>
-          <div className="bg-vuln-surface border border-orange-500/30 rounded-lg p-4">
-            <p className="text-2xl font-bold text-orange-500">{summary.high_count}</p>
-            <p className="text-xs text-sm text-vuln-text-muted mt-0.5">High</p>
-          </div>
-          <div className="bg-vuln-surface border border-yellow-500/30 rounded-lg p-4">
-            <p className="text-2xl font-bold text-yellow-500">{summary.medium_count}</p>
-            <p className="text-xs text-sm text-vuln-text-muted mt-0.5">Medium</p>
-          </div>
-          <div className="bg-vuln-surface border border-blue-500/30 rounded-lg p-4">
-            <p className="text-2xl font-bold text-blue-500">{summary.low_count}</p>
-            <p className="text-xs text-sm text-vuln-text-muted mt-0.5">Low</p>
-          </div>
-          <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4">
-            <p className="text-2xl font-bold text-vuln-text">{summary.affected_containers}</p>
-            <p className="text-xs text-sm text-vuln-text-muted mt-0.5">Containers</p>
-          </div>
-        </div>
-      )}
-
-      {/* Warning Banner */}
-      {summary && summary.critical_count > 0 && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-red-500 font-semibold">Critical Secrets Detected</p>
-            <p className="text-vuln-text-muted text-sm mt-1">
-              {summary.critical_count} critical {summary.critical_count === 1 ? "secret has" : "secrets have"} been detected.
-              Immediate action required to secure your infrastructure.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Filters */}
       <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4 mb-6">
         <div className="flex items-center gap-4 flex-wrap">
           <Filter className="w-5 h-5 text-vuln-text-muted" />
 
+          {secrets && secrets.length > 0 && (
+            <button
+              onClick={handleSelectAll}
+              className="px-3 py-1.5 bg-vuln-surface-light hover:bg-vuln-border text-vuln-text rounded text-sm border border-vuln-border"
+            >
+              {selectedIds.length === secrets.length ? "Deselect All" : "Select All"}
+            </button>
+          )}
+
           <select
             value={filters.severity}
-            onChange={(e) => setFilters({ ...filters, severity: e.target.value })}
+            onChange={(e) => updateFilters({ ...filters, severity: e.target.value })}
             className="px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded text-vuln-text"
           >
             <option value="">All Severities</option>
@@ -167,7 +134,7 @@ export function Secrets() {
 
           <select
             value={filters.category}
-            onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+            onChange={(e) => updateFilters({ ...filters, category: e.target.value })}
             className="px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded text-vuln-text"
           >
             <option value="">All Categories</option>
@@ -180,7 +147,7 @@ export function Secrets() {
 
           <select
             value={showStatus}
-            onChange={(e) => setShowStatus(e.target.value)}
+            onChange={(e) => updateStatus(e.target.value)}
             className="px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded text-vuln-text"
           >
             <option value="active">Active Secrets</option>
@@ -233,128 +200,97 @@ export function Secrets() {
         </div>
       </div>
 
-      {/* Secrets List */}
-      <div className="space-y-4">
-        {isLoading ? (
-          <div className="bg-vuln-surface border border-vuln-border rounded-lg p-8 text-center">
-            <p className="text-vuln-text-muted">Loading secrets...</p>
-          </div>
-        ) : filteredSecrets && filteredSecrets.length === 0 ? (
-          <div className="bg-vuln-surface border border-green-500/30 rounded-lg p-8 text-center">
-            <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
-            <p className="text-vuln-text font-semibold">
-              {showStatus === "active" && secrets && secrets.length > 0
-                ? "No Active Secrets"
-                : "No Secrets Detected"}
-            </p>
-            <p className="text-vuln-text-muted text-sm mt-2">
-              {showStatus === "active" && secrets && secrets.length > 0
-                ? "All secrets have been reviewed and marked as false positives or accepted risks."
-                : "Your containers are secure!"}
-            </p>
-          </div>
-        ) : (
-          filteredSecrets?.map((secret) => (
+      {/* Secrets Grid */}
+      {isLoading ? (
+        <div className="bg-vuln-surface border border-vuln-border rounded-lg p-8 text-center">
+          <p className="text-vuln-text-muted">Loading secrets...</p>
+        </div>
+      ) : secrets && secrets.length === 0 ? (
+        <div className="bg-vuln-surface border border-green-500/30 rounded-lg p-8 text-center">
+          <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
+          <p className="text-vuln-text font-semibold">
+            {showStatus === "active" ? "No Active Secrets" : "No Secrets Found"}
+          </p>
+          <p className="text-vuln-text-muted text-sm mt-2">
+            {showStatus === "active"
+              ? "All secrets have been reviewed and marked as false positives or accepted risks."
+              : "No secrets match the current filters."}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {secrets?.map((secret) => (
             <div
               key={secret.id}
-              className="bg-vuln-surface border border-vuln-border rounded-lg p-6 hover:border-orange-500/50 transition-colors"
+              className="bg-vuln-surface border border-vuln-border rounded-lg p-4 hover:border-orange-500/50 transition-colors"
             >
-              {/* Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(secret.id)}
-                      onChange={() => handleToggleSelect(secret.id)}
-                      className="w-4 h-4"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                    <h3 className="text-vuln-text font-semibold text-lg">{secret.title}</h3>
-                    <span className={getSeverityBadge(secret.severity)}>{secret.severity}</span>
-                    {secret.status === "false_positive" && (
-                      <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded border border-green-500/30">
-                        FALSE POSITIVE
-                      </span>
-                    )}
-                    {secret.status === "accepted_risk" && (
-                      <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded border border-yellow-500/30">
-                        ACCEPTED RISK
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4 text-sm text-vuln-text-muted">
-                    <span className="flex items-center gap-1">
-                      <Key className="w-3 h-3" />
-                      {secret.category}
-                    </span>
-                    <span className="text-vuln-text-disabled">•</span>
-                    <span>Rule: {secret.rule_id}</span>
-                  </div>
-                </div>
+              {/* Row 1: Checkbox + Title + Severity + Status */}
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(secret.id)}
+                  onChange={() => handleToggleSelect(secret.id)}
+                  className="w-4 h-4 flex-shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <h3 className="text-vuln-text font-semibold text-sm truncate flex-1">
+                  {secret.title}
+                </h3>
+                <span className={getSeverityBadge(secret.severity)}>{secret.severity}</span>
+                {secret.status === "false_positive" && (
+                  <span className="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded border border-green-500/30">
+                    FP
+                  </span>
+                )}
+                {secret.status === "accepted_risk" && (
+                  <span className="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded border border-yellow-500/30">
+                    AR
+                  </span>
+                )}
               </div>
 
-              {/* File Location */}
-              {secret.file_path && (
-                <div className="bg-vuln-surface-light border border-vuln-border rounded-lg p-3 mb-3">
-                  <div className="flex items-center gap-2 text-sm">
-                    <FileCode className="w-4 h-4 text-blue-400" />
-                    <span className="text-vuln-text font-mono">{secret.file_path}</span>
+              {/* Row 2: Container + Category + Rule */}
+              <div className="flex items-center gap-3 text-xs text-vuln-text-muted mb-2">
+                {secret.container_name && (
+                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">
+                    <Box className="w-3 h-3" />
+                    {secret.container_name}
+                  </span>
+                )}
+                <span className="flex items-center gap-1">
+                  <Key className="w-3 h-3" />
+                  {secret.category}
+                </span>
+                <span className="text-vuln-text-disabled">|</span>
+                <span>{secret.rule_id}</span>
+              </div>
+
+              {/* Row 3: File path + Layer digest */}
+              <div className="flex items-center gap-3 text-xs">
+                {secret.file_path && (
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    <FileCode className="w-3 h-3 text-blue-400 flex-shrink-0" />
+                    <span className="text-vuln-text-muted font-mono truncate">
+                      {secret.file_path}
+                    </span>
                     {secret.start_line && (
-                      <span className="text-vuln-text-disabled">
-                        (lines {secret.start_line}
+                      <span className="text-vuln-text-disabled flex-shrink-0">
+                        :{secret.start_line}
                         {secret.end_line && secret.end_line !== secret.start_line
                           ? `-${secret.end_line}`
                           : ""}
-                        )
                       </span>
                     )}
                   </div>
-                </div>
-              )}
-
-              {/* Match (Redacted) */}
-              <div className="mb-3">
-                <p className="text-xs text-vuln-text-disabled mb-1">Detected Match:</p>
-                <div className="bg-red-500/10 border border-red-500/30 rounded px-3 py-2">
-                  <code className="text-sm text-red-400 font-mono break-all">{secret.match}</code>
-                </div>
+                )}
+                {secret.layer_digest && (
+                  <span className="text-vuln-text-disabled font-mono flex-shrink-0">
+                    {secret.layer_digest.substring(0, 16)}...
+                  </span>
+                )}
               </div>
-
-              {/* Code Snippet */}
-              {secret.code_snippet && (
-                <div>
-                  <p className="text-xs text-vuln-text-disabled mb-1">Code Context:</p>
-                  <div className="bg-vuln-surface-light border border-vuln-border rounded-lg p-3 overflow-x-auto">
-                    <pre className="text-xs text-vuln-text font-mono whitespace-pre-wrap">
-                      {secret.code_snippet}
-                    </pre>
-                  </div>
-                </div>
-              )}
-
-              {/* Layer Info */}
-              {secret.layer_digest && (
-                <div className="mt-3 pt-3 border-t border-vuln-border">
-                  <p className="text-xs text-vuln-text-disabled">
-                    Layer: <span className="font-mono text-vuln-text-muted">{secret.layer_digest.substring(0, 16)}...</span>
-                  </p>
-                </div>
-              )}
             </div>
-          ))
-        )}
-      </div>
-
-      {/* Bulk Select All */}
-      {filteredSecrets && filteredSecrets.length > 0 && (
-        <div className="mt-6 flex justify-center">
-          <button
-            onClick={handleSelectAll}
-            className="px-3 py-2 bg-vuln-surface-light hover:bg-vuln-border text-vuln-text rounded-lg text-sm"
-          >
-            {selectedIds.length === filteredSecrets.length ? "Deselect All" : "Select All"}
-          </button>
+          ))}
         </div>
       )}
     </div>

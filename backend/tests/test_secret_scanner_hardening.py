@@ -91,6 +91,22 @@ class TestStatusValidation:
         update = SecretUpdate(status=None)
         assert update.status is None
 
+    def test_validate_status_filter_valid(self):
+        """All valid filter scopes should be accepted and lowercased."""
+        from app.validators import validate_status_filter
+
+        for scope in ("active", "false_positive", "accepted_risk", "all"):
+            assert validate_status_filter(scope) == scope
+            assert validate_status_filter(scope.upper()) == scope
+
+    def test_validate_status_filter_invalid(self):
+        """Invalid filter values should raise ValidationError."""
+        from app.validators import ValidationError, validate_status_filter
+
+        for scope in ("bogus", "to_review", "confirmed", ""):
+            with pytest.raises(ValidationError):
+                validate_status_filter(scope)
+
 
 class TestSeveritySortOrder:
     """Tests for severity sort ordering."""

@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Secrets page redesigned: compact two-column card layout, container name shown on each secret, summary stat cards removed
+- Select All moved from bottom of page into the filter bar
+- Status filters (Active, False Positives, Accepted Risks, All) now server-side instead of client-side
+
 ### Fixed
 - Batch scan counter accumulating across consecutive scan-all runs instead of resetting
 - Trivy scanning now uses client/server mode for faster scans
 - Secret counts accumulating across scans instead of showing only latest completed scan per container
+- Status filter for False Positives and Accepted Risks returning empty results (backend was excluding them)
+- Active secrets filter now correctly excludes both false positives and accepted risks
 
 ## [4.3.0] - 2026-02-26
 

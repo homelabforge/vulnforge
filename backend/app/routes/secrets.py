@@ -17,8 +17,9 @@ from app.repositories.dependencies import (
 from app.repositories.false_positive_pattern_repository import FalsePositivePatternRepository
 from app.repositories.secret_repository import SecretRepository
 from app.schemas.secret import Secret as SecretSchema
-from app.schemas.secret import SecretSummary, SecretUpdate
+from app.schemas.secret import SecretSummary, SecretUpdate, SecretWithContainer
 from app.services.activity_logger import ActivityLogger
+from app.validators import validate_status_filter
 
 router = APIRouter()
 
@@ -182,10 +183,11 @@ async def export_secrets(
     )
 
 
-@router.get("/secrets/", response_model=list[SecretSchema])
+@router.get("/secrets/", response_model=list[SecretWithContainer])
 async def list_all_secrets(
     severity: str | None = None,
     category: str | None = None,
+    status: str | None = None,
     limit: int = 100,
     offset: int = 0,
     secret_repo: SecretRepository = Depends(get_secret_repository),
@@ -197,16 +199,24 @@ async def list_all_secrets(
     Args:
         severity: Filter by severity (CRITICAL, HIGH, MEDIUM, LOW)
         category: Filter by category (AWS, GitHub, Generic, etc.)
+        status: Filter scope (active, false_positive, accepted_risk, all).
+            Defaults to active which excludes false_positive and accepted_risk.
         limit: Maximum number of results
         offset: Pagination offset
 
     Returns:
-        List of secrets matching filters (excluding false positives)
+        List of secrets with container names matching filters
     """
-    secrets = await secret_repo.get_all_active(
-        severity=severity, category=category, limit=limit, offset=offset
+    if status:
+        status = validate_status_filter(status)
+
+    secrets_with_containers = await secret_repo.get_all(
+        severity=severity, category=category, status=status, limit=limit, offset=offset
     )
-    return [SecretSchema.model_validate(s) for s in secrets]
+    return [
+        SecretWithContainer(**SecretSchema.model_validate(s).model_dump(), container_name=name)
+        for s, name in secrets_with_containers
+    ]
 
 
 @router.get("/secrets/{secret_id}", response_model=SecretSchema)

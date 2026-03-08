@@ -280,6 +280,7 @@ export function useSecretsSummary() {
 export function useAllSecrets(filters?: {
   severity?: string;
   category?: string;
+  status?: string;
   limit?: number;
   offset?: number;
 }) {

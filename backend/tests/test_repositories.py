@@ -559,10 +559,114 @@ class TestSecretRepositoryLatestScanScoping:
         assert summary["total_secrets"] == 2
         assert summary["affected_containers"] == 2
 
-    async def test_get_all_active_latest_only(self, repo, multi_container_setup):
-        """get_all_active() should return only latest-scan secrets."""
-        secrets = await repo.get_all_active()
-        assert len(secrets) == 2
+    async def test_get_all_latest_only(self, repo, multi_container_setup):
+        """get_all() should return only latest-scan secrets with container names."""
+        rows = await repo.get_all()
+        assert len(rows) == 2
+        # Each row is a (Secret, container_name) tuple
+        for secret, container_name in rows:
+            assert isinstance(container_name, str)
+            assert len(container_name) > 0
+
+    async def test_get_all_returns_container_name(self, repo, multi_container_setup):
+        """get_all() returns (Secret, container_name) tuples with correct names."""
+        rows = await repo.get_all()
+        container_names = {name for _, name in rows}
+        assert container_names == {"app-a", "app-b"}
+
+    async def test_get_all_status_false_positive(self, repo, db_session, make_container, make_scan):
+        """get_all(status='false_positive') returns only false positive secrets."""
+        now = get_now()
+        container = make_container(name="fp-filter-test")
+        db_session.add(container)
+        await db_session.flush()
+
+        scan = make_scan(container_id=container.id, scan_status="completed", scan_date=now)
+        db_session.add(scan)
+        await db_session.flush()
+
+        db_session.add(self._make_secret(scan_id=scan.id, status="false_positive", title="FP"))
+        db_session.add(self._make_secret(scan_id=scan.id, status="to_review", title="Active"))
+        db_session.add(self._make_secret(scan_id=scan.id, status="accepted_risk", title="AR"))
+        await db_session.commit()
+
+        rows = await repo.get_all(status="false_positive")
+        titles = {s.title for s, _ in rows}
+        assert "FP" in titles
+        assert "Active" not in titles
+        assert "AR" not in titles
+
+    async def test_get_all_status_accepted_risk(self, repo, db_session, make_container, make_scan):
+        """get_all(status='accepted_risk') returns only accepted risk secrets."""
+        now = get_now()
+        container = make_container(name="ar-filter-test")
+        db_session.add(container)
+        await db_session.flush()
+
+        scan = make_scan(container_id=container.id, scan_status="completed", scan_date=now)
+        db_session.add(scan)
+        await db_session.flush()
+
+        db_session.add(self._make_secret(scan_id=scan.id, status="false_positive", title="FP"))
+        db_session.add(self._make_secret(scan_id=scan.id, status="to_review", title="Active"))
+        db_session.add(self._make_secret(scan_id=scan.id, status="accepted_risk", title="AR"))
+        await db_session.commit()
+
+        rows = await repo.get_all(status="accepted_risk")
+        titles = {s.title for s, _ in rows}
+        assert titles == {"AR"}
+
+    async def test_get_all_status_all(self, repo, db_session, make_container, make_scan):
+        """get_all(status='all') returns all statuses."""
+        now = get_now()
+        container = make_container(name="all-filter-test")
+        db_session.add(container)
+        await db_session.flush()
+
+        scan = make_scan(container_id=container.id, scan_status="completed", scan_date=now)
+        db_session.add(scan)
+        await db_session.flush()
+
+        db_session.add(self._make_secret(scan_id=scan.id, status="false_positive", title="FP"))
+        db_session.add(self._make_secret(scan_id=scan.id, status="to_review", title="Active"))
+        db_session.add(self._make_secret(scan_id=scan.id, status="accepted_risk", title="AR"))
+        await db_session.commit()
+
+        rows = await repo.get_all(status="all")
+        titles = {s.title for s, _ in rows}
+        assert titles == {"FP", "Active", "AR"}
+
+    async def test_get_all_active_excludes_accepted_risk(
+        self, repo, db_session, make_container, make_scan
+    ):
+        """Default status (active) excludes both false_positive AND accepted_risk."""
+        now = get_now()
+        container = make_container(name="active-filter-test")
+        db_session.add(container)
+        await db_session.flush()
+
+        scan = make_scan(container_id=container.id, scan_status="completed", scan_date=now)
+        db_session.add(scan)
+        await db_session.flush()
+
+        db_session.add(self._make_secret(scan_id=scan.id, status="false_positive", title="FP"))
+        db_session.add(self._make_secret(scan_id=scan.id, status="to_review", title="Active"))
+        db_session.add(self._make_secret(scan_id=scan.id, status="accepted_risk", title="AR"))
+        db_session.add(self._make_secret(scan_id=scan.id, status="confirmed", title="Confirmed"))
+        await db_session.commit()
+
+        rows = await repo.get_all()  # Default = active
+        titles = {s.title for s, _ in rows}
+        assert "Active" in titles
+        assert "Confirmed" in titles
+        assert "FP" not in titles
+        assert "AR" not in titles
+
+    async def test_get_all_latest_scan_with_join(self, repo, multi_container_setup):
+        """Latest-scan scoping still holds after adding the Container join."""
+        # multi_container_setup: 2 containers, each with old (3 secrets) + new (1 secret) scans
+        rows = await repo.get_all()
+        assert len(rows) == 2  # Only latest scan secrets, not old ones
 
     async def test_export_latest_only(self, repo, multi_container_setup):
         """get_for_export() should return only latest-scan secrets."""

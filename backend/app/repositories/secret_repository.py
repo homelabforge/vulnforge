@@ -149,24 +149,52 @@ class SecretRepository:
         result = await self.db.execute(query)
         return result.scalar_one()
 
-    async def get_all_active(
+    async def get_all(
         self,
         severity: str | None = None,
         category: str | None = None,
+        status: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[Secret]:
-        """Get all active secrets with optional filtering.
+    ) -> list[tuple[Secret, str]]:
+        """Get secrets with container names, scoped to latest completed scan per container.
 
-        Scoped to the latest completed scan per container. Excludes false positives.
+        Returns a list of (Secret, container_name) tuples. Status filtering controls
+        which secrets are included:
+
+        - status=None or "active": excludes both false_positive and accepted_risk
+        - status="false_positive": only false positives
+        - status="accepted_risk": only accepted risks
+        - status="all": no status filter
 
         Args:
-            severity: Optional severity filter
+            severity: Optional severity filter (CRITICAL, HIGH, MEDIUM, LOW)
             category: Optional category filter
+            status: Status filter scope (active, false_positive, accepted_risk, all)
             limit: Maximum number of results
             offset: Pagination offset
+
+        Returns:
+            List of (Secret, container_name) tuples from latest completed scans only
         """
-        query = self._get_active_secrets_query().join(Scan)
+        query = (
+            select(Secret, Container.name)
+            .select_from(Secret)
+            .join(Scan, Secret.scan_id == Scan.id)
+            .join(Container, Scan.container_id == Container.id)
+            .where(Secret.scan_id.in_(self._latest_scan_ids_subquery()))
+        )
+
+        # Apply status filtering
+        if status == "false_positive":
+            query = query.where(Secret.status == "false_positive")
+        elif status == "accepted_risk":
+            query = query.where(Secret.status == "accepted_risk")
+        elif status == "all":
+            pass  # No status filter
+        else:
+            # Default ("active" or None): exclude reviewed statuses
+            query = query.where(Secret.status.not_in(["false_positive", "accepted_risk"]))
 
         if severity:
             query = query.where(Secret.severity == severity.upper())
@@ -177,7 +205,8 @@ class SecretRepository:
         query = query.order_by(Secret.created_at.desc()).limit(limit).offset(offset)
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        rows = result.all()
+        return [(row[0], row[1]) for row in rows]
 
     async def get_by_container(
         self,

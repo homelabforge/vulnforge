@@ -41,6 +41,16 @@ class Secret(BaseModel):
         return self
 
 
+class SecretWithContainer(Secret):
+    """Secret with container name for list views.
+
+    Inherits ensure_redaction from Secret, so match and code_snippet
+    are always redacted even when constructed from (Secret, container_name) tuples.
+    """
+
+    container_name: str
+
+
 class SecretUpdate(BaseModel):
     """Schema for updating secret status."""
 
