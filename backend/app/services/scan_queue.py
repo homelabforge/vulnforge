@@ -854,16 +854,30 @@ class ScanQueue:
         return result_payload
 
     def register_batch(self, total: int, source: str = "api") -> None:
-        """Register additional containers for batch tracking.
+        """Register containers for batch tracking.
 
-        Unlike the previous start_batch(), this is ADDITIVE — it never resets
-        counters mid-flight. This is safe for overlapping batches (e.g. scheduler
-        enqueuing while an API batch is still running).
+        If no scans are currently in-flight (queue empty, no active scans),
+        counters are reset first to prevent accumulation across separate
+        scan-all invocations. Otherwise, the count is added to the existing
+        batch for overlapping enqueue scenarios.
 
         Args:
             total: Number of containers being enqueued in this batch.
             source: Origin of the batch ("api" or "scheduler") for logging.
         """
+        # Reset stale counters when starting a fresh batch
+        if self.queue.qsize() == 0 and len(self.active_scans) == 0:
+            if self._batch_total > 0 or self._batch_completed > 0:
+                logger.debug(
+                    "Resetting stale batch counters before new batch "
+                    f"(was {self._batch_completed}/{self._batch_total})"
+                )
+            self._batch_total = 0
+            self._batch_completed = 0
+            self._batch_results = []
+            if self.trivy_scanner is not None:
+                self.trivy_scanner.reset_scan_stats()
+
         self._batch_total += total
         logger.info(
             f"Registered batch ({source}): +{total} containers "
@@ -886,10 +900,12 @@ class ScanQueue:
             # Send single batch summary notification
             await self._send_batch_notification()
 
-            # Reset batch tracking
+            # Reset batch tracking and per-mode scan statistics
             self._batch_total = 0
             self._batch_completed = 0
             self._batch_results = []
+            if self.trivy_scanner is not None:
+                self.trivy_scanner.reset_scan_stats()
             self._emit_status_update()
 
     async def _send_batch_notification(self):
@@ -981,8 +997,8 @@ class ScanQueue:
             )
 
     def get_status(self) -> dict:
-        """Get current queue status."""
-        return {
+        """Get current queue status including per-mode scan statistics."""
+        status = {
             "queue_size": self.queue.qsize(),
             "active_scans": len(self.active_scans),
             "current_scan": self._current_scan,
@@ -990,6 +1006,10 @@ class ScanQueue:
             "batch_total": self._batch_total,
             "batch_completed": self._batch_completed,
         }
+        # Include per-mode scan statistics from the shared TrivyScanner
+        if self.trivy_scanner is not None:
+            status["scanner_stats"] = self.trivy_scanner.get_scan_stats()
+        return status
 
     def get_progress_snapshot(self) -> dict:
         """Return combined scan and queue status suitable for clients."""

@@ -154,20 +154,33 @@ class TestScanQueueUnit:
         assert result is False
         assert q.queue.qsize() == 0
 
-    def test_register_batch_additive(self):
-        """register_batch is additive, not destructive."""
+    def test_register_batch_additive_during_active_scans(self):
+        """register_batch is additive when scans are in-flight."""
         q = ScanQueue()
         q.register_batch(10, source="api")
         assert q._batch_total == 10
 
-        # Second batch adds to total, doesn't reset
+        # Simulate active scan — second batch should add, not reset
+        q.active_scans.add(1)
         q._batch_completed = 5
         q._batch_results = [{"total_vulns": 1}]
         q.register_batch(3, source="scheduler")
         assert q._batch_total == 13
-        # Completed count and results are NOT reset
         assert q._batch_completed == 5
         assert len(q._batch_results) == 1
+
+    def test_register_batch_resets_stale_counters(self):
+        """register_batch resets counters when no scans are active."""
+        q = ScanQueue()
+        q._batch_total = 44
+        q._batch_completed = 44
+        q._batch_results = [{"total_vulns": 1}] * 44
+
+        # No active scans, empty queue — fresh batch resets first
+        q.register_batch(44, source="api")
+        assert q._batch_total == 44
+        assert q._batch_completed == 0
+        assert len(q._batch_results) == 0
 
     def test_get_status(self):
         """get_status returns dict with expected keys and values."""

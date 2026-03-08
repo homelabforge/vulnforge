@@ -159,20 +159,37 @@ class TestEnqueueContainers:
 class TestBatchNotification:
     """Test additive batch counter behavior."""
 
-    def test_register_batch_additive(self):
-        """Two register_batch calls accumulate counters."""
+    def test_register_batch_additive_during_active_scans(self):
+        """Two register_batch calls accumulate when scans are in-flight."""
         q = ScanQueue()
         q.register_batch(5, source="api")
         assert q._batch_total == 5
 
+        # Simulate an active scan so the second batch adds to the first
+        q.active_scans.add(1)
         q.register_batch(10, source="scheduler")
         assert q._batch_total == 15
 
-    def test_register_batch_does_not_reset(self):
-        """register_batch never resets completed count or results."""
+    def test_register_batch_resets_when_idle(self):
+        """register_batch resets stale counters when no scans are active."""
+        q = ScanQueue()
+        q._batch_completed = 44
+        q._batch_total = 44
+        q._batch_results = [{"total_vulns": 1}] * 44
+
+        # No active scans, empty queue — new batch should reset first
+        q.register_batch(44, source="api")
+
+        assert q._batch_total == 44
+        assert q._batch_completed == 0
+        assert len(q._batch_results) == 0
+
+    def test_register_batch_preserves_during_active_scans(self):
+        """register_batch preserves counters when scans are still running."""
         q = ScanQueue()
         q._batch_completed = 3
         q._batch_results = [{"total_vulns": 1}, {"total_vulns": 2}]
+        q.active_scans.add(42)
 
         q.register_batch(5, source="api")
 

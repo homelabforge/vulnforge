@@ -29,10 +29,22 @@ class TrivyScanner:
         """
         self.docker_service = docker_service
         self._exec_lock = asyncio.Lock()
+        # Bounded concurrency for client/server mode — the Trivy server manages
+        # its own DB locking, so we only need to limit concurrent docker exec calls.
+        self._client_semaphore = asyncio.Semaphore(settings.parallel_scans)
 
         # Determine scan mode from configuration
         self.server_url = settings.trivy_server
         self.use_server_mode = bool(self.server_url)
+
+        # Per-mode scan statistics (reset between batch runs via reset_scan_stats)
+        self._scan_stats: dict[str, int | float] = {
+            "client_mode_count": 0,
+            "exec_mode_count": 0,
+            "fallback_count": 0,
+            "client_total_duration": 0.0,
+            "exec_total_duration": 0.0,
+        }
 
         if self.use_server_mode:
             logger.info(f"Trivy client mode enabled (server: {self.server_url})")
@@ -41,20 +53,58 @@ class TrivyScanner:
                 f"Trivy docker exec mode enabled (container: {settings.trivy_container_name})"
             )
 
-    async def _exec_trivy_command(self, container, cmd: list[str], **kwargs):
+    def get_scan_stats(self) -> dict[str, int | float]:
+        """Return per-mode scan statistics. Thread-safe for read access."""
+        stats = dict(self._scan_stats)
+        client_count = stats["client_mode_count"]
+        exec_count = stats["exec_mode_count"]
+        stats["avg_client_duration"] = (
+            stats["client_total_duration"] / client_count if client_count else 0.0
+        )
+        stats["avg_exec_duration"] = (
+            stats["exec_total_duration"] / exec_count if exec_count else 0.0
+        )
+        return stats
+
+    def reset_scan_stats(self) -> None:
+        """Reset per-mode scan statistics. Call between batch runs."""
+        self._scan_stats = {
+            "client_mode_count": 0,
+            "exec_mode_count": 0,
+            "fallback_count": 0,
+            "client_total_duration": 0.0,
+            "exec_total_duration": 0.0,
+        }
+
+    async def _exec_trivy_command(
+        self, container, cmd: list[str], *, use_server: bool = False, **kwargs
+    ):
         """
         Run a command inside the Trivy container with concurrency control.
 
-        Trivy writes to a shared cache inside the container; running multiple
-        scans simultaneously can corrupt initialization. We serialize exec
-        calls so only one Trivy process manipulates the cache at a time.
+        In exec mode, Trivy writes to a shared BoltDB cache; concurrent access
+        can corrupt it, so we serialize with a lock.  In server/client mode,
+        the Trivy server manages DB locking internally, so we use a bounded
+        semaphore to allow parallel scans without overwhelming the server.
+
+        Args:
+            use_server: When True, use bounded semaphore (client/server mode).
+                        When False, use exclusive lock (exec mode / maintenance).
         """
-        async with self._exec_lock:
-            return await asyncio.to_thread(
-                container.exec_run,
-                cmd,
-                **kwargs,
-            )
+        if use_server:
+            async with self._client_semaphore:
+                return await asyncio.to_thread(
+                    container.exec_run,
+                    cmd,
+                    **kwargs,
+                )
+        else:
+            async with self._exec_lock:
+                return await asyncio.to_thread(
+                    container.exec_run,
+                    cmd,
+                    **kwargs,
+                )
 
     async def _trivy_db_exists(self, container) -> bool:
         """Check whether the Trivy vulnerability database file exists."""
@@ -86,14 +136,23 @@ class TrivyScanner:
         base_cmd: list[str],
         image: str,
         skip_db_update: bool,
+        *,
+        use_server: bool = False,
     ) -> tuple[int, bytes | bytearray | str | None]:
         """
         Execute the Trivy scan, retrying on database errors (corruption, locking).
         Allows multiple retries for locking (with backoff), one retry for corruption.
+
+        Args:
+            use_server: When True, use bounded semaphore and force --skip-db-update
+                        (server manages DB). When False, use exclusive lock.
         """
         last_exit_code: int | None = None
         last_output: bytes | str | None = None
-        local_skip = skip_db_update
+        # In client/server mode, always skip DB update on the client — the server
+        # manages the vulnerability database. This is narrowly scoped: exec fallback
+        # and DB health check paths are untouched.
+        local_skip = True if use_server else skip_db_update
         retried_on_db_corruption = False
         lock_retry_count = 0
         max_lock_retries = settings.trivy_max_lock_retries
@@ -105,9 +164,10 @@ class TrivyScanner:
             cmd = list(base_cmd)
 
             if local_skip:
-                if await self._trivy_db_exists(container):
+                if use_server or await self._trivy_db_exists(container):
                     cmd.append("--skip-db-update")
-                    logger.info("Using cached Trivy database (offline mode)")
+                    if not use_server:
+                        logger.info("Using cached Trivy database (offline mode)")
                 else:
                     logger.info("Trivy database not initialized; performing full update")
                     local_skip = False
@@ -117,6 +177,7 @@ class TrivyScanner:
             last_exit_code, last_output = await self._exec_trivy_command(
                 container,
                 cmd,
+                use_server=use_server,
                 demux=False,
             )
 
@@ -362,6 +423,7 @@ class TrivyScanner:
                 base_cmd,
                 image,
                 skip_db_update,
+                use_server=True,
             )
 
             scan_duration = (get_now() - start_time).total_seconds()
@@ -428,7 +490,13 @@ class TrivyScanner:
             if exit_code == 0 and output:
                 try:
                     scan_data = json.loads(output)
-                    logger.info(f"Scan completed in {scan_duration:.2f}s (client mode)")
+                    logger.info(
+                        "Scan completed: image=%s mode=client duration=%.2fs",
+                        sanitize_for_log(image),
+                        scan_duration,
+                    )
+                    self._scan_stats["client_mode_count"] += 1
+                    self._scan_stats["client_total_duration"] += scan_duration
                     return self._parse_trivy_output(scan_data, scan_duration)
                 except json.JSONDecodeError as e:
                     logger.error(f"Failed to parse Trivy JSON output: {e}")
@@ -438,11 +506,28 @@ class TrivyScanner:
                         else str(output)
                     )
                     logger.error("Output: %s", sanitize_for_log(output_text))
-            else:
-                logger.warning("Client mode returned no results, falling back to exec mode")
+
+            # Client mode failed — fall back to exec mode
+            fallback_reason = f"exit_code={exit_code}" if exit_code != 0 else "no output"
+            logger.warning(
+                "Client mode failed for %s (reason=%s, fallback=true), falling back to exec mode",
+                sanitize_for_log(image),
+                fallback_reason,
+            )
+            self._scan_stats["fallback_count"] += 1
 
         # Use exec mode (either as fallback or as primary when server not configured)
-        return await self._scan_via_exec(image, scan_secrets, timeout, skip_db_update)
+        result = await self._scan_via_exec(image, scan_secrets, timeout, skip_db_update)
+        if result is not None:
+            exec_duration = result.get("scan_duration_seconds", 0.0)
+            logger.info(
+                "Scan completed: image=%s mode=exec duration=%.2fs",
+                sanitize_for_log(image),
+                exec_duration,
+            )
+            self._scan_stats["exec_mode_count"] += 1
+            self._scan_stats["exec_total_duration"] += exec_duration
+        return result
 
     async def scan_compliance(
         self,
