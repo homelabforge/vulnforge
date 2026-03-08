@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Batch scan counter accumulating across consecutive scan-all runs instead of resetting
 - Trivy scanning now uses client/server mode for faster scans
+- Secret counts accumulating across scans instead of showing only latest completed scan per container
 
 ## [4.3.0] - 2026-02-26
 

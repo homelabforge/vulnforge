@@ -7,9 +7,14 @@ This module tests the widget data API which provides:
 - Remediation recommendations widget
 """
 
+from datetime import timedelta
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import Secret
+from app.utils.timezone import get_now
 
 
 class TestSummaryWidget:
@@ -485,3 +490,89 @@ class TestRemediationWidget:
         data = response.json()
         assert isinstance(data["impact_message"], str)
         assert len(data["impact_message"]) > 0
+
+
+class TestWidgetSecretLatestScanScoping:
+    """Regression: widget total_secrets should only count latest completed scan per container."""
+
+    @staticmethod
+    def _make_secret(scan_id: int, **kwargs) -> Secret:
+        """Create a Secret with explicit fields, bypassing the make_secret factory."""
+        defaults = {
+            "rule_id": "test-rule",
+            "category": "Generic",
+            "title": "Test Secret",
+            "severity": "HIGH",
+            "file_path": "/path/to/file",
+            "start_line": 1,
+            "match": "***REDACTED***",
+            "status": "to_review",
+        }
+        return Secret(scan_id=scan_id, **{**defaults, **kwargs})
+
+    @pytest.mark.asyncio
+    async def test_widget_summary_latest_only(
+        self,
+        authenticated_client: AsyncClient,
+        db_session: AsyncSession,
+        make_container,
+        make_scan,
+    ):
+        """Old scan secrets must not inflate total_secrets in widget summary."""
+        now = get_now()
+
+        container = make_container(name="secret-widget-test")
+        db_session.add(container)
+        await db_session.commit()
+        await db_session.refresh(container)
+
+        # Old scan with 5 secrets
+        old_scan = make_scan(
+            container_id=container.id,
+            scan_status="completed",
+            scan_date=now - timedelta(hours=2),
+        )
+        db_session.add(old_scan)
+        await db_session.commit()
+        await db_session.refresh(old_scan)
+
+        for i in range(5):
+            db_session.add(
+                self._make_secret(
+                    scan_id=old_scan.id,
+                    title=f"Old secret {i}",
+                )
+            )
+        await db_session.commit()
+
+        # New scan with 1 secret
+        new_scan = make_scan(
+            container_id=container.id,
+            scan_status="completed",
+            scan_date=now,
+        )
+        db_session.add(new_scan)
+        await db_session.commit()
+        await db_session.refresh(new_scan)
+
+        db_session.add(
+            self._make_secret(
+                scan_id=new_scan.id,
+                severity="CRITICAL",
+                title="New secret",
+            )
+        )
+        await db_session.commit()
+
+        # Invalidate widget cache so fresh data is returned
+        from app.services.cache_manager import get_cache
+
+        cache = get_cache()
+        await cache.invalidate_pattern("widget:*")
+
+        response = await authenticated_client.get("/api/v1/widget/summary")
+
+        assert response.status_code == 200
+        data = response.json()
+        # Should be 1 (new scan only), NOT 6 (old + new)
+        assert data["total_secrets"] == 1

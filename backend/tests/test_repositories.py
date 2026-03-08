@@ -1,11 +1,15 @@
 """Tests for database repositories."""
 
+from datetime import timedelta
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Secret, Vulnerability
 from app.repositories.container_repository import ContainerRepository
 from app.repositories.scan_result_repository import ScanResultRepository
+from app.repositories.secret_repository import SecretRepository
+from app.utils.timezone import get_now
 
 
 @pytest.mark.asyncio
@@ -339,3 +343,228 @@ class TestSecretRepository:
         assert found.code_snippet is not None
         assert "***REDACTED***" in found.code_snippet
         assert "AKIA" not in found.code_snippet or "***" in found.match
+
+
+@pytest.mark.asyncio
+class TestSecretRepositoryLatestScanScoping:
+    """Tests that SecretRepository methods scope to latest completed scan per container."""
+
+    @pytest.fixture
+    async def repo(self, db_session: AsyncSession):
+        """SecretRepository backed by the test session."""
+        return SecretRepository(db_session)
+
+    @staticmethod
+    def _make_secret(
+        scan_id: int, status: str = "to_review", severity: str = "HIGH", title: str = "Test Secret"
+    ) -> Secret:
+        """Create a Secret with explicit fields, bypassing the broken make_secret factory."""
+        return Secret(
+            scan_id=scan_id,
+            rule_id="test-rule",
+            category="Generic",
+            title=title,
+            severity=severity,
+            file_path="/path/to/file",
+            start_line=1,
+            match="***REDACTED***",
+            status=status,
+        )
+
+    @pytest.fixture
+    async def single_container_multi_scan(self, db_session, make_container, make_scan):
+        """1 container with 2 completed scans: old (3 secrets) and new (1 secret)."""
+        now = get_now()
+        container = make_container(name="web-app")
+        db_session.add(container)
+        await db_session.flush()
+
+        old_scan = make_scan(
+            container_id=container.id,
+            scan_status="completed",
+            scan_date=now - timedelta(hours=2),
+        )
+        db_session.add(old_scan)
+        await db_session.flush()
+
+        for i in range(3):
+            db_session.add(
+                self._make_secret(
+                    scan_id=old_scan.id,
+                    status="to_review",
+                    severity="HIGH",
+                    title=f"Old secret {i}",
+                )
+            )
+
+        new_scan = make_scan(
+            container_id=container.id,
+            scan_status="completed",
+            scan_date=now,
+        )
+        db_session.add(new_scan)
+        await db_session.flush()
+
+        db_session.add(
+            self._make_secret(
+                scan_id=new_scan.id,
+                status="to_review",
+                severity="CRITICAL",
+                title="New secret",
+            )
+        )
+
+        await db_session.commit()
+        return container, old_scan, new_scan
+
+    @pytest.fixture
+    async def multi_container_setup(self, db_session, make_container, make_scan):
+        """2 containers, each with old scan (3 secrets) and new scan (1 secret)."""
+        now = get_now()
+        containers = []
+        for name in ("app-a", "app-b"):
+            c = make_container(name=name)
+            db_session.add(c)
+            await db_session.flush()
+
+            old_scan = make_scan(
+                container_id=c.id,
+                scan_status="completed",
+                scan_date=now - timedelta(hours=2),
+            )
+            db_session.add(old_scan)
+            await db_session.flush()
+
+            for i in range(3):
+                db_session.add(
+                    self._make_secret(
+                        scan_id=old_scan.id,
+                        status="to_review",
+                        severity="MEDIUM",
+                        title=f"Old {name} secret {i}",
+                    )
+                )
+
+            new_scan = make_scan(
+                container_id=c.id,
+                scan_status="completed",
+                scan_date=now,
+            )
+            db_session.add(new_scan)
+            await db_session.flush()
+
+            db_session.add(
+                self._make_secret(
+                    scan_id=new_scan.id,
+                    status="to_review",
+                    severity="HIGH",
+                    title=f"New {name} secret",
+                )
+            )
+            containers.append(c)
+
+        await db_session.commit()
+        return containers
+
+    async def test_count_only_latest_scan(self, repo, single_container_multi_scan):
+        """Old scan's 3 secrets should not be counted; only the new scan's 1."""
+        count = await repo.count_total()
+        assert count == 1
+
+    async def test_failed_scan_does_not_hide_completed(
+        self, repo, db_session, make_container, make_scan
+    ):
+        """A newer failed scan should not replace the last completed scan."""
+        now = get_now()
+        container = make_container(name="fail-test")
+        db_session.add(container)
+        await db_session.flush()
+
+        completed_scan = make_scan(
+            container_id=container.id,
+            scan_status="completed",
+            scan_date=now - timedelta(hours=1),
+        )
+        db_session.add(completed_scan)
+        await db_session.flush()
+
+        for i in range(2):
+            db_session.add(
+                self._make_secret(
+                    scan_id=completed_scan.id,
+                    status="to_review",
+                    severity="HIGH",
+                    title=f"Secret {i}",
+                )
+            )
+
+        # Newer failed scan — should be ignored
+        failed_scan = make_scan(
+            container_id=container.id,
+            scan_status="failed",
+            scan_date=now,
+        )
+        db_session.add(failed_scan)
+        await db_session.commit()
+
+        count = await repo.count_total()
+        assert count == 2
+
+    async def test_false_positives_excluded_from_latest(
+        self, repo, db_session, make_container, make_scan
+    ):
+        """FP secrets in the latest scan should not be counted."""
+        now = get_now()
+        container = make_container(name="fp-test")
+        db_session.add(container)
+        await db_session.flush()
+
+        scan = make_scan(
+            container_id=container.id,
+            scan_status="completed",
+            scan_date=now,
+        )
+        db_session.add(scan)
+        await db_session.flush()
+
+        db_session.add(
+            self._make_secret(
+                scan_id=scan.id,
+                status="false_positive",
+                severity="HIGH",
+                title="FP secret",
+            )
+        )
+        db_session.add(
+            self._make_secret(
+                scan_id=scan.id,
+                status="to_review",
+                severity="HIGH",
+                title="Active secret",
+            )
+        )
+        await db_session.commit()
+
+        count = await repo.count_total()
+        assert count == 1
+
+    async def test_multiple_containers_latest_only(self, repo, multi_container_setup):
+        """Each container contributes only its latest scan's secrets."""
+        count = await repo.count_total()
+        assert count == 2  # 1 per container
+
+    async def test_summary_uses_latest_scan(self, repo, multi_container_setup):
+        """get_summary() totals should match latest-scan-only counts."""
+        summary = await repo.get_summary()
+        assert summary["total_secrets"] == 2
+        assert summary["affected_containers"] == 2
+
+    async def test_get_all_active_latest_only(self, repo, multi_container_setup):
+        """get_all_active() should return only latest-scan secrets."""
+        secrets = await repo.get_all_active()
+        assert len(secrets) == 2
+
+    async def test_export_latest_only(self, repo, multi_container_setup):
+        """get_for_export() should return only latest-scan secrets."""
+        rows = await repo.get_for_export()
+        assert len(rows) == 2

@@ -33,59 +33,100 @@ class SecretRepository:
             else_=5,
         )
 
-    def _get_active_secrets_query(self):
-        """
-        Base query that excludes false positives.
+    @staticmethod
+    def _latest_scan_ids_subquery():
+        """Subquery returning the latest completed scan ID per container.
 
-        Returns:
-            Query for active (non-false-positive) secrets
+        Defines "latest" as most recent by scan_date, with id as tiebreaker.
+        Only includes completed scans.
         """
-        return select(Secret).where(Secret.status != "false_positive")
+        ranked = (
+            select(
+                Scan.id.label("scan_id"),
+                func.row_number()
+                .over(
+                    partition_by=Scan.container_id,
+                    order_by=(Scan.scan_date.desc(), Scan.id.desc()),
+                )
+                .label("rn"),
+            )
+            .where(Scan.scan_status == "completed")
+            .subquery()
+        )
+        return select(ranked.c.scan_id).where(ranked.c.rn == 1)
+
+    @staticmethod
+    def _latest_scan_id_for_container(container_id: int):
+        """Latest completed scan ID for a specific container.
+
+        Uses the same ranking logic as _latest_scan_ids_subquery():
+        scan_date DESC, id DESC, completed only.
+        """
+        return (
+            select(Scan.id)
+            .where(Scan.container_id == container_id)
+            .where(Scan.scan_status == "completed")
+            .order_by(Scan.scan_date.desc(), Scan.id.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+
+    def _get_active_secrets_query(self):
+        """Base query: active secrets from latest completed scan per container.
+
+        Excludes false positives and scopes to latest completed scan.
+        Methods needing all-scan access (get_by_scan, get_by_id, get_by_ids)
+        use direct select(Secret) queries instead.
+        """
+        return (
+            select(Secret)
+            .where(Secret.status != "false_positive")
+            .where(Secret.scan_id.in_(self._latest_scan_ids_subquery()))
+        )
 
     async def count_total(self) -> int:
-        """
-        Count total active secrets (excluding false positives).
+        """Count total active secrets from latest completed scan per container.
 
-        Returns:
-            Total count of active secrets
+        Excludes false positives. Scoped to the latest completed scan per container.
         """
-        query = select(func.count(Secret.id)).where(Secret.status != "false_positive")
+        query = (
+            select(func.count(Secret.id))
+            .where(Secret.status != "false_positive")
+            .where(Secret.scan_id.in_(self._latest_scan_ids_subquery()))
+        )
         result = await self.db.execute(query)
         return result.scalar_one()
 
     async def count_by_container(self, container_id: int) -> int:
-        """
-        Count active secrets for a specific container.
+        """Count active secrets for a container's latest completed scan.
+
+        Excludes false positives. Scoped to the latest completed scan per container.
 
         Args:
             container_id: Container ID
-
-        Returns:
-            Count of active secrets for the container
         """
+        latest_scan_id = self._latest_scan_id_for_container(container_id)
         query = (
             select(func.count(Secret.id))
-            .join(Scan, Secret.scan_id == Scan.id)
-            .where(Scan.container_id == container_id)
+            .where(Secret.scan_id == latest_scan_id)
             .where(Secret.status != "false_positive")
         )
         result = await self.db.execute(query)
         return result.scalar_one()
 
     async def count_by_severity(self, severity: str) -> int:
-        """
-        Count active secrets by severity level.
+        """Count active secrets by severity level from latest completed scan per container.
+
+        Excludes false positives. Scoped to the latest completed scan per container.
 
         Args:
             severity: Severity level (CRITICAL, HIGH, MEDIUM, LOW)
-
-        Returns:
-            Count of active secrets with the specified severity
         """
         query = (
             select(func.count(Secret.id))
             .where(Secret.severity == severity.upper())
             .where(Secret.status != "false_positive")
+            .where(Secret.scan_id.in_(self._latest_scan_ids_subquery()))
         )
         result = await self.db.execute(query)
         return result.scalar_one()
@@ -115,17 +156,15 @@ class SecretRepository:
         limit: int = 100,
         offset: int = 0,
     ) -> list[Secret]:
-        """
-        Get all active secrets with optional filtering.
+        """Get all active secrets with optional filtering.
+
+        Scoped to the latest completed scan per container. Excludes false positives.
 
         Args:
             severity: Optional severity filter
             category: Optional category filter
             limit: Maximum number of results
             offset: Pagination offset
-
-        Returns:
-            List of active secrets
         """
         query = self._get_active_secrets_query().join(Scan)
 
@@ -146,32 +185,18 @@ class SecretRepository:
         limit: int = 100,
         include_false_positives: bool = False,
     ) -> list[Secret]:
-        """
-        Get secrets for a specific container from the latest scan.
+        """Get secrets for a container from its latest completed scan.
+
+        Uses _latest_scan_id_for_container() for consistent "latest" definition
+        (scan_date DESC, id DESC, completed only).
 
         Args:
             container_id: Container ID
             limit: Maximum number of secrets to return
             include_false_positives: Whether to include false positives
-
-        Returns:
-            List of secrets from the most recent scan
         """
-        # Get the most recent completed scan for this container
-        scan_result = await self.db.execute(
-            select(Scan)
-            .where(Scan.container_id == container_id)
-            .where(Scan.scan_status == "completed")
-            .order_by(Scan.scan_date.desc())
-            .limit(1)
-        )
-        scan = scan_result.scalar_one_or_none()
-
-        if not scan:
-            return []
-
-        # Get secrets from this scan
-        query = select(Secret).where(Secret.scan_id == scan.id)
+        latest_scan_id = self._latest_scan_id_for_container(container_id)
+        query = select(Secret).where(Secret.scan_id == latest_scan_id)
 
         if not include_false_positives:
             query = query.where(Secret.status != "false_positive")
@@ -233,12 +258,12 @@ class SecretRepository:
         return list(result.scalars().all())
 
     async def get_summary(self) -> dict:
-        """
-        Get summary statistics for active secrets.
+        """Get summary statistics for active secrets from latest completed scan per container.
 
-        Returns:
-            Dictionary with summary statistics
+        Scoped to the latest completed scan per container. Excludes false positives.
         """
+        latest_scan_filter = Secret.scan_id.in_(self._latest_scan_ids_subquery())
+
         # Get total secret count
         total_secrets = await self.count_total()
 
@@ -246,6 +271,7 @@ class SecretRepository:
         severity_query = (
             select(Secret.severity, func.count(Secret.id))
             .where(Secret.status != "false_positive")
+            .where(latest_scan_filter)
             .group_by(Secret.severity)
         )
         severity_result = await self.db.execute(severity_query)
@@ -255,6 +281,7 @@ class SecretRepository:
         category_query = (
             select(Secret.category, func.count(Secret.id))
             .where(Secret.status != "false_positive")
+            .where(latest_scan_filter)
             .group_by(Secret.category)
             .order_by(func.count(Secret.id).desc())
             .limit(10)
@@ -268,6 +295,7 @@ class SecretRepository:
             .select_from(Secret)
             .join(Scan, Secret.scan_id == Scan.id)
             .where(Secret.status != "false_positive")
+            .where(latest_scan_filter)
         )
         affected_result = await self.db.execute(affected_query)
         affected_containers = affected_result.scalar_one()
@@ -288,8 +316,9 @@ class SecretRepository:
         category: str | None = None,
         include_false_positives: bool = False,
     ) -> list[tuple[Secret, str]]:
-        """
-        Get secrets for export with container names.
+        """Get secrets for export with container names.
+
+        Scoped to the latest completed scan per container.
 
         Args:
             severity: Optional severity filter
@@ -299,11 +328,12 @@ class SecretRepository:
         Returns:
             List of tuples (Secret, container_name)
         """
-        # Build query with filters
         query = (
             select(Secret, Container.name)
-            .join(Scan)
+            .select_from(Secret)
+            .join(Scan, Secret.scan_id == Scan.id)
             .join(Container, Scan.container_id == Container.id)
+            .where(Secret.scan_id.in_(self._latest_scan_ids_subquery()))
         )
 
         if not include_false_positives:
@@ -317,7 +347,6 @@ class SecretRepository:
 
         query = query.order_by(self._severity_order(), Secret.created_at.desc())
 
-        # Execute query
         result = await self.db.execute(query)
         rows = result.all()
 
