@@ -76,7 +76,6 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
         # Try JWT cookie authentication first (browser users)
         jwt_token = request.cookies.get(JWT_COOKIE_NAME)
-        logger.debug(f"JWT cookie present: {bool(jwt_token)} for {normalized_path}")
         if jwt_token:
             try:
                 payload = decode_token(jwt_token)

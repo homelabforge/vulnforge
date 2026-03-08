@@ -118,9 +118,9 @@ class DockerHubClient:
         headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
 
         # Add GitHub token if available
-        if settings.github_token:
-            headers["Authorization"] = f"Bearer {settings.github_token}"
-            logger.debug(f"Using GitHub token for GHCR API request to {org}/{package}")
+        github_token = settings.github_token
+        if github_token:
+            headers["Authorization"] = f"Bearer {github_token}"
         else:
             logger.warning(
                 "No GitHub token configured - GHCR API may fail with 401. Set GITHUB_TOKEN environment variable."
@@ -274,9 +274,9 @@ class DockerHubClient:
             }
 
             # Add GitHub token if available
-            if settings.github_token:
-                headers["Authorization"] = f"Bearer {settings.github_token}"
-                logger.debug(f"Using GitHub token for release API request to {repo}")
+            github_token = settings.github_token
+            if github_token:
+                headers["Authorization"] = f"Bearer {github_token}"
             else:
                 logger.warning(
                     "No GitHub token configured - GitHub API may be rate limited. Set GITHUB_TOKEN environment variable."
