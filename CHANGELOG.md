@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-03-09
+
 ### Dev Dependencies
 - **eslint**: 10.0.2 → 10.0.3
 - **globals**: 17.3.0 → 17.4.0
@@ -306,7 +308,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial tracked release with dual-scanner (Trivy + Grype) support, Docker Bench compliance, Dockle linting, Dive analysis, real-time SSE progress, false positive management, CISA KEV integration, ntfy notifications, activity logging, SQLite WAL persistence, secret scanning, and responsive dashboard.
 
-[Unreleased]: https://github.com/homelabforge/vulnforge/compare/v4.3.0...HEAD
+[Unreleased]: https://github.com/homelabforge/vulnforge/compare/v4.4.0...HEAD
+[4.4.0]: https://github.com/homelabforge/vulnforge/compare/v4.3.0...v4.4.0
 [4.3.0]: https://github.com/homelabforge/vulnforge/compare/v4.2.1...v4.3.0
 [4.2.1]: https://github.com/homelabforge/vulnforge/compare/v4.2.0...v4.2.1
 [4.2.0]: https://github.com/homelabforge/vulnforge/compare/v4.1.0...v4.2.0
