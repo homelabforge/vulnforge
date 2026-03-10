@@ -46,7 +46,7 @@ export function Dashboard() {
   return (
     <div>
       {/* Header with Actions */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-2xl font-bold text-vuln-text">Dashboard</h1>
           <p className="text-sm text-vuln-text-muted mt-0.5">Container vulnerability overview</p>
@@ -59,7 +59,8 @@ export function Dashboard() {
             className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 text-sm transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${discoverMutation.isPending ? "animate-spin" : ""}`} />
-            Discover Containers
+            <span className="hidden sm:inline">Discover Containers</span>
+            <span className="sm:hidden">Discover</span>
           </button>
           <button
             onClick={handleScanAll}
@@ -100,7 +101,7 @@ export function Dashboard() {
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-4">
         <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>

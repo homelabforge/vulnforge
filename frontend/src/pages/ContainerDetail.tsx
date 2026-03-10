@@ -115,15 +115,15 @@ export function ContainerDetail() {
           Back to Containers
         </Link>
 
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-600/10 rounded-lg">
-              <Container className="w-8 h-8 text-blue-500" />
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 sm:p-3 bg-blue-600/10 rounded-lg shrink-0">
+              <Container className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-vuln-text">{container.name}</h1>
-              <div className="flex items-center gap-3 mt-2">
-                <span className="text-vuln-text-muted text-sm">
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold text-vuln-text truncate">{container.name}</h1>
+              <div className="flex flex-wrap items-center gap-2 mt-1">
+                <span className="text-vuln-text-muted text-xs sm:text-sm truncate max-w-[200px] sm:max-w-none">
                   {container.image}:{container.image_tag}
                 </span>
                 {container.is_running ? (
@@ -176,7 +176,7 @@ export function ContainerDetail() {
 
       {/* Stats Cards */}
       {container.last_scan_date && (
-        <div className="grid grid-cols-2 md:grid-cols-7 gap-4 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-4">
           <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4">
             <p className="text-vuln-text-muted text-sm">Total Vulnerabilities</p>
             <p className="text-2xl font-bold text-vuln-text mt-1">{container.total_vulns || 0}</p>
@@ -209,24 +209,25 @@ export function ContainerDetail() {
       )}
 
       {/* Tabs */}
-      <div className="border-b border-vuln-border mb-6">
-        <div className="flex gap-4">
+      <div className="border-b border-vuln-border mb-6 overflow-x-auto">
+        <div className="flex gap-1 sm:gap-4 min-w-max">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as TabType)}
-                className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
+                className={`flex items-center gap-1.5 px-3 sm:px-4 py-3 border-b-2 transition-colors whitespace-nowrap text-sm sm:text-base ${
                   activeTab === tab.key
                     ? "border-blue-500 text-blue-500"
                     : "border-transparent text-vuln-text-muted hover:text-vuln-text"
                 }`}
               >
                 <Icon className="w-4 h-4" />
-                {tab.label}
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.key === "vulnerabilities" ? "Vulns" : tab.key === "history" ? "History" : tab.label}</span>
                 {tab.count !== undefined && tab.count > 0 && (
-                  <span className="px-2 py-0.5 bg-vuln-surface-light text-vuln-text rounded-full text-xs font-medium">
+                  <span className="px-1.5 py-0.5 bg-vuln-surface-light text-vuln-text rounded-full text-xs font-medium">
                     {tab.count}
                   </span>
                 )}

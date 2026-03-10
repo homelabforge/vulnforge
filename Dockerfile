@@ -27,8 +27,7 @@ FROM python:3.14-slim AS backend-builder
 WORKDIR /app
 
 # Upgrade pip to latest version and clean up old metadata
-RUN pip install --no-cache-dir --upgrade pip && \
-    rm -rf /usr/local/lib/python3.14/site-packages/pip-25.2.dist-info 2>/dev/null || true
+RUN pip install --no-cache-dir --upgrade pip
 
 # Copy backend code and install from pyproject.toml
 COPY backend ./
@@ -48,10 +47,13 @@ LABEL org.opencontainers.image.description="Container vulnerability scanning and
 
 WORKDIR /app
 
-# Install runtime dependencies
+# Install runtime dependencies, create non-root user, and set up directories
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    useradd --uid 1000 --user-group --system --create-home --no-log-init vulnforge && \
+    mkdir -p /data
 
 # Copy Python dependencies from builder
 COPY --from=backend-builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
@@ -64,12 +66,8 @@ COPY --from=backend-builder /app/pyproject.toml ./
 # Copy frontend build
 COPY --from=frontend-builder /app/frontend/dist ./static
 
-# Create non-root user for security
-RUN useradd --uid 1000 --user-group --system --create-home --no-log-init vulnforge
-
-# Create data directory and set proper permissions
-RUN mkdir -p /data && \
-    chown -R vulnforge:vulnforge /app /data && \
+# Set ownership and permissions
+RUN chown -R vulnforge:vulnforge /app /data && \
     chmod -R 755 /app && \
     chmod 755 /data
 

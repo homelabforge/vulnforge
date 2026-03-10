@@ -324,22 +324,22 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-vuln-surface border border-vuln-border p-6 rounded-lg">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-vuln-surface border border-vuln-border p-4 sm:p-6 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-vuln-text-muted text-sm">Images Scanned</p>
-              <p className="text-3xl font-bold text-vuln-text">{summary?.total_images_scanned || 0}</p>
+              <p className="text-vuln-text-muted text-xs sm:text-sm">Images Scanned</p>
+              <p className="text-2xl sm:text-3xl font-bold text-vuln-text">{summary?.total_images_scanned || 0}</p>
             </div>
-            <Package className="h-10 w-10 text-blue-500" />
+            <Package className="h-8 w-8 sm:h-10 sm:w-10 text-blue-500" />
           </div>
         </div>
 
-        <div className="bg-vuln-surface border border-vuln-border p-6 rounded-lg">
+        <div className="bg-vuln-surface border border-vuln-border p-4 sm:p-6 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-vuln-text-muted text-sm">Avg Compliance</p>
-              <p className="text-3xl font-bold text-vuln-text">
+              <p className="text-vuln-text-muted text-xs sm:text-sm">Avg Compliance</p>
+              <p className="text-2xl sm:text-3xl font-bold text-vuln-text">
                 {images.length > 0
                   ? Math.round(
                       images.reduce((sum, img) => sum + img.compliance_score, 0) /
@@ -349,31 +349,31 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                 %
               </p>
             </div>
-            <Shield className="h-10 w-10 text-green-500" />
+            <Shield className="h-8 w-8 sm:h-10 sm:w-10 text-green-500" />
           </div>
         </div>
 
-        <div className="bg-vuln-surface border border-vuln-border p-6 rounded-lg">
+        <div className="bg-vuln-surface border border-vuln-border p-4 sm:p-6 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-vuln-text-muted text-sm">Critical Findings</p>
-              <p className="text-3xl font-bold text-red-400">
+              <p className="text-vuln-text-muted text-xs sm:text-sm">Critical Findings</p>
+              <p className="text-2xl sm:text-3xl font-bold text-red-400">
                 {images.reduce((sum, img) => sum + img.fatal_count, 0)}
               </p>
             </div>
-            <AlertTriangle className="h-10 w-10 text-red-500" />
+            <AlertTriangle className="h-8 w-8 sm:h-10 sm:w-10 text-red-500" />
           </div>
         </div>
 
-        <div className="bg-vuln-surface border border-vuln-border p-6 rounded-lg">
+        <div className="bg-vuln-surface border border-vuln-border p-4 sm:p-6 rounded-lg">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-vuln-text-muted text-sm">Active Failures</p>
-              <p className="text-3xl font-bold text-orange-400">
+              <p className="text-vuln-text-muted text-xs sm:text-sm">Active Failures</p>
+              <p className="text-2xl sm:text-3xl font-bold text-orange-400">
                 {images.reduce((sum, img) => sum + img.active_failures, 0)}
               </p>
             </div>
-            <XCircle className="h-10 w-10 text-orange-500" />
+            <XCircle className="h-8 w-8 sm:h-10 sm:w-10 text-orange-500" />
           </div>
         </div>
       </div>
@@ -392,7 +392,9 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
               <p className="text-sm">Click "Scan Image" to analyze a Docker image for security compliance</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile: card layout, Desktop: table layout */}
+            <div className="hidden sm:block overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-vuln-surface-light">
                   <tr className="border-b border-vuln-border">
@@ -479,6 +481,45 @@ export function ImageCompliance({ onActionsChange }: ImageComplianceProps) {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile card layout */}
+            <div className="sm:hidden divide-y divide-vuln-border">
+              {images.map((image) => (
+                <div
+                  key={image.image_name}
+                  onClick={() => setSelectedImage(image.image_name)}
+                  className="p-3 hover:bg-vuln-surface-light transition-colors cursor-pointer"
+                >
+                  <div className="font-mono text-sm text-vuln-text truncate mb-2" title={image.image_name}>
+                    {image.image_name}
+                  </div>
+                  <div className="flex items-center gap-3 text-sm">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        image.compliance_score >= 80
+                          ? "bg-green-500/20 text-green-400"
+                          : image.compliance_score >= 60
+                          ? "bg-yellow-500/20 text-yellow-400"
+                          : "bg-red-500/20 text-red-400"
+                      }`}
+                    >
+                      {Math.round(image.compliance_score)}%
+                    </span>
+                    {image.fatal_count > 0 && (
+                      <span className="text-red-400 text-xs flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        {image.fatal_count} critical
+                      </span>
+                    )}
+                    {image.warn_count > 0 && (
+                      <span className="text-orange-400 text-xs">{image.warn_count} high</span>
+                    )}
+                    <span className="text-vuln-text-muted text-xs">{image.total_checks} findings</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            </>
           )}
         </div>
       </div>

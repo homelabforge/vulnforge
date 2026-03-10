@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Status filters (Active, False Positives, Accepted Risks, All) now server-side instead of client-side
 
 ### Fixed
+- Navigation bar overflowing on mobile/tablet; desktop nav now uses icons-only below 1280px with bottom nav only on phones (<768px)
 - Batch scan counter accumulating across consecutive scan-all runs instead of resetting
 - Trivy scanning now uses client/server mode for faster scans
 - Secret counts accumulating across scans instead of showing only latest completed scan per container

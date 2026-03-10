@@ -150,17 +150,17 @@ export function Compliance() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-vuln-text flex items-center gap-3">
-            <Shield className="w-8 h-8 text-blue-500" />
+          <h1 className="text-xl sm:text-2xl font-bold text-vuln-text flex items-center gap-2 sm:gap-3">
+            <Shield className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500 shrink-0" />
             Security Compliance
           </h1>
-          <p className="text-sm text-vuln-text-muted mt-0.5">
+          <p className="text-xs sm:text-sm text-vuln-text-muted mt-0.5">
             Host Configuration & Image Security Analysis
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {activeTab === "host" ? (
             <>
               <button

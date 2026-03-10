@@ -45,12 +45,12 @@ function Layout({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, authMode, user, logout } = useAuth();
 
   const navigation = [
-    { name: "Dashboard", path: "/", icon: Home },
-    { name: "Containers", path: "/containers", icon: Container },
-    { name: "Secrets", path: "/secrets", icon: Key },
-    { name: "Compliance", path: "/compliance", icon: FileCheck },
-    { name: "Activity", path: "/activity", icon: ActivityIcon },
-    { name: "Settings", path: "/settings", icon: SettingsIcon },
+    { name: "Dashboard", shortName: "Home", path: "/", icon: Home },
+    { name: "Containers", shortName: "Containers", path: "/containers", icon: Container },
+    { name: "Secrets", shortName: "Secrets", path: "/secrets", icon: Key },
+    { name: "Compliance", shortName: "Comply", path: "/compliance", icon: FileCheck },
+    { name: "Activity", shortName: "Activity", path: "/activity", icon: ActivityIcon },
+    { name: "Settings", shortName: "Settings", path: "/settings", icon: SettingsIcon },
   ];
 
   const handleLogout = async () => {
@@ -58,68 +58,107 @@ function Layout({ children }: { children: React.ReactNode }) {
     navigate('/login', { replace: true });
   };
 
-  return (
-    <div className="min-h-screen bg-vuln-bg">
-      {/* Header */}
-      <header className="bg-vuln-surface border-b border-vuln-border">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Shield className="w-9 h-9 text-primary" />
-              <div>
-                <h1 className="text-2xl font-bold text-primary">VulnForge</h1>
-                <p className="text-sm text-vuln-text-muted">Container Vulnerability Scanner</p>
-              </div>
-            </div>
+  const isActivePath = (path: string) => {
+    if (path === "/") return location.pathname === "/";
+    return location.pathname.startsWith(path);
+  };
 
-            {/* Navigation */}
-            <nav className="flex gap-2 items-center">
+  return (
+    <div className="min-h-screen bg-vuln-bg pb-16 md:pb-0 overflow-x-hidden">
+      {/* Header */}
+      <header className="bg-vuln-surface border-b border-vuln-border overflow-hidden">
+        <div className="container mx-auto px-4 py-3 md:py-4">
+          <div className="flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-3">
+              <Shield className="w-7 h-7 xl:w-9 xl:h-9 text-primary" />
+              <div>
+                <h1 className="text-xl xl:text-2xl font-bold text-primary">VulnForge</h1>
+                <p className="text-xs xl:text-sm text-vuln-text-muted hidden xl:block">Container Vulnerability Scanner</p>
+              </div>
+            </Link>
+
+            {/* Desktop Navigation — icons only at md, icons+labels at xl */}
+            <nav className="hidden md:flex gap-1 items-center">
               {navigation.map((item) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.path;
+                const isActive = isActivePath(item.path);
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-base transition-colors ${
+                    title={item.name}
+                    className={`flex items-center gap-2 px-2 xl:px-3 py-2 rounded-lg text-sm transition-colors ${
                       isActive
                         ? "bg-primary text-white"
                         : "text-vuln-text-muted hover:text-vuln-text hover:bg-vuln-surface-light"
                     }`}
                   >
-                    <Icon className="w-5 h-5" />
-                    {item.name}
+                    <Icon className="w-4 h-4" />
+                    <span className="hidden xl:inline">{item.name}</span>
                   </Link>
                 );
               })}
-
-              {/* Logout Button - Only show when authenticated */}
-              {isAuthenticated && authMode !== 'none' && (
-                <div className="flex items-center gap-2 ml-4 pl-4 border-l border-vuln-border">
-                  <div className="flex items-center gap-2 px-3 py-2 text-sm text-vuln-text-muted">
-                    <User size={16} />
-                    <span>{user?.username}</span>
-                  </div>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-vuln-text-muted hover:bg-vuln-surface-light hover:text-vuln-text transition-colors"
-                  >
-                    <LogOut size={16} />
-                    Logout
-                  </button>
-                </div>
-              )}
             </nav>
+
+            {/* User/Logout - Desktop */}
+            {isAuthenticated && authMode !== 'none' && (
+              <div className="hidden md:flex items-center gap-2 ml-2 pl-2 border-l border-vuln-border">
+                <div className="flex items-center gap-2 px-2 py-2 text-sm text-vuln-text-muted">
+                  <User size={16} />
+                  <span className="hidden xl:inline">{user?.username}</span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-2 px-2 py-2 rounded-md text-sm font-medium text-vuln-text-muted hover:bg-vuln-surface-light hover:text-vuln-text transition-colors"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
+            )}
+
+            {/* Mobile Logout */}
+            {isAuthenticated && authMode !== 'none' && (
+              <button
+                onClick={handleLogout}
+                className="md:hidden flex items-center gap-1 px-2 py-2 rounded-md text-sm text-vuln-text-muted hover:bg-vuln-surface-light hover:text-vuln-text transition-colors"
+              >
+                <LogOut size={16} />
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-4">
+      <main className="container mx-auto px-3 md:px-4 py-4">
         <Suspense fallback={<PageSkeleton />}>
           {children}
         </Suspense>
       </main>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-vuln-surface border-t border-vuln-border z-40 h-14">
+        <div className="flex justify-around items-center h-full">
+          {navigation.map((item) => {
+            const Icon = item.icon;
+            const isActive = isActivePath(item.path);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex flex-col items-center justify-center gap-0.5 py-1 min-w-[48px] flex-1 transition-colors ${
+                  isActive
+                    ? "text-primary bg-primary/10 rounded-lg"
+                    : "text-vuln-text-muted"
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] leading-tight truncate">{item.shortName}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
 
       {/* Toast Notifications - theme aware */}
       <Toaster position="top-right" richColors theme={theme} />
