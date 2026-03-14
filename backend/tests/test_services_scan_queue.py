@@ -237,33 +237,6 @@ class TestScanQueueUnit:
 class TestHelperMethods:
     """Test static helper methods on ScanQueue."""
 
-    def test_as_int_valid(self):
-        """String '42' converts to int 42."""
-        assert ScanQueue._as_int("42", 0) == 42
-
-    def test_as_int_none(self):
-        """None returns the default."""
-        assert ScanQueue._as_int(None, 99) == 99
-
-    def test_as_int_invalid(self):
-        """Non-numeric string returns the default."""
-        assert ScanQueue._as_int("abc", 7) == 7
-
-    def test_as_bool_true_values(self):
-        """Various truthy string values convert to True."""
-        for val in ("true", "1", "yes", "on", "True", "YES", "ON"):
-            assert ScanQueue._as_bool(val, False) is True, f"Expected True for {val!r}"
-
-    def test_as_bool_false_values(self):
-        """Non-truthy string values convert to False."""
-        for val in ("false", "0", "no", "off", "anything", ""):
-            assert ScanQueue._as_bool(val, True) is False, f"Expected False for {val!r}"
-
-    def test_as_bool_none(self):
-        """None returns the default."""
-        assert ScanQueue._as_bool(None, True) is True
-        assert ScanQueue._as_bool(None, False) is False
-
     def test_record_metrics(self):
         """_record_metrics populates the deques and increments counter."""
         q = ScanQueue()

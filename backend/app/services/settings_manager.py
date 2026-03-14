@@ -1,6 +1,7 @@
 """Settings manager service for handling application configuration."""
 
 import json
+import time
 from typing import Any
 
 from sqlalchemy import select
@@ -10,7 +11,16 @@ from app.models import Setting
 
 
 class SettingsManager:
-    """Manage application settings with typed access."""
+    """Manage application settings with typed access.
+
+    Includes a class-level TTL cache to avoid redundant DB queries for
+    settings that change infrequently.  VulnForge runs as a single Granian
+    worker, so a class-level dict is effectively process-global.
+    """
+
+    # --- Cache ---
+    _cache: dict[str, tuple[str, float]] = {}  # {key: (value, expiry_timestamp)}
+    _CACHE_TTL: float = 60.0  # seconds
 
     # Default settings values
     DEFAULTS = {
@@ -182,16 +192,34 @@ class SettingsManager:
         "cors_origins": "security",
     }
 
+    @classmethod
+    def invalidate_cache(cls, key: str | None = None) -> None:
+        """Clear cached settings. Pass a key to clear one, or None for all."""
+        if key:
+            cls._cache.pop(key, None)
+        else:
+            cls._cache.clear()
+
     def __init__(self, db: AsyncSession):
         """Initialize settings manager."""
         self.db = db
 
     async def get(self, key: str, default: str | None = None) -> str | None:
-        """Get a setting value by key."""
+        """Get a setting value by key, with TTL cache."""
+        # Check cache first
+        cached = self._cache.get(key)
+        if cached is not None:
+            value, expiry = cached
+            if time.monotonic() < expiry:
+                return value
+            del self._cache[key]
+
         result = await self.db.execute(select(Setting).where(Setting.key == key))
         setting = result.scalar_one_or_none()
 
         if setting:
+            # Cache the DB value
+            self._cache[key] = (setting.value, time.monotonic() + self._CACHE_TTL)
             return setting.value
 
         # Return default from DEFAULTS or provided default
@@ -249,6 +277,53 @@ class SettingsManager:
 
         return values
 
+    async def get_many_typed(self, specs: dict[str, tuple[type, Any]]) -> dict[str, Any]:
+        """Get multiple settings with automatic type conversion.
+
+        Args:
+            specs: Mapping of ``{key: (type_class, default)}`` where
+                   *type_class* is ``int``, ``bool``, ``float``, or ``str``.
+
+        Returns:
+            ``{key: typed_value}`` with conversions applied.
+        """
+        raw = await self.get_many(list(specs.keys()))
+        result: dict[str, Any] = {}
+        for key, (type_cls, default) in specs.items():
+            value = raw.get(key)
+            if value is None:
+                result[key] = default
+            elif type_cls is int:
+                try:
+                    result[key] = int(value)
+                except (ValueError, TypeError):
+                    result[key] = default
+            elif type_cls is bool:
+                result[key] = str(value).lower() in ("true", "1", "yes", "on")
+            elif type_cls is float:
+                try:
+                    result[key] = float(value)
+                except (ValueError, TypeError):
+                    result[key] = default
+            else:
+                result[key] = value
+        return result
+
+    # Declarative validation registry: {key: (validator_name, kwargs)}
+    _VALIDATORS: dict[str, tuple[str, dict]] = {
+        "scan_schedule": ("cron", {}),
+        "compliance_scan_schedule": ("cron", {}),
+        "log_level": ("log_level", {}),
+        "ntfy_url": ("url", {"allowed_schemes": ["http", "https"]}),
+        "ntfy_topic": ("topic", {}),
+        "scan_timeout": ("positive_int", {"min_value": 1, "max_value": 3600}),
+        "parallel_scans": ("positive_int", {"min_value": 1}),
+        "keep_scan_history_days": ("positive_int", {"min_value": 1}),
+        "notify_threshold_critical": ("positive_int", {"min_value": 1}),
+        "notify_threshold_high": ("positive_int", {"min_value": 1}),
+        "notify_threshold_medium": ("positive_int", {"min_value": 1}),
+    }
+
     async def set(
         self,
         key: str,
@@ -257,37 +332,7 @@ class SettingsManager:
         is_sensitive: bool | None = None,
     ) -> Setting:
         """Set a setting value with validation."""
-        from app.validators import (
-            validate_cron_expression,
-            validate_log_level,
-            validate_positive_integer,
-            validate_topic_name,
-            validate_url,
-        )
-
-        # Validate values based on setting key
-        validated_value = value
-        if key in ("scan_schedule", "compliance_scan_schedule"):
-            validated_value = validate_cron_expression(value)
-        elif key == "log_level":
-            validated_value = validate_log_level(value)
-        elif key in ("ntfy_url",):
-            validated_value = validate_url(value, allowed_schemes=["http", "https"])
-        elif key == "ntfy_topic":
-            validated_value = validate_topic_name(value)
-        elif key in (
-            "scan_timeout",
-            "parallel_scans",
-            "keep_scan_history_days",
-            "notify_threshold_critical",
-            "notify_threshold_high",
-            "notify_threshold_medium",
-        ):
-            validated_value = str(
-                validate_positive_integer(
-                    value, key, min_value=1, max_value=3600 if "timeout" in key else None
-                )
-            )
+        validated_value = self._validate_setting(key, value)
 
         result = await self.db.execute(select(Setting).where(Setting.key == key))
         setting = result.scalar_one_or_none()
@@ -319,8 +364,37 @@ class SettingsManager:
             self.db.add(setting)
 
         await self.db.commit()
+        self.invalidate_cache(key)
         await self.db.refresh(setting)
         return setting
+
+    @classmethod
+    def _validate_setting(cls, key: str, value: str) -> str:
+        """Validate a setting value using the declarative registry."""
+        spec = cls._VALIDATORS.get(key)
+        if spec is None:
+            return value
+
+        from app.validators import (
+            validate_cron_expression,
+            validate_log_level,
+            validate_positive_integer,
+            validate_topic_name,
+            validate_url,
+        )
+
+        validator_name, kwargs = spec
+        if validator_name == "cron":
+            return validate_cron_expression(value)
+        if validator_name == "log_level":
+            return validate_log_level(value)
+        if validator_name == "url":
+            return validate_url(value, **kwargs)
+        if validator_name == "topic":
+            return validate_topic_name(value)
+        if validator_name == "positive_int":
+            return str(validate_positive_integer(value, key, **kwargs))
+        return value
 
     @staticmethod
     def _is_sensitive_key(key: str) -> bool:

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from functools import total_ordering
+from typing import Any
 
 from sqlalchemy import select
 
@@ -246,21 +247,6 @@ class ScanQueue:
                     job_docker_service.close()
         finally:
             logger.info(f"Worker {worker_id} stopped")
-
-    @staticmethod
-    def _as_int(value: str | None, default: int) -> int:
-        """Convert a string setting value to int with fallback."""
-        try:
-            return int(value) if value is not None else default
-        except (TypeError, ValueError):
-            return default
-
-    @staticmethod
-    def _as_bool(value: str | None, default: bool) -> bool:
-        """Convert a string setting value to bool with fallback."""
-        if value is None:
-            return default
-        return str(value).lower() in ("true", "1", "yes", "on")
 
     async def _store_vulnerabilities_with_kev(
         self,
@@ -539,7 +525,7 @@ class ScanQueue:
         db,
         job: QueuedScanJob,
         docker_service: DockerService,
-    ) -> tuple[Container, Scan, "ScanJob | None", dict[str, str | None]]:
+    ) -> tuple[Container, Scan, "ScanJob | None", dict[str, Any]]:
         """Stage 1: Load settings, container, create scan record, link ScanJob.
 
         Commits:
@@ -548,16 +534,16 @@ class ScanQueue:
         - ScanJob link (via _link_scan_job) — transitions queued → processing
         - Container status update — marks last_scan_status = "in_progress"
         """
-        # Fetch settings in one batch query
+        # Fetch settings in one batch query with type conversion
         settings_manager = SettingsManager(db)
-        settings_values = await settings_manager.get_many(
-            [
-                "scan_timeout",
-                "enable_secret_scanning",
-                "scanner_db_max_age_hours",
-                "scanner_skip_db_update_when_fresh",
-                "scanner_stale_db_warning_hours",
-            ]
+        settings_values = await settings_manager.get_many_typed(
+            {
+                "scan_timeout": (int, 300),
+                "enable_secret_scanning": (bool, True),
+                "scanner_db_max_age_hours": (int, 24),
+                "scanner_skip_db_update_when_fresh": (bool, True),
+                "scanner_stale_db_warning_hours": (int, 72),
+            }
         )
 
         # Load container
@@ -604,22 +590,19 @@ class ScanQueue:
         self,
         container: Container,
         docker_service: DockerService,
-        settings_values: dict[str, str | None],
+        settings_values: dict[str, Any],
     ) -> tuple[dict | None, float, object]:
         """Stage 2: Run scanner with health checks and network pre-flight.
 
         No database access. Returns (trivy_result, duration, trivy_db_health).
-        TimeoutError propagates to caller.
+        TimeoutError propagates to caller. Settings are already typed by
+        _prepare_scan via get_many_typed().
         """
-        timeout = self._as_int(settings_values.get("scan_timeout"), 300)
-        enable_secret_scanning = self._as_bool(settings_values.get("enable_secret_scanning"), True)
-        max_db_age_hours = self._as_int(settings_values.get("scanner_db_max_age_hours"), 24)
-        skip_db_when_fresh = self._as_bool(
-            settings_values.get("scanner_skip_db_update_when_fresh"), True
-        )
-        stale_warning_hours = self._as_int(
-            settings_values.get("scanner_stale_db_warning_hours"), 72
-        )
+        timeout: int = settings_values["scan_timeout"]
+        enable_secret_scanning: bool = settings_values["enable_secret_scanning"]
+        max_db_age_hours: int = settings_values["scanner_db_max_age_hours"]
+        skip_db_when_fresh: bool = settings_values["scanner_skip_db_update_when_fresh"]
+        stale_warning_hours: int = settings_values["scanner_stale_db_warning_hours"]
 
         trivy_scanner = self.trivy_scanner or TrivyScanner(docker_service)
 
@@ -870,7 +853,7 @@ class ScanQueue:
                     container, scan, scan_job_row, settings_values = await self._prepare_scan(
                         db, job, docker_service
                     )
-                    timeout = self._as_int(settings_values.get("scan_timeout"), 300)
+                    timeout = settings_values["scan_timeout"]
 
                     try:
                         # Stage 2: Execute (no DB access)

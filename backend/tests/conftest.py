@@ -178,6 +178,9 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession]:
 
     session = async_session()
     try:
+        # Clear settings cache to prevent cross-test contamination
+        SettingsManager.invalidate_cache()
+
         # Always initialize default settings to avoid middleware errors
         for key, value in SettingsManager.DEFAULTS.items():
             setting = Setting(key=key, value=value)
@@ -186,6 +189,7 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession]:
 
         yield session
     finally:
+        SettingsManager.invalidate_cache()
         await session.close()
 
 
