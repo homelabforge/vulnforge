@@ -534,276 +534,360 @@ class ScanQueue:
             await db.commit()
             logger.debug(f"Marked ScanJob {scan_job_row.id} as failed")
 
-    async def _process_scan(self, job: QueuedScanJob, docker_service: DockerService):
-        """Process a single scan job — orchestrator for scan lifecycle."""
+    async def _prepare_scan(
+        self,
+        db,
+        job: QueuedScanJob,
+        docker_service: DockerService,
+    ) -> tuple[Container, Scan, "ScanJob | None", dict[str, str | None]]:
+        """Stage 1: Load settings, container, create scan record, link ScanJob.
 
+        Commits:
+        - Container tag refresh (if image changed) — persists Docker state
+        - Scan record creation — scan ID must be visible for ScanJob linking
+        - ScanJob link (via _link_scan_job) — transitions queued → processing
+        - Container status update — marks last_scan_status = "in_progress"
+        """
+        # Fetch settings in one batch query
+        settings_manager = SettingsManager(db)
+        settings_values = await settings_manager.get_many(
+            [
+                "scan_timeout",
+                "enable_secret_scanning",
+                "scanner_db_max_age_hours",
+                "scanner_skip_db_update_when_fresh",
+                "scanner_stale_db_warning_hours",
+            ]
+        )
+
+        # Load container
+        result = await db.execute(select(Container).where(Container.id == job.container_id))
+        container = result.scalar_one_or_none()
+        if not container:
+            raise ValueError(f"Container {job.container_id} not found in database")
+
+        # Refresh image tag from Docker before scanning
+        live_container = docker_service.get_container(container.name)
+        if live_container:
+            old_tag = container.image_tag
+            new_tag = live_container.get("image_tag", container.image_tag)
+            if old_tag != new_tag:
+                logger.info(
+                    f"Container {container.name} image tag changed: "
+                    f"{old_tag} → {new_tag} (refreshing before scan)"
+                )
+                container.image = live_container.get("image", container.image)
+                container.image_tag = new_tag
+                container.image_id = live_container.get("image_id", container.image_id)
+                await db.commit()  # commit: tag refresh must persist before scan
+                await db.refresh(container)
+
+        # Create scan record
+        scan = Scan(
+            container_id=container.id,
+            scan_status="in_progress",
+            image_scanned=f"{container.image}:{container.image_tag}",
+        )
+        db.add(scan)
+        await db.commit()  # commit: scan ID must be visible for ScanJob linking
+        await db.refresh(scan)
+
+        # Link ScanJob (if one exists) → Scan
+        scan_job_row = await self._link_scan_job(db, container.id, scan.id)
+
+        container.last_scan_status = "in_progress"
+        await db.commit()  # commit: status visible to API callers
+
+        return container, scan, scan_job_row, settings_values
+
+    async def _execute_scan(
+        self,
+        container: Container,
+        docker_service: DockerService,
+        settings_values: dict[str, str | None],
+    ) -> tuple[dict | None, float, object]:
+        """Stage 2: Run scanner with health checks and network pre-flight.
+
+        No database access. Returns (trivy_result, duration, trivy_db_health).
+        TimeoutError propagates to caller.
+        """
+        timeout = self._as_int(settings_values.get("scan_timeout"), 300)
+        enable_secret_scanning = self._as_bool(settings_values.get("enable_secret_scanning"), True)
+        max_db_age_hours = self._as_int(settings_values.get("scanner_db_max_age_hours"), 24)
+        skip_db_when_fresh = self._as_bool(
+            settings_values.get("scanner_skip_db_update_when_fresh"), True
+        )
+        stale_warning_hours = self._as_int(
+            settings_values.get("scanner_stale_db_warning_hours"), 72
+        )
+
+        trivy_scanner = self.trivy_scanner or TrivyScanner(docker_service)
+
+        trivy_health = TrivyHealthMonitor(trivy_scanner)
+        trivy_db_health = await trivy_health.check_database_health(
+            max_age_hours=max_db_age_hours, stale_warning_hours=stale_warning_hours
+        )
+        skip_trivy_db_update = skip_db_when_fresh and trivy_db_health.can_skip_update
+
+        connectivity_checker = get_connectivity_checker()
+        network_status = await connectivity_checker.check_connectivity()
+
+        logger.info(
+            f"Network pre-flight check: {network_status.status.value} - "
+            f"{len(network_status.reachable_hosts)}/{len(connectivity_checker.test_hosts)} hosts reachable"
+        )
+
+        if network_status.is_offline and not skip_trivy_db_update:
+            logger.warning(
+                "System is OFFLINE but scanner DB updates are required. "
+                "Scan may fail. Consider enabling 'Skip DB update when fresh' in settings."
+            )
+
+        start_time = get_now()
+        image_ref = f"{container.image}:{container.image_tag}"
+
+        logger.info(f"Running Trivy scanner for {container.name}")
+        try:
+            trivy_result = await asyncio.wait_for(
+                trivy_scanner.scan_image(
+                    image_ref,
+                    scan_secrets=enable_secret_scanning,
+                    skip_db_update=skip_trivy_db_update,
+                ),
+                timeout=timeout,
+            )
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Trivy scan failed: {error_msg}")
+
+            error_classifier = get_error_classifier()
+            classified_error = error_classifier.classify_error(
+                scanner_name="Trivy",
+                error_message=error_msg,
+                db_age_hours=trivy_db_health.age_hours,
+            )
+            logger.warning(
+                f"Trivy error classified as {classified_error.error_type.value}: "
+                f"{classified_error.user_message}"
+            )
+            for suggestion in classified_error.suggestions:
+                logger.info(f"  → {suggestion}")
+
+            trivy_result = None
+
+        duration = (get_now() - start_time).total_seconds()
+        return trivy_result, duration, trivy_db_health
+
+    async def _process_results(
+        self,
+        db,
+        container: Container,
+        scan: Scan,
+        docker_service: DockerService,
+        trivy_result: dict | None,
+        duration: float,
+        trivy_db_health,
+    ) -> int:
+        """Stage 3: Process scan output — store vulns/secrets, compute CVE delta.
+
+        No commits — caller is responsible for the atomic finalization commit.
+        Returns kev_count (0 if scan failed).
+        """
+        import json
+
+        if trivy_result is None:
+            scan.scan_status = "failed"
+            scan.error_message = "Scanner returned no data"
+            container.last_scan_status = "failed"
+            await self._log_scan_failure(db, container, scan.id, "Scanner returned no data")
+            return 0
+
+        # Parse vulnerabilities
+        vulnerabilities = []
+        for vuln in trivy_result.get("vulnerabilities", []):
+            vuln["scanner"] = "trivy"
+            vuln["confidence"] = "MEDIUM"
+            vuln["found_by_scanners"] = json.dumps(["trivy"])
+            vulnerabilities.append(vuln)
+
+        secrets_raw = trivy_result.get("secrets", [])
+
+        # Compute severity counts
+        severity_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+        fixable_count = 0
+        for vuln in vulnerabilities:
+            sev = vuln.get("severity", "UNKNOWN")
+            severity_counts[sev] = severity_counts.get(sev, 0) + 1
+            if vuln.get("is_fixable", False):
+                fixable_count += 1
+
+        # CVE delta against previous completed scan
+        current_cves = {v["cve_id"] for v in vulnerabilities}
+        previous_cves: set[str] = set()
+        prev_scan_result = await db.execute(
+            select(Scan)
+            .where(
+                Scan.container_id == container.id,
+                Scan.scan_status == "completed",
+                Scan.id != scan.id,
+            )
+            .order_by(Scan.scan_date.desc())
+            .limit(1)
+        )
+        prev_scan = prev_scan_result.scalar_one_or_none()
+        if prev_scan:
+            prev_vulns_result = await db.execute(
+                select(Vulnerability.cve_id).where(Vulnerability.scan_id == prev_scan.id)
+            )
+            previous_cves = {row[0] for row in prev_vulns_result.fetchall()}
+
+        cves_fixed = list(previous_cves - current_cves)
+        cves_introduced = list(current_cves - previous_cves)
+        if cves_fixed or cves_introduced:
+            logger.info(
+                f"CVE delta for {container.name}: "
+                f"{len(cves_fixed)} fixed, {len(cves_introduced)} introduced"
+            )
+
+        # Update scan record
+        scan.scan_status = "completed"
+        scan.cves_fixed = json.dumps(cves_fixed) if cves_fixed else None
+        scan.cves_introduced = json.dumps(cves_introduced) if cves_introduced else None
+        scan.scan_duration_seconds = duration
+        scan.total_vulns = len(vulnerabilities)
+        scan.fixable_vulns = fixable_count
+        scan.critical_count = severity_counts["CRITICAL"]
+        scan.high_count = severity_counts["HIGH"]
+        scan.medium_count = severity_counts["MEDIUM"]
+        scan.low_count = severity_counts["LOW"]
+
+        logger.info(f"Trivy scan successful - DB age: {trivy_db_health.age_hours}h")
+
+        # Store vulnerabilities + KEV enrichment
+        kev_count = await self._store_vulnerabilities_with_kev(db, scan, vulnerabilities)
+
+        # Store secrets + FP matching
+        secrets_list = await self._store_secrets_with_fp_matching(db, scan, container, secrets_raw)
+        if secrets_list:
+            await self._notify_secrets_detected(db, container, scan, secrets_list)
+
+        # Update container summary
+        container.total_vulns = scan.total_vulns
+        container.fixable_vulns = scan.fixable_vulns
+        container.critical_count = scan.critical_count
+        container.high_count = scan.high_count
+        container.medium_count = scan.medium_count
+        container.low_count = scan.low_count
+        container.last_scan_status = "completed"
+        container.scanner_coverage = 1
+
+        logger.info(
+            f"Scan completed for {container.name}: "
+            f"{scan.total_vulns} vulnerabilities in {duration:.1f}s"
+        )
+
+        # Dive analysis (non-blocking, errors logged but don't fail scan)
+        image_ref = f"{container.image}:{container.image_tag}"
+        await self._run_dive_analysis(docker_service, container, image_ref)
+
+        return kev_count
+
+    async def _finalize_scan(
+        self,
+        db,
+        container: Container,
+        scan: Scan,
+        scan_job_row: "ScanJob | None",
+        duration: float,
+        kev_count: int,
+    ) -> dict:
+        """Stage 4: Commit results, update ScanJob, invalidate caches, log activity.
+
+        Commits: Final atomic commit persisting scan results + container summary.
+        """
+        container.last_scan_date = get_now()
+
+        # Update ScanJob status to match scan outcome
+        if scan_job_row:
+            if scan.scan_status == "completed":
+                scan_job_row.status = "completed"
+                scan_job_row.completed_at = get_now()
+            else:
+                scan_job_row.status = "failed"
+                scan_job_row.error_message = scan.error_message
+                scan_job_row.completed_at = get_now()
+
+        await db.commit()  # commit: final atomic persist of scan results
+
+        # Post-commit side effects
+        if scan.scan_status == "completed":
+            # Invalidate widget caches
+            cache = get_cache()
+            await cache.invalidate_pattern("widget:*")
+
+            # Store batch result for batch notification
+            self._batch_results.append(
+                {
+                    "container_name": container.name,
+                    "total_vulns": scan.total_vulns,
+                    "fixable_count": scan.fixable_vulns,
+                    "critical_count": scan.critical_count,
+                    "high_count": scan.high_count,
+                    "medium_count": scan.medium_count,
+                    "low_count": scan.low_count,
+                    "kev_count": kev_count,
+                    "scan_id": scan.id,
+                }
+            )
+
+            # Log activity
+            await self._log_scan_activity(db, container, scan, duration)
+
+        return {"duration": duration, "status": scan.scan_status}
+
+    async def _process_scan(self, job: QueuedScanJob, docker_service: DockerService):
+        """Process a single scan job — thin orchestrator for the 4-stage pipeline.
+
+        Stages:
+          1. _prepare_scan  — load settings/container, create Scan, link ScanJob
+          2. _execute_scan   — health checks, run Trivy (no DB access)
+          3. _process_results — parse output, store vulns/secrets, CVE delta
+          4. _finalize_scan  — commit results, update ScanJob, log activity
+
+        Retry semantics (preserved as-is):
+          On exception, _fail_scan_job marks the ScanJob as failed. The worker
+          then re-queues the job if retries remain. On retry, no ScanJob exists
+          to link (the original was consumed), so scan_job_row will be None.
+        """
         result_payload: dict | None = None
         scan_job_row: ScanJob | None = None
-        timeout = 300  # default, overridden by settings below
+        timeout = 300
 
         try:
             async with db_session() as db:
                 try:
-                    # --- Fetch settings ---
-                    settings_manager = SettingsManager(db)
-                    settings_values = await settings_manager.get_many(
-                        [
-                            "scan_timeout",
-                            "enable_secret_scanning",
-                            "scanner_db_max_age_hours",
-                            "scanner_skip_db_update_when_fresh",
-                            "scanner_stale_db_warning_hours",
-                        ]
+                    # Stage 1: Prepare
+                    container, scan, scan_job_row, settings_values = await self._prepare_scan(
+                        db, job, docker_service
                     )
-
                     timeout = self._as_int(settings_values.get("scan_timeout"), 300)
-                    enable_secret_scanning = self._as_bool(
-                        settings_values.get("enable_secret_scanning"), True
-                    )
-
-                    # --- Load container ---
-                    result = await db.execute(
-                        select(Container).where(Container.id == job.container_id)
-                    )
-                    container = result.scalar_one_or_none()
-                    if not container:
-                        logger.error(f"Container {job.container_id} not found in database")
-                        return None
-
-                    # Refresh image tag from Docker before scanning
-                    live_container = docker_service.get_container(container.name)
-                    if live_container:
-                        old_tag = container.image_tag
-                        new_tag = live_container.get("image_tag", container.image_tag)
-                        if old_tag != new_tag:
-                            logger.info(
-                                f"Container {container.name} image tag changed: "
-                                f"{old_tag} → {new_tag} (refreshing before scan)"
-                            )
-                            container.image = live_container.get("image", container.image)
-                            container.image_tag = new_tag
-                            container.image_id = live_container.get("image_id", container.image_id)
-                            await db.commit()
-                            await db.refresh(container)
-
-                    # --- Create scan record ---
-                    scan = Scan(
-                        container_id=container.id,
-                        scan_status="in_progress",
-                        image_scanned=f"{container.image}:{container.image_tag}",
-                    )
-                    db.add(scan)
-                    await db.commit()
-                    await db.refresh(scan)
-
-                    # --- Link ScanJob (if one exists) → Scan ---
-                    scan_job_row = await self._link_scan_job(db, container.id, scan.id)
-
-                    container.last_scan_status = "in_progress"
-                    await db.commit()
-
-                    # --- Prepare scanner + health checks ---
-                    trivy_scanner = self.trivy_scanner or TrivyScanner(docker_service)
-
-                    max_db_age_hours = self._as_int(
-                        settings_values.get("scanner_db_max_age_hours"), 24
-                    )
-                    skip_db_when_fresh = self._as_bool(
-                        settings_values.get("scanner_skip_db_update_when_fresh"), True
-                    )
-                    stale_warning_hours = self._as_int(
-                        settings_values.get("scanner_stale_db_warning_hours"), 72
-                    )
-
-                    trivy_health = TrivyHealthMonitor(trivy_scanner)
-                    trivy_db_health = await trivy_health.check_database_health(
-                        max_age_hours=max_db_age_hours, stale_warning_hours=stale_warning_hours
-                    )
-                    skip_trivy_db_update = skip_db_when_fresh and trivy_db_health.can_skip_update
-
-                    connectivity_checker = get_connectivity_checker()
-                    network_status = await connectivity_checker.check_connectivity()
-
-                    logger.info(
-                        f"Network pre-flight check: {network_status.status.value} - "
-                        f"{len(network_status.reachable_hosts)}/{len(connectivity_checker.test_hosts)} hosts reachable"
-                    )
-
-                    if network_status.is_offline and not skip_trivy_db_update:
-                        logger.warning(
-                            "System is OFFLINE but scanner DB updates are required. "
-                            "Scan may fail. Consider enabling 'Skip DB update when fresh' in settings."
-                        )
 
                     try:
-                        start_time = get_now()
-                        image_ref = f"{container.image}:{container.image_tag}"
+                        # Stage 2: Execute (no DB access)
+                        trivy_result, duration, trivy_db_health = await self._execute_scan(
+                            container, docker_service, settings_values
+                        )
 
-                        # --- Run Trivy scanner ---
-                        logger.info(f"Running Trivy scanner for {container.name}")
-                        try:
-                            trivy_result = await asyncio.wait_for(
-                                trivy_scanner.scan_image(
-                                    image_ref,
-                                    scan_secrets=enable_secret_scanning,
-                                    skip_db_update=skip_trivy_db_update,
-                                ),
-                                timeout=timeout,
-                            )
-                        except Exception as e:
-                            error_msg = str(e)
-                            logger.error(f"Trivy scan failed: {error_msg}")
-
-                            error_classifier = get_error_classifier()
-                            classified_error = error_classifier.classify_error(
-                                scanner_name="Trivy",
-                                error_message=error_msg,
-                                db_age_hours=trivy_db_health.age_hours,
-                            )
-                            logger.warning(
-                                f"Trivy error classified as {classified_error.error_type.value}: "
-                                f"{classified_error.user_message}"
-                            )
-                            for suggestion in classified_error.suggestions:
-                                logger.info(f"  → {suggestion}")
-
-                            trivy_result = None
-
-                        # --- Process results ---
-                        import json
-
-                        vulnerabilities = []
-                        if trivy_result:
-                            for vuln in trivy_result.get("vulnerabilities", []):
-                                vuln["scanner"] = "trivy"
-                                vuln["confidence"] = "MEDIUM"
-                                vuln["found_by_scanners"] = json.dumps(["trivy"])
-                                vulnerabilities.append(vuln)
-
-                        secrets_raw = trivy_result.get("secrets", []) if trivy_result else []
-                        duration = (get_now() - start_time).total_seconds()
-
-                        if trivy_result is not None:
-                            # Compute severity counts
-                            severity_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
-                            fixable_count = 0
-                            for vuln in vulnerabilities:
-                                sev = vuln.get("severity", "UNKNOWN")
-                                severity_counts[sev] = severity_counts.get(sev, 0) + 1
-                                if vuln.get("is_fixable", False):
-                                    fixable_count += 1
-
-                            # CVE delta
-                            current_cves = {v["cve_id"] for v in vulnerabilities}
-                            previous_cves: set[str] = set()
-                            prev_scan_result = await db.execute(
-                                select(Scan)
-                                .where(
-                                    Scan.container_id == container.id,
-                                    Scan.scan_status == "completed",
-                                    Scan.id != scan.id,
-                                )
-                                .order_by(Scan.scan_date.desc())
-                                .limit(1)
-                            )
-                            prev_scan = prev_scan_result.scalar_one_or_none()
-                            if prev_scan:
-                                prev_vulns_result = await db.execute(
-                                    select(Vulnerability.cve_id).where(
-                                        Vulnerability.scan_id == prev_scan.id
-                                    )
-                                )
-                                previous_cves = {row[0] for row in prev_vulns_result.fetchall()}
-
-                            cves_fixed = list(previous_cves - current_cves)
-                            cves_introduced = list(current_cves - previous_cves)
-                            if cves_fixed or cves_introduced:
-                                logger.info(
-                                    f"CVE delta for {container.name}: "
-                                    f"{len(cves_fixed)} fixed, {len(cves_introduced)} introduced"
-                                )
-
-                            # Update scan record
-                            scan.scan_status = "completed"
-                            scan.cves_fixed = json.dumps(cves_fixed) if cves_fixed else None
-                            scan.cves_introduced = (
-                                json.dumps(cves_introduced) if cves_introduced else None
-                            )
-                            scan.scan_duration_seconds = duration
-                            scan.total_vulns = len(vulnerabilities)
-                            scan.fixable_vulns = fixable_count
-                            scan.critical_count = severity_counts["CRITICAL"]
-                            scan.high_count = severity_counts["HIGH"]
-                            scan.medium_count = severity_counts["MEDIUM"]
-                            scan.low_count = severity_counts["LOW"]
-
-                            logger.info(
-                                f"Trivy scan successful - "
-                                f"DB age: {trivy_db_health.age_hours}h (skip_update={skip_trivy_db_update})"
-                            )
-
-                            # Store vulnerabilities + KEV enrichment
-                            kev_count = await self._store_vulnerabilities_with_kev(
-                                db, scan, vulnerabilities
-                            )
-
-                            # Store secrets + FP matching
-                            secrets_list = await self._store_secrets_with_fp_matching(
-                                db, scan, container, secrets_raw
-                            )
-                            if secrets_list:
-                                await self._notify_secrets_detected(
-                                    db, container, scan, secrets_list
-                                )
-
-                            # Update container summary
-                            container.total_vulns = scan.total_vulns
-                            container.fixable_vulns = scan.fixable_vulns
-                            container.critical_count = scan.critical_count
-                            container.high_count = scan.high_count
-                            container.medium_count = scan.medium_count
-                            container.low_count = scan.low_count
-                            container.last_scan_status = "completed"
-                            container.scanner_coverage = 1
-
-                            logger.info(
-                                f"Scan completed for {container.name}: "
-                                f"{scan.total_vulns} vulnerabilities in {duration:.1f}s"
-                            )
-
-                            # Dive analysis (non-blocking)
-                            await self._run_dive_analysis(docker_service, container, image_ref)
-
-                            # Invalidate widget caches
-                            cache = get_cache()
-                            await cache.invalidate_pattern("widget:*")
-
-                            # Store batch result
-                            self._batch_results.append(
-                                {
-                                    "container_name": container.name,
-                                    "total_vulns": scan.total_vulns,
-                                    "fixable_count": scan.fixable_vulns,
-                                    "critical_count": scan.critical_count,
-                                    "high_count": scan.high_count,
-                                    "medium_count": scan.medium_count,
-                                    "low_count": scan.low_count,
-                                    "kev_count": kev_count,
-                                    "scan_id": scan.id,
-                                }
-                            )
-
-                            # Log activity
-                            await self._log_scan_activity(db, container, scan, duration)
-
-                        else:
-                            # Scanner returned no data
-                            scan.scan_status = "failed"
-                            scan.error_message = "Scanner returned no data"
-                            container.last_scan_status = "failed"
-                            await self._log_scan_failure(
-                                db, container, scan.id, "Scanner returned no data"
-                            )
+                        # Stage 3: Process results (no commits)
+                        kev_count = await self._process_results(
+                            db,
+                            container,
+                            scan,
+                            docker_service,
+                            trivy_result,
+                            duration,
+                            trivy_db_health,
+                        )
 
                     except TimeoutError:
                         scan.scan_status = "failed"
@@ -815,21 +899,16 @@ class ScanQueue:
                         )
                         raise
 
-                    # Finalize — update ScanJob status to match scan outcome
-                    container.last_scan_date = get_now()
-                    if scan_job_row:
-                        if scan.scan_status == "completed":
-                            scan_job_row.status = "completed"
-                            scan_job_row.completed_at = get_now()
-                        else:
-                            scan_job_row.status = "failed"
-                            scan_job_row.error_message = scan.error_message
-                            scan_job_row.completed_at = get_now()
-                    await db.commit()
-                    result_payload = {
-                        "duration": duration,
-                        "status": scan.scan_status,
-                    }
+                    # Stage 4: Finalize (commits atomically)
+                    result_payload = await self._finalize_scan(
+                        db,
+                        container,
+                        scan,
+                        scan_job_row,
+                        duration,
+                        kev_count,
+                    )
+
                 except TimeoutError:
                     if scan_job_row:
                         scan_job_row.status = "failed"
@@ -843,7 +922,7 @@ class ScanQueue:
 
         except Exception as e:
             logger.error(f"Scan processing error for {job.container_name}: {e}", exc_info=True)
-            # Best-effort: mark ScanJob as failed
+            # Best-effort: mark ScanJob as failed (separate session)
             try:
                 async with db_session() as err_db:
                     await self._fail_scan_job(err_db, job.container_id, str(e))
