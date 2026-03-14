@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Decompose scan pipeline `_process_scan` into 4 discrete stages with documented commit boundaries
+- Split monolithic `api.ts` (1140 lines) into modular type and API client files (21 modules)
+- Migrate direct API calls to React Query hooks in About, ContainerDetail, ApiKeysCard, DatabaseBackupSection
+- Add TTL cache, typed batch getters, and declarative validation to SettingsManager
+- Add provider caching, circuit breaker, and exponential backoff to notification dispatcher
+- Document repository transaction convention (flush vs commit) across all repositories
+
+### Removed
+- Dead header-based auth system (19 settings keys, routes/auth.py, frontend schemas)
+- Legacy ntfy-only notifier (`notifier.py`) — replaced by multi-service dispatcher
+- Legacy notification settings (`notify_on_scan_complete`, `notify_on_critical`, thresholds)
+- Dead frontend code: `authApi`, `userAuth:401` listener, auth Zod validators
+
+### Fixed
+- Missing `theme` entry in `DEFAULT_CATEGORIES` (was falling back to 'general' instead of 'ui')
+- Deprecated `send_to_ntfy` field in notification rule schemas (API contract preserved)
+- Marked `ScanResultRepository` as deprecated (test-only, no production consumers)
+
+### Added
+- Frontend test infrastructure: `test-utils.tsx`, `test-factories.ts`
+- Tests for SettingsContext, useVulnForge hooks, Dashboard page (110 -> 134 tests)
+
 ### Dev Dependencies
 - **@typescript-eslint/eslint-plugin**: 8.56.1 → 8.57.0
 - **@typescript-eslint/parser**: 8.56.1 → 8.57.0
