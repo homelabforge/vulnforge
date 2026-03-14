@@ -171,6 +171,7 @@ class SettingsManager:
         "keep_scan_history_days": "retention",
         "default_severity_filter": "ui",
         "default_show_fixable_only": "ui",
+        "theme": "ui",
         "kev_checking_enabled": "kev",
         "kev_cache_hours": "kev",
         "kev_last_refresh": "kev",
