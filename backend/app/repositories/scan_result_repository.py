@@ -1,5 +1,10 @@
 """Legacy-compatible ScanResult repository implementation.
 
+.. deprecated::
+    This repository is a compatibility wrapper used only by tests.
+    No production code imports it. New tests should use the Scan model
+    directly rather than adding new call sites here.
+
 All write methods in this repository use flush() (composable — callers
 own the commit). This is intentional: the repository is primarily used
 in test fixtures where the test session manages transaction boundaries.
@@ -15,7 +20,11 @@ from app.models.scan import Scan
 
 
 class ScanResultRepository:
-    """Compatibility wrapper that mimics the legacy ScanResultRepository API."""
+    """Compatibility wrapper that mimics the legacy ScanResultRepository API.
+
+    .. deprecated::
+        Only used by test fixtures. No production routes or services import this.
+    """
 
     def __init__(self, db: AsyncSession):
         self.db = db
