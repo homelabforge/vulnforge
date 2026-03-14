@@ -1,4 +1,8 @@
-"""Activity log repository for centralized activity queries."""
+"""Activity log repository for centralized activity queries.
+
+All write methods in this repository commit directly (fire-and-forget
+logging operations, never composed in larger transactions).
+"""
 
 from datetime import datetime, timedelta
 from typing import Any
@@ -64,7 +68,7 @@ class ActivityLogRepository:
         )
 
         self.db.add(activity)
-        await self.db.commit()
+        await self.db.commit()  # commit: leaf operation, not composed
         await self.db.refresh(activity)
         return activity
 
@@ -184,6 +188,6 @@ class ActivityLogRepository:
 
         stmt = delete(ActivityLog).where(ActivityLog.timestamp < cutoff_date)
         result = await self.db.execute(stmt)
-        await self.db.commit()
+        await self.db.commit()  # commit: leaf operation, not composed
 
         return result.rowcount  # type: ignore[union-attr]

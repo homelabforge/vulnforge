@@ -1,4 +1,21 @@
-"""Database connection and session management."""
+"""Database connection and session management.
+
+Transaction Convention
+---------------------
+Repositories use two patterns for persistence, chosen by composability:
+
+- ``flush()`` — The repository makes changes visible within the current session
+  but does NOT end the transaction.  The caller (service/orchestrator layer)
+  decides when to ``commit()``.  Use this when the operation may be composed
+  with other writes in a single atomic unit (e.g. scan pipeline stages).
+
+- ``commit()`` — The repository ends the transaction itself.  Use this only
+  for provably leaf operations that are never composed with other writes
+  (e.g. single-row status updates called directly from API routes).
+
+Methods that commit document the reason with an inline comment:
+``# commit: leaf operation, not composed``.
+"""
 
 import logging
 from collections.abc import AsyncGenerator

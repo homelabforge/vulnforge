@@ -4,16 +4,11 @@ import {
   integerWithBounds,
   enhancedCronExpression,
   urlOrEmpty,
-  jsonArrayString,
-  httpHeaderName,
-  apiKeysJsonString,
-  basicAuthUsersJsonString,
 } from "./shared";
 
 // Constants for dropdowns
 export const LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"] as const;
 export const SEVERITY_FILTERS = ["all", "critical", "high", "medium", "low"] as const;
-export const AUTH_PROVIDERS = ["none", "authentik", "custom_headers", "api_key", "basic_auth"] as const;
 
 export const TIMEZONE_PRESETS = [
   "UTC",
@@ -52,23 +47,9 @@ export const settingsFieldSchemas = {
   // URLs
   ntfy_url: urlOrEmpty,
 
-  // JSON arrays with structure validation
-  auth_api_keys: apiKeysJsonString,
-  auth_basic_users: basicAuthUsersJsonString,
-  auth_admin_usernames: jsonArrayString, // Simple string array, no structure needed
-
-  // HTTP header names
-  auth_authentik_header_username: httpHeaderName,
-  auth_authentik_header_email: httpHeaderName,
-  auth_authentik_header_groups: httpHeaderName,
-  auth_custom_header_username: httpHeaderName,
-  auth_custom_header_email: httpHeaderName,
-  auth_custom_header_groups: httpHeaderName,
-
   // Enums
   log_level: z.enum(LOG_LEVELS),
   default_severity_filter: z.enum(SEVERITY_FILTERS),
-  auth_provider: z.enum(AUTH_PROVIDERS),
 };
 
 // Full settings schema (for reference/future use)
@@ -115,20 +96,6 @@ export const settingsSchema = z.object({
   scanner_skip_db_update_when_fresh: z.boolean(),
   scanner_allow_stale_db: z.boolean(),
   scanner_stale_db_warning_hours: integerWithBounds(1, 720, 72),
-
-  // Authentication settings
-  auth_enabled: z.boolean(),
-  auth_provider: z.enum(AUTH_PROVIDERS),
-  auth_authentik_header_username: httpHeaderName,
-  auth_authentik_header_email: httpHeaderName,
-  auth_authentik_header_groups: httpHeaderName,
-  auth_custom_header_username: httpHeaderName,
-  auth_custom_header_email: httpHeaderName,
-  auth_custom_header_groups: httpHeaderName,
-  auth_api_keys: apiKeysJsonString,
-  auth_basic_users: basicAuthUsersJsonString,
-  auth_admin_group: z.string(),
-  auth_admin_usernames: jsonArrayString,
 });
 
 export type SettingsFormData = z.infer<typeof settingsSchema>;

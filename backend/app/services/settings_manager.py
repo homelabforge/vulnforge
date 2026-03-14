@@ -1,26 +1,12 @@
 """Settings manager service for handling application configuration."""
 
 import json
-import os
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Setting
-
-
-def _env_or_default(key: str, default: str) -> str:
-    """Retrieve setting override from environment variables."""
-    env_keys = [
-        key.upper(),
-        f"VULNFORGE_{key.upper()}",
-    ]
-    for env_key in env_keys:
-        value = os.getenv(env_key)
-        if value:
-            return value
-    return default
 
 
 class SettingsManager:
@@ -114,37 +100,6 @@ class SettingsManager:
         "scanner_allow_stale_db": "true",  # Allow scans with stale databases when network unavailable
         "scanner_stale_db_warning_hours": "72",  # Warn when database is older than this
         # NOTE: Docker connection is now configured via DOCKER_HOST environment variable in compose
-        # Authentication settings
-        "auth_enabled": "false",  # Master auth toggle
-        "auth_provider": "none",  # Options: none, authentik, custom_headers, api_key, basic_auth
-        # Authentik provider settings
-        "auth_authentik_header_username": "X-Authentik-Username",
-        "auth_authentik_header_email": "X-Authentik-Email",
-        "auth_authentik_header_groups": "X-Authentik-Groups",
-        "auth_authentik_verify_secret": "",  # Shared secret for header verification (optional)
-        "auth_authentik_secret_header": "X-Authentik-Secret",  # Header name for verification secret
-        "auth_authentik_trusted_proxies": _env_or_default(
-            "auth_authentik_trusted_proxies",
-            '["127.0.0.1", "::1", "socket-proxy-ro", "host.docker.internal"]',
-        ),
-        # Custom headers provider settings
-        "auth_custom_header_username": "X-Remote-User",
-        "auth_custom_header_email": "X-Remote-Email",
-        "auth_custom_header_groups": "X-Remote-Groups",
-        "auth_custom_header_verify_secret": "",  # Shared secret for header verification (optional)
-        "auth_custom_header_secret_header": "X-Auth-Secret",  # Header name for verification secret
-        "auth_custom_header_trusted_proxies": _env_or_default(
-            "auth_custom_header_trusted_proxies",
-            '["127.0.0.1", "::1", "socket-proxy-ro", "host.docker.internal"]',
-        ),
-        # API key provider settings (JSON array)
-        "auth_api_keys": "[]",  # [{"key": "abc123", "name": "my-script", "admin": true}]
-        # Basic auth provider settings (JSON array with bcrypt hashes)
-        "auth_basic_users": "[]",  # [{"username": "admin", "password_hash": "bcrypt...", "admin": true}]
-        # Role/permission settings (provider-agnostic)
-        "auth_require_admin": "false",  # Require admin for maintenance endpoints
-        "auth_admin_group": "vulnforge-admins",  # Admin group name for header-based auth
-        "auth_admin_usernames": "[]",  # JSON array of admin usernames (fallback)
         # CORS settings
         "cors_origins": '["https://vulnforge.starett.net", "http://localhost:5173"]',  # JSON array
     }
@@ -224,25 +179,6 @@ class SettingsManager:
         "scanner_skip_db_update_when_fresh": "scanner",
         "scanner_allow_stale_db": "scanner",
         "scanner_stale_db_warning_hours": "scanner",
-        "auth_enabled": "auth",
-        "auth_provider": "auth",
-        "auth_authentik_header_username": "auth",
-        "auth_authentik_header_email": "auth",
-        "auth_authentik_header_groups": "auth",
-        "auth_authentik_verify_secret": "auth",
-        "auth_authentik_secret_header": "auth",
-        "auth_authentik_trusted_proxies": "auth",
-        "auth_custom_header_username": "auth",
-        "auth_custom_header_email": "auth",
-        "auth_custom_header_groups": "auth",
-        "auth_custom_header_verify_secret": "auth",
-        "auth_custom_header_secret_header": "auth",
-        "auth_custom_header_trusted_proxies": "auth",
-        "auth_api_keys": "auth",
-        "auth_basic_users": "auth",
-        "auth_require_admin": "auth",
-        "auth_admin_group": "auth",
-        "auth_admin_usernames": "auth",
         "cors_origins": "security",
     }
 

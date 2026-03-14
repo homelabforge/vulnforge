@@ -1,4 +1,11 @@
-"""Repository for managing persistent false positive patterns."""
+"""Repository for managing persistent false positive patterns.
+
+All write methods in this repository commit directly (leaf operations
+called from API routes, never composed in larger transactions).
+The ``record_match()`` method is an exception — it is called from the
+scan pipeline, but its commit is safe because match-count updates are
+independent of the scan's atomic result persistence.
+"""
 
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,7 +76,7 @@ class FalsePositivePatternRepository:
             created_by=created_by,
         )
         self.db.add(pattern)
-        await self.db.commit()
+        await self.db.commit()  # commit: leaf operation, not composed
         await self.db.refresh(pattern)
 
         return pattern
@@ -131,7 +138,7 @@ class FalsePositivePatternRepository:
         result = await self.db.execute(
             delete(FalsePositivePattern).where(FalsePositivePattern.id == pattern_id)
         )
-        await self.db.commit()
+        await self.db.commit()  # commit: leaf operation, not composed
         return result.rowcount > 0  # type: ignore[union-attr]
 
     async def delete_and_unsuppress(self, pattern_id: int) -> tuple[bool, int]:
@@ -195,7 +202,7 @@ class FalsePositivePatternRepository:
         await self.db.execute(
             delete(FalsePositivePattern).where(FalsePositivePattern.id == pattern_id)
         )
-        await self.db.commit()
+        await self.db.commit()  # commit: leaf operation, not composed
         return True, unsuppressed
 
     async def matches_pattern(
@@ -241,7 +248,7 @@ class FalsePositivePatternRepository:
         if pattern:
             pattern.match_count += 1
             pattern.last_matched = get_now()
-            await self.db.commit()
+            await self.db.commit()  # commit: independent counter update, safe during scan pipeline
 
     async def count_total(self) -> int:
         """

@@ -21,7 +21,6 @@ from app.models import Container
 from app.routes import (
     activity,
     api_keys,
-    auth,
     compliance,
     containers,
     false_positive_patterns,
@@ -258,7 +257,6 @@ async def health_check():
 # Include routers
 app.include_router(activity.router, prefix="/api/v1/activity", tags=["Activity"])
 app.include_router(api_keys.router)  # Prefix already defined in router
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(user_auth.router, prefix="/api/v1", tags=["User Authentication"])
 app.include_router(compliance.router, prefix="/api/v1/compliance", tags=["Compliance"])
 app.include_router(

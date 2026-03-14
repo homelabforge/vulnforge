@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dev Dependencies
+- **@typescript-eslint/eslint-plugin**: 8.56.1 → 8.57.0
+- **@typescript-eslint/parser**: 8.56.1 → 8.57.0
+- **@vitejs/plugin-react-swc**: 4.2.3 → 4.3.0
+- **@vitest/coverage-v8**: 4.0.18 → 4.1.0
+- **@vitest/ui**: 4.0.18 → 4.1.0
+- **ruff**: 0.15.5 → 0.15.6
+- **typescript-eslint**: 8.56.1 → 8.57.0
+- **vite**: 7.3.1 → 8.0.0
+- **vitest**: 4.0.18 → 4.1.0
+
+### App Dependencies
+- **pyjwt**: 2.11.0 → 2.12.1
+
 ## [4.4.0] - 2026-03-09
 
 ### Dev Dependencies

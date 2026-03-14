@@ -125,21 +125,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
-  // Listen for 401 errors from API calls (session expired)
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'userAuth:401') {
-        setIsAuthenticated(false);
-        setUser(null);
-        toast.error('Session expired. Please login again.');
-        // ProtectedRoute will handle redirect
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
   // ============================================================================
   // Auth Actions
   // ============================================================================

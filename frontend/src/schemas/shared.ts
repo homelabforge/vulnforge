@@ -111,37 +111,6 @@ export const cronExpression = z.string().refine(
 );
 
 /**
- * Zod schema for JSON array strings (validates it's parseable JSON array).
- */
-export const jsonArrayString = z.string().refine(
-  (val) => {
-    if (val === "" || val === "[]") return true;
-    try {
-      const parsed = JSON.parse(val);
-      return Array.isArray(parsed);
-    } catch {
-      return false;
-    }
-  },
-  { message: "Must be a valid JSON array" }
-);
-
-/**
- * Zod schema for valid HTTP header names.
- * Header names must be alphanumeric with hyphens, starting with a letter.
- * Examples: X-Authentik-Username, Content-Type, Authorization
- */
-export const httpHeaderName = z.string().refine(
-  (val) => {
-    if (val === "") return true; // Allow empty for optional fields
-    // RFC 7230: Header names are tokens (alphanumeric + !#$%&'*+-.^_`|~)
-    // We use a stricter pattern: letters, digits, and hyphens, starting with a letter
-    return /^[A-Za-z][A-Za-z0-9-]*$/.test(val);
-  },
-  { message: "Invalid header name. Use letters, numbers, and hyphens (e.g., X-Custom-Header)" }
-);
-
-/**
  * Zod schema for Docker image name validation.
  * Supports: image, image:tag, registry/image, registry/image:tag, registry:port/image:tag
  * Examples: nginx, nginx:latest, docker.io/library/nginx:1.25, ghcr.io/org/image:v1.0
@@ -218,65 +187,3 @@ export const enhancedCronExpression = z.string().refine(
   { message: "Invalid cron expression. Format: 'minute(0-59) hour(0-23) day(1-31) month(1-12) weekday(0-7)'" }
 );
 
-/**
- * Schema for API key objects in auth configuration.
- */
-export const apiKeyObjectSchema = z.object({
-  key: z.string().min(8, "API key must be at least 8 characters"),
-  name: z.string().min(1, "API key name is required"),
-  admin: z.boolean().optional().default(false),
-});
-
-/**
- * Schema for validating JSON string containing API keys array.
- */
-export const apiKeysJsonString = z.string().refine(
-  (val) => {
-    if (val === "" || val === "[]") return true;
-    try {
-      const parsed = JSON.parse(val);
-      if (!Array.isArray(parsed)) return false;
-      // Validate each key object
-      return parsed.every((item) => {
-        const result = apiKeyObjectSchema.safeParse(item);
-        return result.success;
-      });
-    } catch {
-      return false;
-    }
-  },
-  { message: 'Invalid API keys format. Expected: [{"key": "...", "name": "...", "admin": true/false}]' }
-);
-
-/**
- * Schema for basic auth user objects.
- */
-export const basicAuthUserSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password_hash: z.string().refine(
-    (val) => /^\$2[aby]?\$\d{1,2}\$.{53}$/.test(val),
-    { message: "Password hash must be in bcrypt format" }
-  ),
-  admin: z.boolean().optional().default(false),
-});
-
-/**
- * Schema for validating JSON string containing basic auth users array.
- */
-export const basicAuthUsersJsonString = z.string().refine(
-  (val) => {
-    if (val === "" || val === "[]") return true;
-    try {
-      const parsed = JSON.parse(val);
-      if (!Array.isArray(parsed)) return false;
-      // Validate each user object
-      return parsed.every((item) => {
-        const result = basicAuthUserSchema.safeParse(item);
-        return result.success;
-      });
-    } catch {
-      return false;
-    }
-  },
-  { message: 'Invalid users format. Expected: [{"username": "...", "password_hash": "$2b$...", "admin": true/false}]' }
-);

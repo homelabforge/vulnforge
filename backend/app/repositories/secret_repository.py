@@ -1,4 +1,8 @@
-"""Secret repository for centralized secret queries with false positive filtering."""
+"""Secret repository for centralized secret queries with false positive filtering.
+
+All write methods in this repository commit directly (leaf operations
+called from API routes, never composed in larger transactions).
+"""
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -406,7 +410,7 @@ class SecretRepository:
             secret.notes = notes
         secret.updated_at = get_now()
 
-        await self.db.commit()
+        await self.db.commit()  # commit: leaf operation, not composed
         await self.db.refresh(secret)
 
         return secret
@@ -437,5 +441,5 @@ class SecretRepository:
                 secret.updated_at = get_now()
                 updated_count += 1
 
-        await self.db.commit()
+        await self.db.commit()  # commit: leaf operation, not composed
         return updated_count

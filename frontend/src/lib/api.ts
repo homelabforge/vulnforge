@@ -704,33 +704,6 @@ export const activityApi = {
   },
 };
 
-// Auth
-export interface UserInfo {
-  username: string;
-  email: string | null;
-  groups: string[];
-  is_admin: boolean;
-  provider: string;
-  is_authenticated: boolean;
-}
-
-export interface AuthStatus {
-  enabled: boolean;
-  configured: boolean;
-}
-
-export const authApi = {
-  getCurrentUser: async (): Promise<UserInfo> => {
-    const res = await fetch(`${API_BASE}/auth/me`);
-    return handleResponse(res);
-  },
-
-  getAuthStatus: async (): Promise<AuthStatus> => {
-    const res = await fetch(`${API_BASE}/auth/status`);
-    return handleResponse(res);
-  },
-};
-
 // User Authentication API (single-user JWT auth)
 import type {
   UserProfile,

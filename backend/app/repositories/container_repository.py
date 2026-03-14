@@ -365,7 +365,7 @@ class ContainerRepository:
         container_data = self._normalize_container_data(container_data)
         container = Container(**container_data)
         self.db.add(container)
-        await self.db.flush()  # Use flush for test compatibility
+        await self.db.flush()  # flush: composable, caller owns commit
         await self.db.refresh(container)
         return container
 
@@ -379,7 +379,7 @@ class ContainerRepository:
         Returns:
             Updated container
         """
-        await self.db.flush()  # Use flush for test compatibility
+        await self.db.flush()  # flush: composable, caller owns commit
         await self.db.refresh(container)
         return container
 
@@ -416,7 +416,7 @@ class ContainerRepository:
             container: Container to delete
         """
         await self.db.delete(container)
-        await self.db.flush()  # Use flush for test compatibility
+        await self.db.flush()  # flush: composable, caller owns commit
 
     async def create_or_update(self, container_data: dict) -> Container:
         """
@@ -445,14 +445,14 @@ class ContainerRepository:
             existing.last_seen = normalized_data.get("last_seen", existing.last_seen)
             if normalized_data.get("container_id"):
                 existing.container_id = normalized_data["container_id"]
-            await self.db.commit()
+            await self.db.commit()  # commit: leaf operation, not composed
             await self.db.refresh(existing)
             return existing
         else:
             # Create new
             container = Container(**normalized_data)
             self.db.add(container)
-            await self.db.commit()
+            await self.db.commit()  # commit: leaf operation, not composed
             await self.db.refresh(container)
             return container
 
@@ -488,6 +488,6 @@ class ContainerRepository:
             removed += 1
 
         if removed:
-            await self.db.commit()
+            await self.db.commit()  # commit: leaf operation, not composed
 
         return removed

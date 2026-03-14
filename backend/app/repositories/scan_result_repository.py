@@ -1,4 +1,9 @@
-"""Legacy-compatible ScanResult repository implementation."""
+"""Legacy-compatible ScanResult repository implementation.
+
+All write methods in this repository use flush() (composable — callers
+own the commit). This is intentional: the repository is primarily used
+in test fixtures where the test session manages transaction boundaries.
+"""
 
 from typing import Any
 
@@ -40,7 +45,7 @@ class ScanResultRepository:
             scan.scan_date = extra["created_at"]
 
         self.db.add(scan)
-        await self.db.flush()  # Use flush instead of commit - let test fixture manage transactions
+        await self.db.flush()  # flush: composable, caller owns commit
         await self.db.refresh(scan)
         return scan
 
@@ -80,7 +85,7 @@ class ScanResultRepository:
     async def update(self, scan: Scan) -> Scan:
         """Persist changes made to a scan instance."""
 
-        await self.db.flush()  # Use flush instead of commit - let test fixture manage transactions
+        await self.db.flush()  # flush: composable, caller owns commit
         await self.db.refresh(scan)
         return scan
 

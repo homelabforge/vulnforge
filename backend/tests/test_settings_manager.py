@@ -14,7 +14,7 @@ class TestSettingsRetrieval:
         """Test retrieving an existing setting."""
         manager = SettingsManager(db_with_settings)
 
-        value = await manager.get("auth_enabled")
+        value = await manager.get("ntfy_enabled")
         assert value is not None
         assert isinstance(value, str)
 
@@ -29,8 +29,8 @@ class TestSettingsRetrieval:
         """Test retrieving setting from DEFAULTS when not in database."""
         manager = SettingsManager(db_session)
 
-        value = await manager.get("auth_enabled")
-        assert value == "false"  # Default value from DEFAULTS
+        value = await manager.get("ntfy_enabled")
+        assert value == "true"  # Default value from DEFAULTS
 
 
 @pytest.mark.asyncio
@@ -114,11 +114,11 @@ class TestSettingsUpdate:
         manager = SettingsManager(db_with_settings)
 
         # Update existing
-        await manager.set("auth_enabled", "true")
+        await manager.set("ntfy_enabled", "false")
 
         # Verify update
-        value = await manager.get("auth_enabled")
-        assert value == "true"
+        value = await manager.get("ntfy_enabled")
+        assert value == "false"
 
     async def test_bulk_update_settings(self, db_session):
         """Test bulk updating multiple settings."""
@@ -198,7 +198,7 @@ class TestSettingsDefaults:
         manager = SettingsManager(db_session)
 
         # Test a few key defaults
-        default_keys = ["auth_enabled", "auth_provider", "scan_schedule", "ntfy_enabled"]
+        default_keys = ["ntfy_enabled", "scan_schedule", "scan_timeout", "kev_checking_enabled"]
 
         for key in default_keys:
             value = await manager.get(key)
@@ -212,7 +212,7 @@ class TestSettingsDefaults:
         original_defaults = SettingsManager.DEFAULTS.copy()
 
         # Get some settings
-        await manager.get("auth_enabled")
+        await manager.get("ntfy_enabled")
         await manager.get("scan_schedule")
 
         # Verify DEFAULTS unchanged
@@ -228,23 +228,23 @@ class TestSettingsCacheInvalidation:
         manager = SettingsManager(db_with_settings)
 
         # Get value (may cache)
-        await manager.get("auth_enabled")
+        await manager.get("ntfy_enabled")
 
         # Update value
-        await manager.set("auth_enabled", "true")
+        await manager.set("ntfy_enabled", "false")
 
         # Get again - should reflect update
-        value2 = await manager.get("auth_enabled")
+        value2 = await manager.get("ntfy_enabled")
 
-        assert value2 == "true"
+        assert value2 == "false"
 
     async def test_multiple_updates_reflected(self, db_with_settings):
         """Test that sequential updates are immediately reflected."""
         manager = SettingsManager(db_with_settings)
 
         updates = {
-            "auth_enabled": "true",
-            "auth_provider": "authentik",
+            "ntfy_enabled": "false",
+            "scan_timeout": "600",
         }
 
         for key, value in updates.items():
