@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class NotificationLogBase(BaseModel):
@@ -50,7 +50,7 @@ class NotificationRuleBase(BaseModel):
     message_template: str
     priority: int = 3
     tags: str | None = None
-    send_to_ntfy: bool = True
+    send_to_ntfy: bool = Field(default=True, deprecated=True)
 
 
 class NotificationRuleCreate(NotificationRuleBase):
@@ -73,7 +73,7 @@ class NotificationRuleUpdate(BaseModel):
     message_template: str | None = None
     priority: int | None = None
     tags: str | None = None
-    send_to_ntfy: bool | None = None
+    send_to_ntfy: bool | None = Field(default=None, deprecated=True)
 
 
 class NotificationRule(NotificationRuleBase):

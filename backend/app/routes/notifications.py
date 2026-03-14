@@ -261,20 +261,30 @@ async def toggle_notification_rule(
 
 
 @router.post("/test")
-async def send_test_notification():
+async def send_test_notification(db: AsyncSession = Depends(get_db)):
     """Send a test notification to verify ntfy configuration (legacy endpoint)."""
-    from app.services.notifier import NotificationService
+    from app.services.notifications.ntfy import NtfyNotificationService
+    from app.services.settings_manager import SettingsManager
 
-    notifier = NotificationService()
+    settings = SettingsManager(db)
+    ntfy_url = await settings.get("ntfy_url")
+    ntfy_topic = await settings.get("ntfy_topic", default="vulnforge")
+    ntfy_token = await settings.get("ntfy_token")
 
+    if not ntfy_url or not ntfy_topic:
+        raise HTTPException(status_code=400, detail="ntfy URL or topic not configured")
+
+    service = NtfyNotificationService(ntfy_url, ntfy_topic, ntfy_token)
     try:
-        await notifier.send_notification(
-            message="This is a test notification from VulnForge Settings. If you received this, your notification configuration is working correctly!",
+        success = await service.send(
             title="VulnForge Test Notification",
-            priority=3,
+            message="This is a test notification from VulnForge Settings. If you received this, your notification configuration is working correctly!",
+            priority="default",
             tags=["test", "VulnForge"],
         )
-        return {"status": "success", "message": "Test notification sent successfully"}
+        if success:
+            return {"status": "success", "message": "Test notification sent successfully"}
+        raise HTTPException(status_code=502, detail="Failed to send test notification")
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Notification server timed out")
     except httpx.ConnectError:
@@ -287,6 +297,8 @@ async def send_test_notification():
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid notification configuration: {e}")
+    finally:
+        await service.close()
 
 
 @router.post("/test/ntfy")

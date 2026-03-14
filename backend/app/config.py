@@ -51,12 +51,6 @@ class Settings(BaseSettings):
     ntfy_enabled: bool = True
     ntfy_token: str | None = None  # Optional access token for authentication
 
-    # Notification thresholds
-    notify_on_scan_complete: bool = True
-    notify_on_critical: bool = True
-    notify_threshold_critical: int = 1  # Alert if X or more critical CVEs found
-    notify_threshold_high: int = 10  # Alert if X or more high CVEs found
-
     # Data retention
     keep_scan_history_days: int = 90
 

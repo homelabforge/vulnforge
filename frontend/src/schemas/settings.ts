@@ -30,10 +30,6 @@ export const settingsFieldSchemas = {
   scan_timeout: integerWithBounds(60, 600, 300),
   parallel_scans: integerWithBounds(1, 50, 3),
 
-  // Notification thresholds
-  notify_threshold_critical: integerWithBounds(1, 100, 1),
-  notify_threshold_high: integerWithBounds(1, 100, 10),
-
   // Data retention
   keep_scan_history_days: integerWithBounds(1, 365, 90),
 
@@ -69,11 +65,6 @@ export const settingsSchema = z.object({
   ntfy_url: urlOrEmpty,
   ntfy_topic: z.string(),
   ntfy_token: z.string(),
-  notify_on_scan_complete: z.boolean(),
-  notify_on_critical: z.boolean(),
-  notify_threshold_critical: integerWithBounds(1, 100, 1),
-  notify_threshold_high: integerWithBounds(1, 100, 10),
-
   // Data retention
   keep_scan_history_days: integerWithBounds(1, 365, 90),
 

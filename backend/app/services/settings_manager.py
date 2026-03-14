@@ -88,11 +88,6 @@ class SettingsManager:
         "email_smtp_tls": "true",
         "email_from": "",
         "email_to": "",
-        # Legacy notification settings (for backwards compatibility)
-        "notify_on_scan_complete": "true",
-        "notify_on_critical": "true",
-        "notify_threshold_critical": "1",
-        "notify_threshold_high": "10",
         # Data retention
         "keep_scan_history_days": "90",
         # UI preferences
@@ -173,11 +168,6 @@ class SettingsManager:
         "email_smtp_tls": "notifications",
         "email_from": "notifications",
         "email_to": "notifications",
-        # Legacy notification settings
-        "notify_on_scan_complete": "notifications",
-        "notify_on_critical": "notifications",
-        "notify_threshold_critical": "notifications",
-        "notify_threshold_high": "notifications",
         "keep_scan_history_days": "retention",
         "default_severity_filter": "ui",
         "default_show_fixable_only": "ui",
@@ -319,8 +309,6 @@ class SettingsManager:
         "scan_timeout": ("positive_int", {"min_value": 1, "max_value": 3600}),
         "parallel_scans": ("positive_int", {"min_value": 1}),
         "keep_scan_history_days": ("positive_int", {"min_value": 1}),
-        "notify_threshold_critical": ("positive_int", {"min_value": 1}),
-        "notify_threshold_high": ("positive_int", {"min_value": 1}),
         "notify_threshold_medium": ("positive_int", {"min_value": 1}),
     }
 
@@ -449,10 +437,6 @@ class SettingsManager:
             "ntfy_url": "Base URL for ntfy server",
             "ntfy_topic": "Topic name for ntfy notifications",
             "ntfy_token": "Access token for ntfy authentication (leave empty if not required)",
-            "notify_on_scan_complete": "Send notification when scan completes",
-            "notify_on_critical": "Send notification when critical vulnerabilities found",
-            "notify_threshold_critical": "Minimum number of critical vulnerabilities to trigger notification",
-            "notify_threshold_high": "Minimum number of high vulnerabilities to trigger notification",
             "keep_scan_history_days": "Number of days to keep scan history",
             "default_severity_filter": "Default severity filter for vulnerabilities page",
             "default_show_fixable_only": "Default state for 'show fixable only' filter",

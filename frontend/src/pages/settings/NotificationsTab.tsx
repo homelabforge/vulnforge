@@ -35,11 +35,6 @@ export function NotificationsTab({ settingsMap, onSave, isSaving }: Notification
   const [ntfyUrl, setNtfyUrl] = useState(settingsMap.ntfy_url || "http://ntfy:80");
   const [ntfyTopic, setNtfyTopic] = useState(settingsMap.ntfy_topic || "vulnforge");
   const [ntfyToken, setNtfyToken] = useState(settingsMap.ntfy_token || "");
-  // Legacy ntfy thresholds (no UI — forwarded to keep backend values intact)
-  const notifyOnScanComplete = settingsMap.notify_on_scan_complete !== "false";
-  const notifyOnCritical = settingsMap.notify_on_critical !== "false";
-  const notifyThresholdCritical = Number(settingsMap.notify_threshold_critical) || 1;
-  const notifyThresholdHigh = Number(settingsMap.notify_threshold_high) || 10;
 
   const [gotifyEnabled, setGotifyEnabled] = useState(settingsMap.gotify_enabled === "true");
   const [gotifyServer, setGotifyServer] = useState(settingsMap.gotify_server || "");
@@ -100,10 +95,6 @@ export function NotificationsTab({ settingsMap, onSave, isSaving }: Notification
       ntfy_url: ntfyUrl,
       ntfy_topic: ntfyTopic,
       ntfy_token: ntfyToken,
-      notify_on_scan_complete: notifyOnScanComplete.toString(),
-      notify_on_critical: notifyOnCritical.toString(),
-      notify_threshold_critical: notifyThresholdCritical.toString(),
-      notify_threshold_high: notifyThresholdHigh.toString(),
       gotify_enabled: gotifyEnabled.toString(),
       gotify_server: gotifyServer,
       gotify_token: gotifyToken,
@@ -142,8 +133,7 @@ export function NotificationsTab({ settingsMap, onSave, isSaving }: Notification
     }),
     onSave,
     [
-      ntfyEnabled, ntfyUrl, ntfyTopic, ntfyToken, notifyOnScanComplete, notifyOnCritical,
-      notifyThresholdCritical, notifyThresholdHigh,
+      ntfyEnabled, ntfyUrl, ntfyTopic, ntfyToken,
       gotifyEnabled, gotifyServer, gotifyToken,
       pushoverEnabled, pushoverUserKey, pushoverApiToken,
       slackEnabled, slackWebhookUrl,

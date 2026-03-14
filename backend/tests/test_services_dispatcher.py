@@ -200,7 +200,7 @@ class TestDispatch:
 
         assert result == {"mock-ntfy": True}
         mock_service.send.assert_called_once()
-        mock_service.close.assert_called_once()
+        # Providers are cached and not closed after each dispatch
 
     @pytest.mark.asyncio
     async def test_dispatch_uses_retry_for_urgent(self, db_session: AsyncSession):

@@ -130,9 +130,18 @@ def _mock_background_services(monkeypatch):
 @pytest.fixture(autouse=True)
 def clear_settings_cache():
     """Clear any cached state between tests."""
-    # New auth middleware doesn't have a settings cache
-    # This fixture is kept for compatibility
+    from app.services.notifications.dispatcher import NotificationDispatcher
+
+    # Reset dispatcher class-level caches
+    NotificationDispatcher._provider_cache = {}
+    NotificationDispatcher._cache_settings_hash = None
+    NotificationDispatcher._failure_counts = {}
+    NotificationDispatcher._circuit_open_until = {}
     yield
+    NotificationDispatcher._provider_cache = {}
+    NotificationDispatcher._cache_settings_hash = None
+    NotificationDispatcher._failure_counts = {}
+    NotificationDispatcher._circuit_open_until = {}
 
 
 @pytest.fixture

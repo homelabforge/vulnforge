@@ -1,6 +1,10 @@
 """Notification dispatcher for routing events to enabled services."""
 
+from __future__ import annotations
+
+import hashlib
 import logging
+import time
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -69,9 +73,42 @@ class NotificationDispatcher:
         "email": 2.0,  # SMTP can be slow, longer delays
     }
 
+    # --- Provider cache ---
+    _provider_cache: dict[str, NotificationService] = {}
+    _cache_settings_hash: str | None = None
+
+    # --- Circuit breaker ---
+    _failure_counts: dict[str, int] = {}
+    _circuit_open_until: dict[str, float] = {}
+    CIRCUIT_THRESHOLD = 5  # consecutive failures to trip
+    CIRCUIT_RECOVERY_SECONDS = 300  # 5 minutes
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.settings = SettingsManager(db)
+
+    def _is_circuit_open(self, service_name: str) -> bool:
+        """Check if the circuit breaker is open for a service."""
+        until = self._circuit_open_until.get(service_name)
+        if until and time.time() < until:
+            return True
+        if until:
+            del self._circuit_open_until[service_name]
+            self._failure_counts[service_name] = 0
+        return False
+
+    def _record_failure(self, service_name: str) -> None:
+        """Record a failure for a service and trip the circuit if threshold reached."""
+        count = self._failure_counts.get(service_name, 0) + 1
+        self._failure_counts[service_name] = count
+        if count >= self.CIRCUIT_THRESHOLD:
+            self._circuit_open_until[service_name] = time.time() + self.CIRCUIT_RECOVERY_SECONDS
+            logger.warning(f"Circuit breaker tripped for {service_name} after {count} failures")
+
+    def _record_success(self, service_name: str) -> None:
+        """Reset failure tracking on success."""
+        self._failure_counts.pop(service_name, None)
+        self._circuit_open_until.pop(service_name, None)
 
     async def _is_event_enabled(self, event_type: str) -> bool:
         """Check if an event type is enabled in settings."""
@@ -91,7 +128,12 @@ class NotificationDispatcher:
         return event_enabled if event_enabled is not None else True
 
     async def _get_enabled_services(self) -> list[NotificationService]:
-        """Get list of enabled and configured notification services."""
+        """Get list of enabled and configured notification services.
+
+        Uses a class-level cache keyed by a hash of all provider settings.
+        When settings change the hash changes, old providers are closed,
+        and new ones are built.
+        """
         # Import here to avoid circular imports
         from app.services.notifications.discord import DiscordNotificationService
         from app.services.notifications.email import EmailNotificationService
@@ -101,73 +143,123 @@ class NotificationDispatcher:
         from app.services.notifications.slack import SlackNotificationService
         from app.services.notifications.telegram import TelegramNotificationService
 
-        services: list[NotificationService] = []
+        # Gather all provider-relevant settings in one batch
+        provider_keys = [
+            "ntfy_enabled",
+            "ntfy_url",
+            "ntfy_topic",
+            "ntfy_token",
+            "gotify_enabled",
+            "gotify_server",
+            "gotify_token",
+            "pushover_enabled",
+            "pushover_user_key",
+            "pushover_api_token",
+            "slack_enabled",
+            "slack_webhook_url",
+            "discord_enabled",
+            "discord_webhook_url",
+            "telegram_enabled",
+            "telegram_bot_token",
+            "telegram_chat_id",
+            "email_enabled",
+            "email_smtp_host",
+            "email_smtp_port",
+            "email_smtp_user",
+            "email_smtp_password",
+            "email_smtp_tls",
+            "email_from",
+            "email_to",
+        ]
+        raw = await self.settings.get_many(provider_keys)
+
+        # Compute a hash of all provider settings
+        hash_input = "|".join(f"{k}={raw.get(k, '')}" for k in sorted(provider_keys))
+        settings_hash = hashlib.sha256(hash_input.encode()).hexdigest()
+
+        # Return cached providers if settings haven't changed
+        if settings_hash == self._cache_settings_hash and self._provider_cache:
+            return list(self._provider_cache.values())
+
+        # Settings changed — close old providers
+        for old_svc in self._provider_cache.values():
+            try:
+                await old_svc.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+        cls = type(self)
+        cls._provider_cache = {}
+        cls._cache_settings_hash = settings_hash
+
+        def _is_true(val: str | None) -> bool:
+            return str(val).lower() in ("true", "1", "yes", "on") if val else False
 
         # Check ntfy
-        if await self.settings.get_bool("ntfy_enabled", default=False):
-            server = await self.settings.get("ntfy_url")
-            topic = await self.settings.get("ntfy_topic", default="vulnforge")
-            api_key = await self.settings.get("ntfy_token")
+        if _is_true(raw.get("ntfy_enabled")):
+            server = raw.get("ntfy_url")
+            topic = raw.get("ntfy_topic") or "vulnforge"
+            api_key = raw.get("ntfy_token")
             if server and topic:
-                services.append(NtfyNotificationService(server, topic, api_key))
+                cls._provider_cache["ntfy"] = NtfyNotificationService(server, topic, api_key)
 
         # Check gotify
-        if await self.settings.get_bool("gotify_enabled", default=False):
-            server = await self.settings.get("gotify_server")
-            token = await self.settings.get("gotify_token")
+        if _is_true(raw.get("gotify_enabled")):
+            server = raw.get("gotify_server")
+            token = raw.get("gotify_token")
             if server and token:
-                services.append(GotifyNotificationService(server, token))
+                cls._provider_cache["gotify"] = GotifyNotificationService(server, token)
 
         # Check pushover
-        if await self.settings.get_bool("pushover_enabled", default=False):
-            user_key = await self.settings.get("pushover_user_key")
-            api_token = await self.settings.get("pushover_api_token")
+        if _is_true(raw.get("pushover_enabled")):
+            user_key = raw.get("pushover_user_key")
+            api_token = raw.get("pushover_api_token")
             if user_key and api_token:
-                services.append(PushoverNotificationService(user_key, api_token))
+                cls._provider_cache["pushover"] = PushoverNotificationService(user_key, api_token)
 
         # Check slack
-        if await self.settings.get_bool("slack_enabled", default=False):
-            webhook_url = await self.settings.get("slack_webhook_url")
+        if _is_true(raw.get("slack_enabled")):
+            webhook_url = raw.get("slack_webhook_url")
             if webhook_url:
-                services.append(SlackNotificationService(webhook_url))
+                cls._provider_cache["slack"] = SlackNotificationService(webhook_url)
 
         # Check discord
-        if await self.settings.get_bool("discord_enabled", default=False):
-            webhook_url = await self.settings.get("discord_webhook_url")
+        if _is_true(raw.get("discord_enabled")):
+            webhook_url = raw.get("discord_webhook_url")
             if webhook_url:
-                services.append(DiscordNotificationService(webhook_url))
+                cls._provider_cache["discord"] = DiscordNotificationService(webhook_url)
 
         # Check telegram
-        if await self.settings.get_bool("telegram_enabled", default=False):
-            bot_token = await self.settings.get("telegram_bot_token")
-            chat_id = await self.settings.get("telegram_chat_id")
+        if _is_true(raw.get("telegram_enabled")):
+            bot_token = raw.get("telegram_bot_token")
+            chat_id = raw.get("telegram_chat_id")
             if bot_token and chat_id:
-                services.append(TelegramNotificationService(bot_token, chat_id))
+                cls._provider_cache["telegram"] = TelegramNotificationService(bot_token, chat_id)
 
         # Check email
-        if await self.settings.get_bool("email_enabled", default=False):
-            smtp_host = await self.settings.get("email_smtp_host")
-            smtp_port = await self.settings.get_int("email_smtp_port", default=587) or 587
-            smtp_user = await self.settings.get("email_smtp_user")
-            smtp_password = await self.settings.get("email_smtp_password")
-            from_address = await self.settings.get("email_from")
-            to_address = await self.settings.get("email_to")
-            use_tls_val = await self.settings.get_bool("email_smtp_tls", default=True)
-            use_tls = use_tls_val if use_tls_val is not None else True
+        if _is_true(raw.get("email_enabled")):
+            smtp_host = raw.get("email_smtp_host")
+            try:
+                smtp_port = int(raw.get("email_smtp_port") or "587")
+            except (ValueError, TypeError):
+                smtp_port = 587
+            smtp_user = raw.get("email_smtp_user")
+            smtp_password = raw.get("email_smtp_password")
+            from_address = raw.get("email_from")
+            to_address = raw.get("email_to")
+            use_tls = _is_true(raw.get("email_smtp_tls"))
             if smtp_host and smtp_user and smtp_password and from_address and to_address:
-                services.append(
-                    EmailNotificationService(
-                        smtp_host,
-                        smtp_port,
-                        smtp_user,
-                        smtp_password,
-                        from_address,
-                        to_address,
-                        use_tls,
-                    )
+                cls._provider_cache["email"] = EmailNotificationService(
+                    smtp_host,
+                    smtp_port,
+                    smtp_user,
+                    smtp_password,
+                    from_address,
+                    to_address,
+                    use_tls,
                 )
 
-        return services
+        return list(cls._provider_cache.values())
 
     async def dispatch(
         self,
@@ -219,6 +311,12 @@ class NotificationDispatcher:
 
         # Send to all enabled services
         for service in services:
+            # Skip services with open circuit breakers
+            if self._is_circuit_open(service.service_name):
+                logger.info(f"Skipping {service.service_name}: circuit breaker open")
+                results[service.service_name] = False
+                continue
+
             try:
                 # Adapt delay per service
                 multiplier = self.SERVICE_RETRY_MULTIPLIERS.get(service.service_name, 1.0)
@@ -245,11 +343,15 @@ class NotificationDispatcher:
                     )
 
                 results[service.service_name] = success
+
+                if success:
+                    self._record_success(service.service_name)
+                else:
+                    self._record_failure(service.service_name)
             except Exception as e:
                 logger.error(f"Error sending to {service.service_name}: {e}")
                 results[service.service_name] = False
-            finally:
-                await service.close()
+                self._record_failure(service.service_name)
 
         return results
 

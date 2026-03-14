@@ -710,11 +710,19 @@ class TestSendTestNotification:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test sending a test notification."""
-        # Arrange
-        with patch("app.services.notifier.NotificationService") as mock_service:
+        # Arrange - configure ntfy settings
+        from app.services.settings_manager import SettingsManager
+
+        settings = SettingsManager(db_session)
+        await settings.set("ntfy_url", "https://ntfy.example.com")
+        await settings.set("ntfy_topic", "vulnforge-test")
+        await db_session.commit()
+
+        with patch("app.services.notifications.ntfy.NtfyNotificationService") as mock_cls:
             mock_instance = MagicMock()
-            mock_instance.send_notification = AsyncMock()
-            mock_service.return_value = mock_instance
+            mock_instance.send = AsyncMock(return_value=True)
+            mock_instance.close = AsyncMock()
+            mock_cls.return_value = mock_instance
 
             # Act
             response = await authenticated_client.post("/api/v1/notifications/test")
@@ -731,12 +739,18 @@ class TestSendTestNotification:
     ):
         """Test notification timeout handling."""
         # Arrange
-        with patch("app.services.notifier.NotificationService") as mock_service:
+        from app.services.settings_manager import SettingsManager
+
+        settings = SettingsManager(db_session)
+        await settings.set("ntfy_url", "https://ntfy.example.com")
+        await settings.set("ntfy_topic", "vulnforge-test")
+        await db_session.commit()
+
+        with patch("app.services.notifications.ntfy.NtfyNotificationService") as mock_cls:
             mock_instance = MagicMock()
-            mock_instance.send_notification = AsyncMock(
-                side_effect=httpx.TimeoutException("Timeout")
-            )
-            mock_service.return_value = mock_instance
+            mock_instance.send = AsyncMock(side_effect=httpx.TimeoutException("Timeout"))
+            mock_instance.close = AsyncMock()
+            mock_cls.return_value = mock_instance
 
             # Act
             response = await authenticated_client.post("/api/v1/notifications/test")
@@ -750,12 +764,18 @@ class TestSendTestNotification:
     ):
         """Test notification connection error handling."""
         # Arrange
-        with patch("app.services.notifier.NotificationService") as mock_service:
+        from app.services.settings_manager import SettingsManager
+
+        settings = SettingsManager(db_session)
+        await settings.set("ntfy_url", "https://ntfy.example.com")
+        await settings.set("ntfy_topic", "vulnforge-test")
+        await db_session.commit()
+
+        with patch("app.services.notifications.ntfy.NtfyNotificationService") as mock_cls:
             mock_instance = MagicMock()
-            mock_instance.send_notification = AsyncMock(
-                side_effect=httpx.ConnectError("Connection failed")
-            )
-            mock_service.return_value = mock_instance
+            mock_instance.send = AsyncMock(side_effect=httpx.ConnectError("Connection failed"))
+            mock_instance.close = AsyncMock()
+            mock_cls.return_value = mock_instance
 
             # Act
             response = await authenticated_client.post("/api/v1/notifications/test")
