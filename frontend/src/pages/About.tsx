@@ -2,16 +2,12 @@
  * About Page - Application information and credits
  */
 
-import { useEffect, useState } from "react";
 import { Shield, Database, Bell, Sparkles, Heart, CheckCircle, ExternalLink } from "lucide-react";
-import { systemApi } from "../lib/api";
+import { useAppInfo } from "@/hooks/useVulnForge";
 
 export function About() {
-  const [version, setVersion] = useState<string>("...");
-
-  useEffect(() => {
-    systemApi.getAppInfo().then((info) => setVersion(info.version)).catch(() => setVersion("unknown"));
-  }, []);
+  const { data: appInfo } = useAppInfo();
+  const version = appInfo?.version ?? "...";
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">

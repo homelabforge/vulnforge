@@ -5,13 +5,11 @@
 import { useParams, Link } from "react-router-dom";
 import { useState } from "react";
 import { Container, ArrowLeft, Shield, Key, Bug, Play, Loader2, Circle, History, AlertCircle, Star } from "lucide-react";
-import { useContainer, useTriggerScan, useScanStatus, useContainerSecrets, useScanHistory, useVulnerabilities } from "@/hooks/useVulnForge";
+import { useContainer, useTriggerScan, useScanStatus, useContainerSecrets, useScanHistory, useVulnerabilities, useUpdateContainer } from "@/hooks/useVulnForge";
 import { formatRelativeDate, getSeverityBadge, formatBytes } from "@/lib/utils";
 import { useTimezone } from "@/contexts/SettingsContext";
 import { toast } from "sonner";
 import { handleApiError } from "@/lib/errorHandler";
-import { containersApi } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
 import { ScanHistoryTimeline } from "@/components/ScanHistoryTimeline";
 import { VulnerabilityDetailModal } from "@/components/VulnerabilityDetailModal";
 
@@ -30,12 +28,12 @@ export function ContainerDetail() {
   const [fixableOnly, setFixableOnly] = useState(false);
   const [kevOnly, setKevOnly] = useState(false);
 
-  const queryClient = useQueryClient();
   const { data: container, isLoading } = useContainer(containerId);
   const { data: scanStatus } = useScanStatus();
   const { data: secrets, isLoading: secretsLoading } = useContainerSecrets(containerId);
   const { data: scanHistory, isLoading: historyLoading } = useScanHistory(containerId);
   const scanMutation = useTriggerScan();
+  const updateContainerMutation = useUpdateContainer();
   const [isTogglingProject, setIsTogglingProject] = useState(false);
 
   // Fetch vulnerabilities for this container
@@ -57,20 +55,19 @@ export function ContainerDetail() {
     });
   };
 
-  const handleToggleMyProject = async () => {
+  const handleToggleMyProject = () => {
     if (!container) return;
     setIsTogglingProject(true);
-    try {
-      await containersApi.update(containerId, { is_my_project: !container.is_my_project });
-      toast.success(container.is_my_project ? "Removed from My Projects" : "Added to My Projects");
-      // Invalidate queries to refresh the data
-      queryClient.invalidateQueries({ queryKey: ["container", containerId] });
-      queryClient.invalidateQueries({ queryKey: ["containers"] });
-    } catch (error) {
-      handleApiError(error, "Failed to update project status");
-    } finally {
-      setIsTogglingProject(false);
-    }
+    updateContainerMutation.mutate(
+      { id: containerId, updates: { is_my_project: !container.is_my_project } },
+      {
+        onSuccess: () => {
+          toast.success(container.is_my_project ? "Removed from My Projects" : "Added to My Projects");
+        },
+        onError: (error) => handleApiError(error, "Failed to update project status"),
+        onSettled: () => setIsTogglingProject(false),
+      },
+    );
   };
 
   const isScanning = scanStatus?.status === "scanning" && scanStatus?.current_container === container?.name;

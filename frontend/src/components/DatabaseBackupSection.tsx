@@ -1,45 +1,27 @@
-import { useState, useEffect } from "react";
 import { Download, Trash2, RefreshCw, Calendar, HardDrive, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { handleApiError } from "@/lib/errorHandler";
-import { maintenanceApi, type BackupEntry } from "@/lib/api";
+import { maintenanceApi } from "@/lib/api";
 import { formatRelativeDate } from "@/lib/utils";
+import { useBackups, useCreateBackup, useDeleteBackup, useRestoreBackup } from "@/hooks/useVulnForge";
 
 export function DatabaseBackupSection() {
-  const [backups, setBackups] = useState<BackupEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const { data: backupsData, isLoading: loading, refetch: refetchBackups } = useBackups();
+  const backups = backupsData?.backups ?? [];
+  const createMutation = useCreateBackup();
+  const deleteMutation = useDeleteBackup();
+  const restoreMutation = useRestoreBackup();
 
-  // Load backups on mount
-  useEffect(() => {
-    loadBackups();
-  }, []);
-
-  const loadBackups = async () => {
-    try {
-      setLoading(true);
-      const data = await maintenanceApi.listBackups();
-      setBackups(data.backups || []);
-    } catch (error) {
-      handleApiError(error, "Failed to load backups");
-    } finally {
-      setLoading(false);
-    }
+  const createBackup = () => {
+    createMutation.mutate(undefined, {
+      onSuccess: (data) => {
+        toast.success(`Backup created: ${data.filename} (${data.size_mb} MB)`);
+      },
+      onError: (error) => handleApiError(error, "Failed to create backup"),
+    });
   };
 
-  const createBackup = async () => {
-    try {
-      setCreating(true);
-      const data = await maintenanceApi.createBackup();
-      toast.success(`Backup created: ${data.filename} (${data.size_mb} MB)`);
-      await loadBackups();
-    } catch (error) {
-      handleApiError(error, "Failed to create backup");
-    } finally {
-      setCreating(false);
-    }
-  };
-
+  // Blob download — kept as direct API call (React Query not suited for Blob responses)
   const downloadBackup = async (filename: string) => {
     try {
       const blob = await maintenanceApi.downloadBackup(filename);
@@ -57,21 +39,18 @@ export function DatabaseBackupSection() {
     }
   };
 
-  const deleteBackup = async (filename: string) => {
+  const deleteBackup = (filename: string) => {
     if (!confirm(`Are you sure you want to delete backup: ${filename}?`)) {
       return;
     }
 
-    try {
-      await maintenanceApi.deleteBackup(filename);
-      toast.success("Backup deleted");
-      await loadBackups();
-    } catch (error) {
-      handleApiError(error, "Failed to delete backup");
-    }
+    deleteMutation.mutate(filename, {
+      onSuccess: () => toast.success("Backup deleted"),
+      onError: (error) => handleApiError(error, "Failed to delete backup"),
+    });
   };
 
-  const restoreBackup = async (filename: string) => {
+  const restoreBackup = (filename: string) => {
     // Strong confirmation since this is destructive
     const confirmMessage = `⚠️ RESTORE DATABASE FROM BACKUP ⚠️
 
@@ -89,21 +68,20 @@ Type 'RESTORE' to confirm:`;
       return;
     }
 
-    try {
-      toast.loading("Restoring database...", { id: "restore" });
-      const data = await maintenanceApi.restoreBackup(filename);
-      toast.success(
-        `Database restored! Safety backup created: ${data.safety_backup}. Reloading...`,
-        { id: "restore", duration: 5000 }
-      );
-      // Reload the page after a short delay
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-    } catch (error) {
-      handleApiError(error, "Failed to restore backup");
-      toast.dismiss("restore");
-    }
+    toast.loading("Restoring database...", { id: "restore" });
+    restoreMutation.mutate(filename, {
+      onSuccess: (data) => {
+        toast.success(
+          `Database restored! Safety backup created: ${data.safety_backup}. Reloading...`,
+          { id: "restore", duration: 5000 }
+        );
+        setTimeout(() => window.location.reload(), 2000);
+      },
+      onError: (error) => {
+        handleApiError(error, "Failed to restore backup");
+        toast.dismiss("restore");
+      },
+    });
   };
 
   return (
@@ -118,10 +96,10 @@ Type 'RESTORE' to confirm:`;
         </div>
         <button
           onClick={createBackup}
-          disabled={creating}
+          disabled={createMutation.isPending}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-vuln-surface text-white rounded-lg flex items-center gap-2 transition-colors"
         >
-          {creating ? (
+          {createMutation.isPending ? (
             <>
               <RefreshCw className="w-4 h-4 animate-spin" />
               Creating...
@@ -140,7 +118,7 @@ Type 'RESTORE' to confirm:`;
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium text-vuln-text">Available Backups ({backups.length})</h3>
           <button
-            onClick={loadBackups}
+            onClick={() => refetchBackups()}
             disabled={loading}
             className="text-vuln-text-muted hover:text-vuln-text transition-colors"
           >

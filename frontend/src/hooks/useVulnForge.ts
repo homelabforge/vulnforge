@@ -6,7 +6,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useEffect } from "react";
 import {
   activityApi,
+  apiKeysApi,
   containersApi,
+  maintenanceApi,
   scansApi,
   vulnerabilitiesApi,
   secretsApi,
@@ -14,6 +16,7 @@ import {
   settingsApi,
   systemApi,
 } from "@/lib/api";
+import type { APIKeyCreate } from "@/lib/api";
 
 // Containers hooks
 export function useContainers() {
@@ -353,5 +356,93 @@ export function useContainerActivities(containerId: number, limit?: number) {
     queryKey: ["containerActivities", containerId, limit],
     queryFn: () => activityApi.getByContainer(containerId, limit),
     refetchInterval: 15000, // Auto-refresh every 15 seconds
+  });
+}
+
+// System hooks
+export function useAppInfo() {
+  return useQuery({
+    queryKey: ["appInfo"],
+    queryFn: () => systemApi.getAppInfo(),
+    staleTime: 5 * 60 * 1000, // 5 min — version rarely changes
+  });
+}
+
+// Container mutations
+export function useUpdateContainer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, updates }: { id: number; updates: { is_my_project?: boolean; is_running?: boolean } }) =>
+      containersApi.update(id, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["containers"] });
+      queryClient.invalidateQueries({ queryKey: ["container"] });
+    },
+  });
+}
+
+// API Keys hooks
+export function useApiKeys() {
+  return useQuery({
+    queryKey: ["apiKeys"],
+    queryFn: () => apiKeysApi.list(false),
+  });
+}
+
+export function useCreateApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: APIKeyCreate) => apiKeysApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["apiKeys"] });
+    },
+  });
+}
+
+export function useRevokeApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiKeysApi.revoke(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["apiKeys"] });
+    },
+  });
+}
+
+// Backup hooks
+export function useBackups() {
+  return useQuery({
+    queryKey: ["backups"],
+    queryFn: () => maintenanceApi.listBackups(),
+  });
+}
+
+export function useCreateBackup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => maintenanceApi.createBackup(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["backups"] });
+    },
+  });
+}
+
+export function useDeleteBackup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (filename: string) => maintenanceApi.deleteBackup(filename),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["backups"] });
+    },
+  });
+}
+
+export function useRestoreBackup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (filename: string) => maintenanceApi.restoreBackup(filename),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["backups"] });
+    },
   });
 }

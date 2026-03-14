@@ -1,79 +1,60 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Key, Plus, Trash2, Copy, Check, AlertCircle } from "lucide-react";
-import { apiKeysApi, APIKey, APIKeyCreated } from "../lib/api";
+import type { APIKeyCreated } from "../lib/api";
 import { HelpTooltip } from "./HelpTooltip";
+import { useApiKeys, useCreateApiKey, useRevokeApiKey } from "@/hooks/useVulnForge";
 
 export function ApiKeysCard() {
-  const [keys, setKeys] = useState<APIKey[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: keysData, isLoading: loading, error: queryError } = useApiKeys();
+  const createMutation = useCreateApiKey();
+  const revokeMutation = useRevokeApiKey();
+  const keys = keysData?.keys ?? [];
+
+  const [localError, setLocalError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyDescription, setNewKeyDescription] = useState("");
   const [createdKey, setCreatedKey] = useState<APIKeyCreated | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
-  const [creating, setCreating] = useState(false);
 
-  // Load API keys on mount
-  useEffect(() => {
-    loadKeys();
-  }, []);
+  const error = localError || (queryError ? "Failed to load API keys" : null);
 
-  const loadKeys = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const result = await apiKeysApi.list(false); // Don't include revoked keys
-      setKeys(result.keys);
-    } catch (err: unknown) {
-      const error = err as { detail?: string };
-      setError(error.detail || "Failed to load API keys");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!newKeyName.trim()) {
-      setError("Name is required");
+      setLocalError("Name is required");
       return;
     }
 
-    try {
-      setCreating(true);
-      setError(null);
-      const result = await apiKeysApi.create({
-        name: newKeyName.trim(),
-        description: newKeyDescription.trim() || undefined,
-      });
-      setCreatedKey(result);
-      setNewKeyName("");
-      setNewKeyDescription("");
-      setShowCreateModal(false); // Close create modal after successful creation
-      // Reload keys list
-      await loadKeys();
-    } catch (err: unknown) {
-      const error = err as { detail?: string };
-      setError(error.detail || "Failed to create API key");
-    } finally {
-      setCreating(false);
-    }
+    setLocalError(null);
+    createMutation.mutate(
+      { name: newKeyName.trim(), description: newKeyDescription.trim() || undefined },
+      {
+        onSuccess: (result) => {
+          setCreatedKey(result);
+          setNewKeyName("");
+          setNewKeyDescription("");
+          setShowCreateModal(false);
+        },
+        onError: (err: unknown) => {
+          const e = err as { detail?: string };
+          setLocalError(e.detail || "Failed to create API key");
+        },
+      },
+    );
   };
 
-  const handleRevoke = async (id: number, name: string) => {
+  const handleRevoke = (id: number, name: string) => {
     if (!confirm(`Revoke API key "${name}"? This cannot be undone.`)) {
       return;
     }
 
-    try {
-      setError(null);
-      await apiKeysApi.revoke(id);
-      // Reload keys list
-      await loadKeys();
-    } catch (err: unknown) {
-      const error = err as { detail?: string };
-      setError(error.detail || "Failed to revoke API key");
-    }
+    setLocalError(null);
+    revokeMutation.mutate(id, {
+      onError: (err: unknown) => {
+        const e = err as { detail?: string };
+        setLocalError(e.detail || "Failed to revoke API key");
+      },
+    });
   };
 
   const copyToClipboard = async (text: string) => {
@@ -208,19 +189,19 @@ export function ApiKeysCard() {
                   setShowCreateModal(false);
                   setNewKeyName("");
                   setNewKeyDescription("");
-                  setError(null);
+                  setLocalError(null);
                 }}
                 className="flex-1 px-4 py-2 bg-vuln-surface-light border border-vuln-border text-vuln-text rounded-lg hover:bg-vuln-surface transition-colors"
-                disabled={creating}
+                disabled={createMutation.isPending}
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreate}
-                disabled={creating || !newKeyName.trim()}
+                disabled={createMutation.isPending || !newKeyName.trim()}
                 className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {creating ? "Creating..." : "Create Key"}
+                {createMutation.isPending ? "Creating..." : "Create Key"}
               </button>
             </div>
           </div>
