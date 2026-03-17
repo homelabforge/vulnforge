@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.4.1] - 2026-03-17
+
 ### Changed
 - Decompose scan pipeline `_process_scan` into 4 discrete stages with documented commit boundaries
 - Split monolithic `api.ts` (1140 lines) into modular type and API client files (21 modules)
