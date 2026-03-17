@@ -1,5 +1,25 @@
 """Tests for path normalization and traversal protection."""
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+async def local_auth_mode(db_with_settings):
+    """Enable local auth for all path-normalization security tests.
+
+    These tests assert that API endpoints return 401 when not authenticated.
+    That is only true when user_auth_mode == 'local'; when it is 'none' (the
+    default in tests), all API endpoints are publicly accessible by design.
+    """
+    from app.models import Setting
+    from app.services.settings_manager import SettingsManager
+
+    db_with_settings.add(Setting(key="user_auth_mode", value="local"))
+    await db_with_settings.commit()
+    SettingsManager.invalidate_cache("user_auth_mode")
+    yield
+    SettingsManager.invalidate_cache("user_auth_mode")
+
 
 class TestPathNormalization:
     """Tests for URL path normalization security."""

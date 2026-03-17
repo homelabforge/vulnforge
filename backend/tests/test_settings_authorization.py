@@ -1,5 +1,25 @@
 """Tests for settings API authorization."""
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+async def local_auth_mode(db_with_settings):
+    """Enable local auth for all settings-authorization tests.
+
+    Authorization tests assert 401 when unauthenticated.  That only holds
+    when user_auth_mode == 'local'; the test-environment default is 'none'
+    (open access), which would cause these tests to see 200 instead.
+    """
+    from app.models import Setting
+    from app.services.settings_manager import SettingsManager
+
+    db_with_settings.add(Setting(key="user_auth_mode", value="local"))
+    await db_with_settings.commit()
+    SettingsManager.invalidate_cache("user_auth_mode")
+    yield
+    SettingsManager.invalidate_cache("user_auth_mode")
+
 
 class TestSettingsAuthorization:
     """Tests for settings endpoint authorization."""

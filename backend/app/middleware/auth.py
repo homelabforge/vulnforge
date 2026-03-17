@@ -134,7 +134,22 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     )
                     return await call_next(request)
 
-        # Both authentication methods failed
+        # No credentials provided. Check if authentication is globally disabled.
+        # When user_auth_mode == "none", all API endpoints are publicly accessible.
+        # This check is last (after JWT/API key) so credentialed requests never hit the DB.
+        # SettingsManager has a 60s class-level TTL cache so this is a memory lookup on the
+        # hot path after the first unauthenticated request within each TTL window.
+        from app.database import async_session_maker
+        from app.services.settings_manager import SettingsManager
+
+        async with async_session_maker() as db:
+            auth_mode_value = await SettingsManager(db).get("user_auth_mode", default="none")
+
+        if (auth_mode_value or "none") == "none":
+            request.state.user = User(username="anonymous", provider="none", is_admin=False)
+            return await call_next(request)
+
+        # Auth is required and both methods failed
         logger.debug("Authentication failed: no valid JWT cookie or API key")
         return JSONResponse(
             status_code=401,
