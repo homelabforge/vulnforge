@@ -16,15 +16,16 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Split React and React-related libraries into separate chunk
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          // React Query in its own chunk for better caching
-          'query-vendor': ['@tanstack/react-query'],
-          // Charts library is large - separate chunk
-          'charts-vendor': ['recharts'],
-          // UI utilities
-          'ui-vendor': ['lucide-react', 'sonner', 'clsx', 'tailwind-merge'],
+        // Vite 8 (rolldown) requires manualChunks as a function, not an object
+        manualChunks(id) {
+          if (['react', 'react-dom', 'react-router-dom'].some((m) => id.includes(`/${m}/`))) {
+            return 'react-vendor';
+          }
+          if (id.includes('/@tanstack/react-query/')) return 'query-vendor';
+          if (id.includes('/recharts/')) return 'charts-vendor';
+          if (['lucide-react', 'sonner', 'clsx', 'tailwind-merge'].some((m) => id.includes(`/${m}/`))) {
+            return 'ui-vendor';
+          }
         },
       },
     },
