@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dead frontend code: `authApi`, `userAuth:401` listener, auth Zod validators
 
 ### Fixed
+- Auth middleware now respects `user_auth_mode=none`, allowing open access on fresh installs without requiring setup first (fixes #28)
 - Missing `theme` entry in `DEFAULT_CATEGORIES` (was falling back to 'general' instead of 'ui')
 - Deprecated `send_to_ntfy` field in notification rule schemas (API contract preserved)
 - Marked `ScanResultRepository` as deprecated (test-only, no production consumers)
