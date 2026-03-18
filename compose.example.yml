@@ -1,29 +1,41 @@
-version: '3.8'
-
 services:
   # VulnForge - Container Vulnerability Scanning Platform
   vulnforge:
     image: ghcr.io/homelabforge/vulnforge:latest
     container_name: vulnforge
+    init: true
     ports:
       - "8787:8787"
     volumes:
       # Data directory for SQLite database and backups
-      - ./data:/data
+      - vulnforge-data:/data
       # Docker socket access (read-write for container inspection and Trivy/Dive exec)
       - /var/run/docker.sock:/var/run/docker.sock
+      # Host mounts for native compliance checker (optional but recommended)
+      - /etc/docker:/host/etc/docker:ro
+      - /etc/audit:/host/etc/audit:ro
     environment:
       # Docker configuration
-      DOCKER_SOCKET_PROXY: ""  # Optional: use tcp://socket-proxy-rw:2375 for Docker socket proxy
+      # DOCKER_SOCKET_PROXY defaults to unix:///var/run/docker.sock
+      # Override to use a Docker socket proxy instead of the bind-mounted socket:
+      # DOCKER_SOCKET_PROXY: tcp://socket-proxy-rw:2375
 
       # Scanner containers (optional - VulnForge will use docker exec if available)
       TRIVY_CONTAINER_NAME: trivy
-      TRIVY_SERVER: ""  # Optional: http://trivy:8080 for Trivy server mode
+      TRIVY_SERVER: http://trivy:8080  # Trivy server mode (recommended when running the trivy service below)
       DIVE_CONTAINER_NAME: dive
 
-      # Application settings (optional)
+      # Compliance checker host path (must match the bind mount above)
+      HOST_ETC_PATH: /host/etc
+
+      # Application settings (optional - showing defaults)
       # LOG_LEVEL: INFO
-      # CORS_ORIGINS: http://localhost:8787
+      # TIMEZONE: UTC
+      # SCAN_SCHEDULE: "0 2 * * *"      # Cron schedule for automated scans
+      # SCAN_TIMEOUT: 300                # Per-container scan timeout (seconds)
+      # PARALLEL_SCANS: 3                # Concurrent container scans
+      # KEEP_SCAN_HISTORY_DAYS: 90       # Data retention period
+      # CORS_ORIGINS: '["http://localhost:8787"]'
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
@@ -38,6 +50,7 @@ services:
   trivy:
     image: aquasec/trivy:latest
     container_name: trivy
+    init: true
     command: server --listen 0.0.0.0:8080
     volumes:
       - trivy-cache:/root/.cache/trivy
@@ -48,16 +61,30 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+    security_opt:
+      - no-new-privileges:true
 
   # Dive - Image Efficiency Analyzer (optional)
+  # The dive image uses "dive" as its entrypoint, so we override it
+  # to keep the container running for on-demand exec from VulnForge.
   dive:
     image: wagoodman/dive:latest
     container_name: dive
-    command: tail -f /dev/null
+    init: true
+    entrypoint: ["/bin/sh", "-c", "sleep infinity"]
     volumes:
       - dive-output:/output
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "dive --version >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
+  vulnforge-data:
   trivy-cache:
   dive-output:
