@@ -59,7 +59,7 @@ jobs:
       if: matrix.language == 'javascript'
       uses: oven-sh/setup-bun@v2
       with:
-        bun-version: '1.3.4'
+        bun-version: '1.3.8'
 
     - name: Install dependencies
       if: matrix.language == 'javascript'
