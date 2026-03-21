@@ -15,7 +15,7 @@ export function ScoreCard({ summary }: ScoreCardProps): React.ReactElement {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Overall Score */}
         <div className="md:col-span-1 text-center border-r border-vuln-border">
-          <div className={`text-5xl font-bold ${getScoreColor(summary.compliance_score)}`}>
+          <div className={`text-5xl font-bold ${getScoreColor(summary.compliance_score ?? null)}`}>
             {summary.compliance_score?.toFixed(1)}%
           </div>
           <div className="text-vuln-text-muted mt-2">Compliance Score</div>

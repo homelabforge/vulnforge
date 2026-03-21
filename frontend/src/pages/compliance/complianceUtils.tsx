@@ -81,10 +81,10 @@ export function groupFindings(findings: ComplianceFinding[]): GroupedFinding[] {
       groups.set(finding.check_id, {
         check_id: finding.check_id,
         title: finding.title,
-        description: finding.description,
+        description: finding.description ?? null,
         category: finding.category,
         severity: finding.severity,
-        remediation: finding.remediation,
+        remediation: finding.remediation ?? null,
         findings: [finding],
         passCount: finding.status === "PASS" ? 1 : 0,
         warnCount: finding.status === "WARN" ? 1 : 0,

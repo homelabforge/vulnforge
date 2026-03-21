@@ -21,7 +21,7 @@ export function ScannerManagementCard() {
     if (!scanner.enabled) {
       return <XCircle className="w-5 h-5 text-vuln-text-disabled" />;
     }
-    if (scanner.db_age_hours !== null && scanner.db_age_hours > 72) {
+    if (scanner.db_age_hours != null && scanner.db_age_hours > 72) {
       return <AlertTriangle className="w-5 h-5 text-orange-500" />;
     }
     return <CheckCircle className="w-5 h-5 text-green-500" />;
@@ -34,14 +34,14 @@ export function ScannerManagementCard() {
     if (!scanner.enabled) {
       return <span className="text-vuln-text-muted">Disabled</span>;
     }
-    if (scanner.db_age_hours !== null && scanner.db_age_hours > 72) {
+    if (scanner.db_age_hours != null && scanner.db_age_hours > 72) {
       return <span className="text-orange-400">Database Stale</span>;
     }
     return <span className="text-green-400">Healthy</span>;
   };
 
-  const getDbAgeColor = (hours: number | null) => {
-    if (hours === null) return "text-vuln-text-muted";
+  const getDbAgeColor = (hours: number | null | undefined) => {
+    if (hours == null) return "text-vuln-text-muted";
     if (hours < 24) return "text-green-400";
     if (hours < 72) return "text-yellow-400";
     return "text-orange-400";
@@ -149,7 +149,7 @@ export function ScannerManagementCard() {
                   <div className="flex flex-col gap-1">
                     <span className="text-vuln-text-disabled text-sm">Database Age</span>
                     {scanner.available ? (
-                      scanner.db_age_hours !== null ? (
+                      scanner.db_age_hours != null ? (
                         <span className={`font-medium ${getDbAgeColor(scanner.db_age_hours)}`}>
                           {scanner.db_age_hours < 1
                             ? "< 1 hour"

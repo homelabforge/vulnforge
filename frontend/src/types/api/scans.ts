@@ -1,3 +1,15 @@
+/**
+ * Scan type definitions.
+ * Generated types aliased from OpenAPI; hand-maintained types below.
+ */
+
+import type { components } from '../api.generated';
+
+// Generated alias
+export type WidgetSummary = components['schemas']['WidgetSummary'];
+
+// Hand-maintained: frontend-only types not in OpenAPI spec
+
 export interface ScanStatus {
   status: "idle" | "scanning";
   current_container?: string;
@@ -68,17 +80,4 @@ export interface ScanTrendsResponse {
     fixable_vulns: TrendVelocityMetric;
     avg_duration_seconds: TrendVelocityMetric;
   };
-}
-
-export interface WidgetSummary {
-  total_containers: number;
-  scanned_containers: number;
-  last_scan: string | null;
-  total_vulnerabilities: number;
-  fixable_vulnerabilities: number;
-  critical_count: number;
-  high_count: number;
-  medium_count: number;
-  low_count: number;
-  total_secrets: number;
 }

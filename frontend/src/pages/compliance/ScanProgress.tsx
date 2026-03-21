@@ -40,7 +40,7 @@ export function ScanProgress({ currentScan }: ScanProgressProps): React.ReactEle
           <div
             className="bg-blue-500 h-full rounded-full transition-all duration-300"
             style={{
-              width: `${(currentScan.progress_current / currentScan.progress_total) * 100}%`,
+              width: `${((currentScan.progress_current ?? 0) / (currentScan.progress_total ?? 1)) * 100}%`,
             }}
           />
         </div>

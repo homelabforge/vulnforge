@@ -88,7 +88,7 @@ export function Compliance() {
       }
     }
 
-    if (rawScanData.status === "scanning" && rawScanData.progress_current !== null) {
+    if (rawScanData.status === "scanning" && rawScanData.progress_current != null) {
       if (rawScanData.progress_current > highestProgress) {
         setHighestProgress(rawScanData.progress_current);
       }
@@ -98,7 +98,7 @@ export function Compliance() {
 
   const currentScan = useMemo(() => {
     if (!rawScanData) return rawScanData;
-    if (rawScanData.status === "scanning" && rawScanData.progress_current !== null) {
+    if (rawScanData.status === "scanning" && rawScanData.progress_current != null) {
       const effectiveProgress = Math.max(rawScanData.progress_current, highestProgress);
       if (effectiveProgress !== rawScanData.progress_current) {
         return { ...rawScanData, progress_current: effectiveProgress };

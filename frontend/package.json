@@ -16,7 +16,11 @@
     "e2e:ui": "playwright test --ui",
     "e2e:headed": "playwright test --headed",
     "e2e:debug": "playwright test --debug",
-    "e2e:report": "playwright show-report"
+    "e2e:report": "playwright show-report",
+    "generate:schema": "cd ../backend && PYTHONPATH=. python3 scripts/export_openapi.py ../frontend/src/types/openapi.json",
+    "generate:types": "bunx openapi-typescript src/types/openapi.json -o src/types/api.generated.ts",
+    "generate:api": "bun run generate:schema && bun run generate:types",
+    "check:api-freshness": "bun run generate:api && git diff --exit-code src/types/openapi.json src/types/api.generated.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
@@ -39,8 +43,8 @@
     "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.57.0",
-    "@typescript-eslint/parser": "^8.57.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.1",
+    "@typescript-eslint/parser": "^8.57.1",
     "@vitejs/plugin-react-swc": "^4.3.0",
     "@vitest/coverage-v8": "^4.1.0",
     "@vitest/ui": "^4.1.0",
@@ -49,12 +53,13 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "0.5.2",
     "globals": "^17.4.0",
-    "jsdom": "^28.1.0",
+    "jsdom": "^29.0.0",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.0",
+    "typescript-eslint": "^8.57.1",
     "vite": "^8.0.0",
+    "openapi-typescript": "^7.13.0",
     "vitest": "^4.1.0"
   }
 }

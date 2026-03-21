@@ -1,52 +1,16 @@
-export interface ComplianceSummary {
-  last_scan_date: string | null;
-  last_scan_status: string | null;
-  compliance_score: number | null;
-  total_checks: number;
-  passed_checks: number;
-  warned_checks: number;
-  failed_checks: number;
-  info_checks: number;
-  note_checks: number;
-  high_severity_failures: number;
-  medium_severity_failures: number;
-  low_severity_failures: number;
-  ignored_findings_count: number;
-  category_breakdown: { [key: string]: number } | null;
-}
+/**
+ * Compliance type definitions.
+ * Generated types aliased from OpenAPI; hand-maintained types below.
+ */
 
-export interface ComplianceFinding {
-  id: number;
-  check_id: string;
-  check_number: string | null;
-  title: string;
-  description: string | null;
-  status: string;
-  severity: string;
-  category: string;
-  target: string | null;
-  remediation: string | null;
-  actual_value: string | null;
-  expected_value: string | null;
-  is_ignored: boolean;
-  ignored_reason: string | null;
-  ignored_by: string | null;
-  ignored_at: string | null;
-  first_seen: string;
-  last_seen: string;
-  scan_date: string;
-}
+import type { components } from '../api.generated';
 
-export interface ComplianceCurrentScan {
-  status: string;
-  scan_id: number | null;
-  started_at: string | null;
-  progress: string | null;
-  current_check: string | null;
-  current_check_id: string | null;
-  progress_current: number | null;
-  progress_total: number | null;
-}
+// Generated aliases (native compliance)
+export type ComplianceSummary = components['schemas']['ComplianceSummary'];
+export type ComplianceFinding = components['schemas']['ComplianceFinding'];
+export type ComplianceCurrentScan = components['schemas']['ComplianceCurrentScan'];
+
+// Hand-maintained: frontend-only or untyped-endpoint types
 
 export interface ComplianceTrendPoint {
   date: string;

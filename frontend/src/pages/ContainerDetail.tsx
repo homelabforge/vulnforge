@@ -510,7 +510,7 @@ export function ContainerDetail() {
                       </div>
                     </div>
 
-                    {secret.redacted && (
+                    {secret.match === '***REDACTED***' && (
                       <div className="bg-amber-900/20 border border-amber-500/30 rounded p-3 mb-4">
                         <div className="flex items-center gap-2 text-amber-400 text-sm">
                           <Shield className="w-4 h-4" />

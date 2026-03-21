@@ -1,26 +1,11 @@
-import type { ActivityEventMetadata } from './system';
+/**
+ * Activity type definitions.
+ * Generated types aliased from OpenAPI; hand-maintained types below.
+ */
 
-export interface ActivityLog {
-  id: number;
-  event_type: string;
-  severity: string;
-  container_id: number | null;
-  container_name: string | null;
-  title: string;
-  description: string | null;
-  event_metadata: ActivityEventMetadata | null;
-  timestamp: string;
-  created_at: string;
-}
+import type { components } from '../api.generated';
 
-export interface ActivityList {
-  activities: ActivityLog[];
-  total: number;
-  event_type_counts: Record<string, number>;
-}
-
-export interface ActivityTypeCount {
-  type: string;
-  count: number;
-  label: string;
-}
+// Generated aliases
+export type ActivityLog = components['schemas']['ActivityLog'];
+export type ActivityList = components['schemas']['ActivityList'];
+export type ActivityTypeCount = components['schemas']['ActivityTypeCount'];
