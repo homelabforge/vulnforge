@@ -86,3 +86,60 @@ class ScanSummary(BaseModel):
     medium_count: int
     low_count: int
     scan_duration_seconds: float
+
+
+class ScanTriggerResponse(BaseModel):
+    """Response from POST /scan — scan enqueue result."""
+
+    message: str
+    queued: int
+    skipped: int
+    total_requested: int
+    job_ids: list[int]
+
+
+class ScanAbortResponse(BaseModel):
+    """Response from POST /{scan_id}/abort."""
+
+    message: str
+    scan_id: int
+
+
+class ScanRetryResponse(BaseModel):
+    """Response from POST /{scan_id}/retry."""
+
+    message: str
+    scan_id: int
+    container: str
+
+
+class CveDeltaScanEntry(BaseModel):
+    """Individual scan entry in a CVE delta response."""
+
+    scan_id: int
+    scan_date: str
+    container_name: str
+    image: str
+    total_vulns: int
+    cves_fixed: list[str]
+    cves_fixed_count: int
+    cves_introduced: list[str]
+    cves_introduced_count: int
+
+
+class CveDeltaSummary(BaseModel):
+    """Summary totals for CVE delta response."""
+
+    total_cves_fixed: int
+    total_cves_introduced: int
+    net_change: int
+
+
+class CveDeltaResponse(BaseModel):
+    """Response from GET /cve-delta — used by TideWatch integration."""
+
+    since_hours: int
+    cutoff_time: str
+    total_scans: int
+    summary: CveDeltaSummary
+    scans: list[CveDeltaScanEntry]

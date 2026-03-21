@@ -13,8 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Container, Scan, ScanJob
+from app.schemas import (
+    CveDeltaResponse,
+    ScanAbortResponse,
+    ScanJobSchema,
+    ScanRequest,
+    ScanRetryResponse,
+    ScanTriggerResponse,
+)
 from app.schemas import Scan as ScanSchema
-from app.schemas import ScanJobSchema, ScanRequest
 from app.services.scan_events import scan_events
 from app.services.scan_queue import ScanPriority, get_scan_queue
 from app.services.scan_trends import build_scan_trends
@@ -33,7 +40,7 @@ def _format_sse(payload: dict, event: str = "scan-status") -> str:
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
 
 
-@router.post("/scan", response_model=dict)
+@router.post("/scan", response_model=ScanTriggerResponse)
 @limiter.limit("10/minute")
 async def scan_containers(
     scan_request: ScanRequest, request: Request, db: AsyncSession = Depends(get_db)
@@ -165,7 +172,7 @@ async def get_scanner_health(request: Request):
     return await scan_queue.get_scanner_health()
 
 
-@router.post("/{scan_id}/abort")
+@router.post("/{scan_id}/abort", response_model=ScanAbortResponse)
 @limiter.limit("20/minute")
 async def abort_scan(scan_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     """
@@ -205,7 +212,7 @@ async def abort_scan(scan_id: int, request: Request, db: AsyncSession = Depends(
         raise HTTPException(status_code=404, detail="Scan not active or queued")
 
 
-@router.post("/{scan_id}/retry")
+@router.post("/{scan_id}/retry", response_model=ScanRetryResponse)
 @limiter.limit("20/minute")
 async def retry_scan(scan_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     """
@@ -254,7 +261,7 @@ async def retry_scan(scan_id: int, request: Request, db: AsyncSession = Depends(
         raise HTTPException(status_code=409, detail="Container is already being scanned")
 
 
-@router.get("/cve-delta")
+@router.get("/cve-delta", response_model=CveDeltaResponse)
 async def get_cve_delta(
     db: AsyncSession = Depends(get_db),
     since_hours: int = Query(

@@ -16,7 +16,18 @@ from app.schemas.container import (
     ContainerUpdate,
     ContainerVulnerabilitySummary,
 )
-from app.schemas.scan import Scan, ScanCreate, ScanJobSchema, ScanProgress, ScanRequest, ScanSummary
+from app.schemas.scan import (
+    CveDeltaResponse,
+    Scan,
+    ScanAbortResponse,
+    ScanCreate,
+    ScanJobSchema,
+    ScanProgress,
+    ScanRequest,
+    ScanRetryResponse,
+    ScanSummary,
+    ScanTriggerResponse,
+)
 from app.schemas.setting import Setting, SettingUpdate, SettingUpdateResponse
 from app.schemas.vulnerability import (
     PaginatedVulnerabilities,
@@ -52,12 +63,16 @@ __all__ = [
     "PaginatedVulnerabilities",
     "RemediationGroup",
     "RemediationItem",
+    "CveDeltaResponse",
     "Scan",
+    "ScanAbortResponse",
     "ScanCreate",
     "ScanJobSchema",
     "ScanRequest",
     "ScanProgress",
+    "ScanRetryResponse",
     "ScanSummary",
+    "ScanTriggerResponse",
     "Vulnerability",
     "VulnerabilityUpdate",
     "VulnerabilitySummary",

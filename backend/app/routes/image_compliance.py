@@ -1,242 +1,47 @@
-"""Image Misconfiguration API endpoints for Trivy image security checks."""
+"""Image Misconfiguration API endpoints for Trivy image security checks.
+
+Scan execution is delegated to image_compliance_scan_service.py. This route
+module retains asyncio.Task lifecycle management and polling-endpoint globals.
+"""
 
 import asyncio
 import csv
 import io
 import json
 import logging
-import subprocess
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import db_session, get_db
+from app.database import get_db
 from app.dependencies.auth import require_admin
 from app.models import ImageComplianceFinding, ImageComplianceScan
 from app.models.user import User
 from app.repositories.dependencies import get_activity_logger
 from app.services.activity_logger import ActivityLogger
 from app.services.docker_client import DockerService
+from app.services.image_compliance_scan_service import perform_image_compliance_scan
 from app.services.image_misconfig_state import image_misconfig_state
-from app.services.trivy_misconfig_service import TrivyMisconfigService
 from app.utils.log_redaction import sanitize_for_log
 from app.utils.timezone import get_now
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Track current scan state
+# Track current scan state — process-local globals require single-worker deployment
+# (see main.py docstring). Multiple workers would cause split-brain scan tracking.
 _current_scan_task: asyncio.Task | None = None
 _current_scan_id: int | None = None
 _last_scan_id: int | None = None  # Track most recent completed scan
 _completion_poll_count: int = 0  # Count polls since completion
 
 
-async def perform_image_compliance_scan(
-    docker_service: DockerService,
-    image_name: str,
-    trigger_type: str = "manual",
-    affected_containers: list[str] | None = None,
-) -> None:
-    """
-    Perform a Trivy image misconfiguration scan.
-
-    Args:
-        docker_service: Docker service instance
-        image_name: Image name or ID to scan
-        trigger_type: Scan trigger type (manual, scheduled, post-vulnerability-scan)
-    """
-
-    global _current_scan_id, _last_scan_id
-
-    # Create new database session for background task
-    async with db_session() as db:
-        # Create scan record
-        scan = ImageComplianceScan(
-            scan_date=get_now(),
-            scan_status="in_progress",
-            image_name=image_name,
-            trigger_type=trigger_type,
-        )
-        db.add(scan)
-        await db.commit()
-        await db.refresh(scan)
-
-        _current_scan_id = scan.id
-
-        image_misconfig_state.update_current_image(image_name)
-
-        success = False
-        error_message = None
-
-        try:
-            # Execute Trivy misconfiguration scan
-            trivy_service = TrivyMisconfigService(docker_service)
-            scan_data = await trivy_service.run_misconfig_scan(image_name)
-
-            if scan_data is None:
-                # Scan failed
-                scan.scan_status = "failed"
-                scan.error_message = "Trivy misconfiguration scan returned no data"
-                await db.commit()
-                return
-
-            # Calculate scores
-            findings = scan_data["findings"]
-            compliance_score = trivy_service.calculate_compliance_score(findings)
-
-            # Count by severity (Trivy uses CRITICAL, HIGH, MEDIUM, LOW, UNKNOWN)
-            fatal = scan_data["critical_count"]
-            warn = scan_data["high_count"]
-            medium = scan_data["medium_count"]
-            low = scan_data["low_count"]
-
-            # Map to old status-based counts for database compatibility
-            # Treat CRITICAL/HIGH as failures, MEDIUM/LOW as info
-            failed = fatal + warn
-            info = medium + low
-            skip = 0  # Trivy doesn't have SKIP status
-
-            # Trivy misconfiguration scanner only reports findings (issues), not total checks
-            # For UI clarity: total_checks = all findings, failed_checks = critical+high, passed_checks = 0
-            total_checks = scan_data["total_count"]  # Total findings (all severities)
-            passed = 0  # Trivy doesn't report passed checks
-
-            # Update scan record
-            scan.scan_status = "completed"
-            scan.scan_duration_seconds = scan_data["scan_duration_seconds"]
-            scan.total_checks = total_checks
-            scan.passed_checks = passed
-            scan.failed_checks = failed
-            scan.info_checks = info
-            scan.skip_checks = skip
-            scan.compliance_score = compliance_score
-            scan.category_scores = None  # Trivy doesn't provide category scores
-            scan.fatal_count = fatal
-            scan.warn_count = warn
-
-            # Get affected containers
-            containers_for_image = affected_containers or []
-
-            if containers_for_image:
-                scan.affected_containers = json.dumps(containers_for_image)
-
-            # Store findings
-            for finding_data in findings:
-                # Check if this finding already exists (by check_id + image_name)
-                result = await db.execute(
-                    select(ImageComplianceFinding).where(
-                        ImageComplianceFinding.check_id == finding_data["check_id"],
-                        ImageComplianceFinding.image_name == image_name,
-                    )
-                )
-                existing_finding = result.scalar_one_or_none()
-
-                # Map Trivy severity to status (for backward compatibility)
-                # CRITICAL/HIGH = FAIL, MEDIUM/LOW = INFO
-                if finding_data["severity"] in ("CRITICAL", "HIGH"):
-                    status = "FAIL"
-                else:
-                    status = "INFO"
-
-                if existing_finding:
-                    # Update existing finding
-                    existing_finding.status = status
-                    existing_finding.severity = finding_data["severity"]
-                    existing_finding.last_seen = get_now()
-                    existing_finding.scan_date = get_now()
-                    existing_finding.title = finding_data["title"]
-                    existing_finding.description = finding_data.get("description")
-                    existing_finding.remediation = finding_data.get("resolution")
-                    # Don't change ignore status if it was previously ignored
-                else:
-                    # Create new finding
-                    # Extract code snippet if available for alerts
-                    alerts = []
-                    if finding_data.get("code_snippet"):
-                        alerts.append(
-                            {
-                                "code": finding_data["code_snippet"],
-                                "line": finding_data.get("start_line"),
-                            }
-                        )
-
-                    finding = ImageComplianceFinding(
-                        check_id=finding_data["check_id"],
-                        check_number=None,  # Trivy doesn't use check numbers
-                        title=finding_data["title"],
-                        description=finding_data.get("description"),
-                        image_name=image_name,
-                        status=status,
-                        severity=finding_data["severity"],
-                        category=finding_data.get("service", "general"),
-                        remediation=finding_data.get("resolution"),
-                        alerts=json.dumps(alerts) if alerts else None,
-                        first_seen=get_now(),
-                        last_seen=get_now(),
-                        scan_date=get_now(),
-                    )
-                    db.add(finding)
-
-            await db.commit()
-            logger.info(
-                "Image misconfiguration scan completed: %s - %.1f%% score, "
-                "%d critical/high, %d medium/low",
-                sanitize_for_log(image_name),
-                compliance_score,
-                failed,
-                info,
-            )
-
-            success = True
-
-        except subprocess.TimeoutExpired as e:
-            logger.error(f"Image scan timed out for {sanitize_for_log(image_name)}: {e}")
-            scan.scan_status = "failed"
-            scan.error_message = "Scan timed out - image may be too large"
-            error_message = "Scan timed out"
-            await db.commit()
-        except subprocess.CalledProcessError as e:
-            logger.error(
-                f"Trivy process failed for {sanitize_for_log(image_name)}: exit code {e.returncode}"
-            )
-            scan.scan_status = "failed"
-            scan.error_message = f"Trivy scan failed with exit code {e.returncode}"
-            error_message = str(e)
-            await db.commit()
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse Trivy output for {sanitize_for_log(image_name)}: {e}")
-            scan.scan_status = "failed"
-            scan.error_message = "Invalid scan output format"
-            error_message = "Invalid output"
-            await db.commit()
-        except Exception as e:
-            # INTENTIONAL: Catch-all for unexpected scan errors.
-            # We must update the scan record to prevent orphaned in_progress scans.
-            logger.error(
-                f"Unexpected image scan error for {sanitize_for_log(image_name)}: {e}",
-                exc_info=True,
-            )
-            scan.scan_status = "failed"
-            scan.error_message = str(e)
-            error_message = str(e)
-            await db.commit()
-        finally:
-            # Store last scan ID before clearing current (still inside db session)
-            if _current_scan_id is not None:
-                _last_scan_id = _current_scan_id
-
-            # Record result in state manager
-            image_misconfig_state.record_result(
-                image_name=image_name,
-                success=success,
-                error_message=error_message,
-            )
-
-            # Clear current scan ID after all operations complete
-            _current_scan_id = None
+def _on_scan_created(scan_id: int) -> None:
+    """Callback from image_compliance_scan_service to track the current scan ID."""
+    global _current_scan_id
+    _current_scan_id = scan_id
 
 
 def _normalize_image_reference(container: dict) -> str | None:
@@ -275,7 +80,7 @@ async def _run_single_image_scan_task(
     trigger_type: str,
 ):
     """Background task wrapper for a single Trivy misconfiguration scan."""
-    global _current_scan_task
+    global _current_scan_task, _last_scan_id, _current_scan_id
     try:
         image_misconfig_state.start_scan(
             total_images=1,
@@ -283,16 +88,20 @@ async def _run_single_image_scan_task(
             targets=[image_name],
         )
         containers_map = _resolve_unique_images(docker_service)
-        await perform_image_compliance_scan(
+        scan_id = await perform_image_compliance_scan(
             docker_service,
             image_name,
             trigger_type,
             affected_containers=containers_map.get(image_name, []),
+            on_scan_created=_on_scan_created,
         )
+        if scan_id is not None:
+            _last_scan_id = scan_id
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("Image misconfiguration scan task failed: %s", exc, exc_info=True)
     finally:
         image_misconfig_state.finish_scan()
+        _current_scan_id = None
         _current_scan_task = None
 
 
@@ -302,7 +111,7 @@ async def _run_batch_image_scan_task(
     trigger_type: str,
 ):
     """Background task wrapper that sequentially scans a list of images."""
-    global _current_scan_task
+    global _current_scan_task, _last_scan_id, _current_scan_id
 
     if not image_map:
         image_misconfig_state.finish_scan()
@@ -317,16 +126,20 @@ async def _run_batch_image_scan_task(
             targets=image_names,
         )
         for image, containers in image_map.items():
-            await perform_image_compliance_scan(
+            scan_id = await perform_image_compliance_scan(
                 docker_service,
                 image,
                 trigger_type,
                 affected_containers=containers,
+                on_scan_created=_on_scan_created,
             )
+            if scan_id is not None:
+                _last_scan_id = scan_id
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("Batch image misconfiguration scan aborted: %s", exc, exc_info=True)
     finally:
         image_misconfig_state.finish_scan()
+        _current_scan_id = None
         _current_scan_task = None
 
 
