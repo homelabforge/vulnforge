@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Extract compliance and image compliance scan logic from routes to services, fixing scheduler→route layer violation
+- Extract scan result persistence (vuln/secret storage, notifications) from ScanQueue to ScanResultProcessor
+- Extract container schema builders from routes to services
+- Extract Trivy result parser to standalone module
+- Deduplicate ActivityLogger internals with shared builder (724 → 409 lines)
+- Replace 32 useState calls in NotificationsTab with useSettingsForm hook
+- Classify settings mutability per-key; write endpoints return SettingUpdateResponse with restart_required flag
+- Add response_model schemas to high-traffic scan endpoints (trigger, abort, retry, cve-delta)
+- Document single-worker/process-local architecture contract
+
+### Added
+- OpenAPI-generated TypeScript types via openapi-typescript, replacing manual type definitions
+- VulnerabilityStatusService for orchestrated status changes with container count resync and cache invalidation
+- `check:api-freshness` CI job to catch stale OpenAPI types before merge
+- OpenAPI contract tests asserting typed `$ref` schemas on image-compliance endpoints
+- Pydantic response_model schemas for all 9 image-compliance endpoints (replaces generic dict)
+- Characterization tests for ScanResultProcessor (vuln/KEV storage, secret FP matching, notifications)
+- Count consistency integration tests (9 tests covering resync + list filtering)
+- Tests for useAutoSave and useSettingsForm hooks (134 → 146 frontend tests)
+
+### Fixed
+- Dashboard/widget vulnerability counts now resync when statuses change (false_positive, accepted)
+- Vulnerability list and counts now exclude both `false_positive` and `accepted` statuses consistently
+- Widget cache invalidated on vulnerability status changes, not just scan completion
+- VulnerabilitySummary schema now includes notes and description fields (frontend detail modal drift)
+- Removed phantom `redacted` field from Secret type (never existed in API)
+- Fixed null vs undefined mismatches exposed by strict generated types
+
+### Removed
+- Deprecated `perform_scan()` route handler (170 lines of dead code)
+
 ## [4.4.1] - 2026-03-17
 
 ### Changed
