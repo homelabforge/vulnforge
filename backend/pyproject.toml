@@ -1,6 +1,6 @@
 [project]
 name = "vulnforge"
-version = "4.4.1"
+version = "4.5.0"
 description = "Docker vulnerability scanner and remediation dashboard powered by Trivy"
 requires-python = ">=3.13"
 dependencies = [

@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-03-21
+
+### Added
+- Typed `response_model` schemas on all API endpoints — zero untyped dict returns remain
+- OpenAPI-generated TypeScript types via openapi-typescript with `check:api-freshness` CI gate
+- VulnerabilityStatusService for orchestrated status changes with container count resync
+- Shared `NON_ACTIONABLE_STATUSES` constant for consistent vulnerability filtering
+- Frontend risk-based tests: SSE scan status hook, vulnerability mutations, compliance flows (173 frontend tests)
+- Backend characterization tests for ScanResultProcessor and count consistency (740 backend tests)
+
+### Changed
+- Extract compliance and image compliance scan logic from routes to services
+- Extract scan result persistence from ScanQueue to ScanResultProcessor
+- Extract container schema builders and Trivy result parser to standalone modules
+- Deduplicate ActivityLogger internals with shared builder (724 → 409 lines)
+- Replace 32 useState calls in NotificationsTab with useSettingsForm hook
+- Classify settings mutability per-key; write endpoints return restart_required flag
+- Document single-worker/process-local architecture contract
+- Standardize all error responses via global HTTPException handler (detail, status_code, error_type, is_retryable)
+
+### Fixed
+- Vulnerability counts now exclude both `false_positive` and `accepted` statuses consistently
+- Widget cache invalidated on vulnerability status changes, not just scan completion
+- VulnerabilitySummary schema includes notes and description fields
+- Null vs undefined mismatches exposed by strict generated types
+
+### Security
+- Bump flatted to resolve prototype pollution vulnerability
+
+### Removed
+- Deprecated `perform_scan()` route handler (170 lines of dead code)
+- Phantom `redacted` field from Secret type (never existed in API)
+
 ### Dev Dependencies
 - **@tailwindcss/vite**: 4.2.1 → 4.2.2
 - **eslint**: 10.0.3 → 10.1.0
@@ -19,34 +52,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### App Dependencies
 - **@tanstack/react-query**: 5.90.21 → 5.94.5
 - **croniter**: 6.0.0 → 6.2.2
-
-### Changed
-- Extract compliance and image compliance scan logic from routes to services
-- Extract scan result persistence from ScanQueue to ScanResultProcessor
-- Extract container schema builders and Trivy result parser to standalone modules
-- Deduplicate ActivityLogger internals with shared builder (724 → 409 lines)
-- Replace 32 useState calls in NotificationsTab with useSettingsForm hook
-- Classify settings mutability per-key; write endpoints return restart_required flag
-- Document single-worker/process-local architecture contract
-- Standardize all error responses via global HTTPException handler (detail, status_code, error_type, is_retryable)
-
-### Added
-- Typed `response_model` schemas on all API endpoints — zero untyped dict returns remain
-- OpenAPI-generated TypeScript types via openapi-typescript with `check:api-freshness` CI gate
-- VulnerabilityStatusService for orchestrated status changes with container count resync
-- Shared `NON_ACTIONABLE_STATUSES` constant for consistent vulnerability filtering
-- Frontend risk-based tests: SSE scan status hook, vulnerability mutations, compliance flows (173 frontend tests)
-- Backend characterization tests for ScanResultProcessor and count consistency (740 backend tests)
-
-### Fixed
-- Vulnerability counts now exclude both `false_positive` and `accepted` statuses consistently
-- Widget cache invalidated on vulnerability status changes, not just scan completion
-- VulnerabilitySummary schema includes notes and description fields
-- Null vs undefined mismatches exposed by strict generated types
-
-### Removed
-- Deprecated `perform_scan()` route handler (170 lines of dead code)
-- Phantom `redacted` field from Secret type (never existed in API)
 
 ## [4.4.1] - 2026-03-17
 
