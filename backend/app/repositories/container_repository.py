@@ -5,14 +5,10 @@ import logging
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import NON_ACTIONABLE_STATUSES
 from app.models import Container, Scan, Vulnerability
 
 logger = logging.getLogger(__name__)
-
-# Vulnerability statuses that are excluded from actionable counts.
-# Scan row counts (Scan.critical_count etc.) are immutable historical snapshots
-# and are NEVER resynced — only Container counts are actionable.
-NON_ACTIONABLE_STATUSES = frozenset({"false_positive", "accepted"})
 
 
 class ContainerRepository:

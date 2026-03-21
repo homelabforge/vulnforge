@@ -128,7 +128,7 @@ async def export_vulnerabilities(
         severity=severity,
         fixable_only=fixable_only,
         status=status,
-        exclude_false_positives=not include_false_positives,
+        exclude_non_actionable=not include_false_positives,
     )
 
     if format == "csv":
