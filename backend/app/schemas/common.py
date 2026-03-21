@@ -38,3 +38,13 @@ class TrivyDbInfoResponse(BaseModel):
     updated_at: str | None
     next_update: str | None
     downloaded_at: str | None
+
+
+class ErrorResponse(BaseModel):
+    """Standardized error response matching frontend ApiErrorResponse interface."""
+
+    detail: str
+    status_code: int
+    error_type: str | None = None
+    suggestions: list[str] = []
+    is_retryable: bool = False

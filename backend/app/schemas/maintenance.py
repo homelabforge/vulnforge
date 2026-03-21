@@ -15,6 +15,16 @@ class CleanupResponse(BaseModel):
     scan_jobs: int = 0
 
 
+class CleanupStatsResponse(BaseModel):
+    """Statistics about cleanable data."""
+
+    total_scans: int
+    old_scans: int
+    retention_days: int
+    cutoff_date: str
+    can_clean: bool
+
+
 class CacheStatsResponse(BaseModel):
     """Cache statistics."""
 

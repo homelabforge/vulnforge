@@ -24,6 +24,7 @@ from app.schemas.maintenance import (
     BackupListResponse,
     BackupRestoreResponse,
     CacheStatsResponse,
+    CleanupStatsResponse,
     KevRefreshResponse,
     KevStatusResponse,
 )
@@ -83,7 +84,7 @@ async def trigger_cleanup(db: AsyncSession = Depends(get_db), user: User = Depen
     }
 
 
-@router.get("/cleanup/stats")
+@router.get("/cleanup/stats", response_model=CleanupStatsResponse)
 async def get_cleanup_stats(
     db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)
 ):

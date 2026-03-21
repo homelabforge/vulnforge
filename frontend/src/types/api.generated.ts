@@ -2834,6 +2834,22 @@ export interface components {
             new_password: string;
         };
         /**
+         * CleanupStatsResponse
+         * @description Statistics about cleanable data.
+         */
+        CleanupStatsResponse: {
+            /** Can Clean */
+            can_clean: boolean;
+            /** Cutoff Date */
+            cutoff_date: string;
+            /** Old Scans */
+            old_scans: number;
+            /** Retention Days */
+            retention_days: number;
+            /** Total Scans */
+            total_scans: number;
+        };
+        /**
          * ComplianceCurrentScan
          * @description Current compliance scan status.
          */
@@ -4074,6 +4090,159 @@ export interface components {
             scan_id: number;
         };
         /**
+         * ScanTrendDataPoint
+         * @description Single data point in scan trend series.
+         */
+        ScanTrendDataPoint: {
+            /** Avg Duration Seconds */
+            avg_duration_seconds?: number | null;
+            /**
+             * Completed Scans
+             * @default 0
+             */
+            completed_scans: number;
+            /**
+             * Critical Vulns
+             * @default 0
+             */
+            critical_vulns: number;
+            /** Date */
+            date: string;
+            /**
+             * Failed Scans
+             * @default 0
+             */
+            failed_scans: number;
+            /**
+             * Fixable Vulns
+             * @default 0
+             */
+            fixable_vulns: number;
+            /**
+             * High Vulns
+             * @default 0
+             */
+            high_vulns: number;
+            /**
+             * Total Scans
+             * @default 0
+             */
+            total_scans: number;
+            /**
+             * Total Vulns
+             * @default 0
+             */
+            total_vulns: number;
+        };
+        /**
+         * ScanTrendSummary
+         * @description Aggregated summary for a trend window.
+         */
+        ScanTrendSummary: {
+            /** Avg Duration Seconds */
+            avg_duration_seconds?: number | null;
+            /**
+             * Completed Scans
+             * @default 0
+             */
+            completed_scans: number;
+            /**
+             * Critical Vulns
+             * @default 0
+             */
+            critical_vulns: number;
+            /**
+             * Failed Scans
+             * @default 0
+             */
+            failed_scans: number;
+            /**
+             * Fixable Vulns
+             * @default 0
+             */
+            fixable_vulns: number;
+            /**
+             * High Vulns
+             * @default 0
+             */
+            high_vulns: number;
+            /**
+             * Total Scans
+             * @default 0
+             */
+            total_scans: number;
+            /**
+             * Total Vulns
+             * @default 0
+             */
+            total_vulns: number;
+        };
+        /**
+         * ScanTrendVelocity
+         * @description Period-over-period velocity metrics.
+         */
+        ScanTrendVelocity: {
+            /**
+             * @default {
+             *       "current": 0,
+             *       "delta": 0,
+             *       "previous": 0
+             *     }
+             */
+            avg_duration_seconds: components["schemas"]["ScanTrendVelocityMetric"];
+            /**
+             * @default {
+             *       "current": 0,
+             *       "delta": 0,
+             *       "previous": 0
+             *     }
+             */
+            completed_scans: components["schemas"]["ScanTrendVelocityMetric"];
+            /**
+             * @default {
+             *       "current": 0,
+             *       "delta": 0,
+             *       "previous": 0
+             *     }
+             */
+            fixable_vulns: components["schemas"]["ScanTrendVelocityMetric"];
+        };
+        /**
+         * ScanTrendVelocityMetric
+         * @description Velocity comparison for a single metric.
+         */
+        ScanTrendVelocityMetric: {
+            /**
+             * Current
+             * @default 0
+             */
+            current: number | null;
+            /**
+             * Delta
+             * @default 0
+             */
+            delta: number | null;
+            /** Percent Change */
+            percent_change?: number | null;
+            /**
+             * Previous
+             * @default 0
+             */
+            previous: number | null;
+        };
+        /**
+         * ScanTrendsResponse
+         * @description Response from GET /scans/trends.
+         */
+        ScanTrendsResponse: {
+            /** Series */
+            series: components["schemas"]["ScanTrendDataPoint"][];
+            summary: components["schemas"]["ScanTrendSummary"];
+            velocity: components["schemas"]["ScanTrendVelocity"];
+            /** Window Days */
+            window_days: number;
+        };
+        /**
          * ScanTriggerResponse
          * @description Response from POST /scan — scan enqueue result.
          */
@@ -4088,6 +4257,51 @@ export interface components {
             skipped: number;
             /** Total Requested */
             total_requested: number;
+        };
+        /**
+         * ScannerHealthDetail
+         * @description Health detail for a single scanner.
+         */
+        ScannerHealthDetail: {
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
+            /** Error */
+            error?: string | null;
+            /** Health */
+            health?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Scanner
+             * @default
+             */
+            scanner: string;
+            /**
+             * Supports Offline
+             * @default false
+             */
+            supports_offline: boolean;
+        };
+        /**
+         * ScannerHealthResponse
+         * @description Response from GET /scans/scanner/health.
+         */
+        ScannerHealthResponse: {
+            /** Settings */
+            settings?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * @default {
+             *       "available": false,
+             *       "scanner": "",
+             *       "supports_offline": false
+             *     }
+             */
+            trivy: components["schemas"]["ScannerHealthDetail"];
         };
         /**
          * ScannerInfo
@@ -5985,7 +6199,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CleanupStatsResponse"];
                 };
             };
         };
@@ -6684,7 +6898,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScannerHealthResponse"];
                 };
             };
         };
@@ -6724,7 +6938,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScanTrendsResponse"];
                 };
             };
             /** @description Validation Error */

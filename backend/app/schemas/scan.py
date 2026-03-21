@@ -145,6 +145,76 @@ class CveDeltaResponse(BaseModel):
     scans: list[CveDeltaScanEntry]
 
 
+class ScanTrendDataPoint(BaseModel):
+    """Single data point in scan trend series."""
+
+    date: str
+    total_scans: int = 0
+    completed_scans: int = 0
+    failed_scans: int = 0
+    total_vulns: int = 0
+    fixable_vulns: int = 0
+    critical_vulns: int = 0
+    high_vulns: int = 0
+    avg_duration_seconds: float | None = None
+
+
+class ScanTrendVelocityMetric(BaseModel):
+    """Velocity comparison for a single metric."""
+
+    current: int | float | None = 0
+    previous: int | float | None = 0
+    delta: int | float | None = 0
+    percent_change: float | None = None
+
+
+class ScanTrendVelocity(BaseModel):
+    """Period-over-period velocity metrics."""
+
+    completed_scans: ScanTrendVelocityMetric = ScanTrendVelocityMetric()
+    fixable_vulns: ScanTrendVelocityMetric = ScanTrendVelocityMetric()
+    avg_duration_seconds: ScanTrendVelocityMetric = ScanTrendVelocityMetric()
+
+
+class ScanTrendSummary(BaseModel):
+    """Aggregated summary for a trend window."""
+
+    total_scans: int = 0
+    completed_scans: int = 0
+    failed_scans: int = 0
+    total_vulns: int = 0
+    fixable_vulns: int = 0
+    critical_vulns: int = 0
+    high_vulns: int = 0
+    avg_duration_seconds: float | None = None
+
+
+class ScanTrendsResponse(BaseModel):
+    """Response from GET /scans/trends."""
+
+    window_days: int
+    series: list[ScanTrendDataPoint]
+    summary: ScanTrendSummary
+    velocity: ScanTrendVelocity
+
+
+class ScannerHealthDetail(BaseModel):
+    """Health detail for a single scanner."""
+
+    scanner: str = ""
+    available: bool = False
+    supports_offline: bool = False
+    health: dict | None = None
+    error: str | None = None
+
+
+class ScannerHealthResponse(BaseModel):
+    """Response from GET /scans/scanner/health."""
+
+    trivy: ScannerHealthDetail = ScannerHealthDetail()
+    settings: dict | None = None
+
+
 class ScanQueueStatus(BaseModel):
     """Current scan queue status."""
 

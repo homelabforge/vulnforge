@@ -22,8 +22,9 @@ from contextlib import asynccontextmanager
 from importlib.metadata import version as pkg_version
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -234,6 +235,39 @@ app = FastAPI(
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+# Status codes that indicate the client can safely retry
+_RETRYABLE_STATUS_CODES = frozenset({502, 503, 504})
+
+# Error type classification by status code range
+_ERROR_TYPE_MAP: dict[int, str] = {
+    400: "validation_error",
+    401: "authentication_error",
+    403: "authorization_error",
+    404: "not_found",
+    409: "conflict",
+    422: "validation_error",
+    429: "rate_limited",
+}
+
+
+@app.exception_handler(HTTPException)
+async def _http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """Standardize all HTTP error responses to match frontend ApiErrorResponse interface."""
+    status = exc.status_code
+    error_type = _ERROR_TYPE_MAP.get(status, "server_error" if status >= 500 else "client_error")
+
+    return JSONResponse(
+        status_code=status,
+        content={
+            "detail": exc.detail or "An error occurred",
+            "status_code": status,
+            "error_type": error_type,
+            "suggestions": [],
+            "is_retryable": status in _RETRYABLE_STATUS_CODES,
+        },
+    )
+
 
 # Authentication middleware (must be before CORS)
 app.add_middleware(AuthenticationMiddleware)

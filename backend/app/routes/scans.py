@@ -22,7 +22,12 @@ from app.schemas import (
     ScanTriggerResponse,
 )
 from app.schemas import Scan as ScanSchema
-from app.schemas.scan import ScanProgressSnapshot, ScanQueueStatus
+from app.schemas.scan import (
+    ScannerHealthResponse,
+    ScanProgressSnapshot,
+    ScanQueueStatus,
+    ScanTrendsResponse,
+)
 from app.services.scan_events import scan_events
 from app.services.scan_queue import ScanPriority, get_scan_queue
 from app.services.scan_trends import build_scan_trends
@@ -141,7 +146,7 @@ async def stream_scan_status(request: Request):
     return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
 
-@router.get("/trends")
+@router.get("/trends", response_model=ScanTrendsResponse)
 @limiter.limit("30/minute")
 async def get_scan_trends(
     request: Request,
@@ -160,7 +165,7 @@ async def get_queue_status(request: Request):
     return scan_queue.get_status()
 
 
-@router.get("/scanner/health")
+@router.get("/scanner/health", response_model=ScannerHealthResponse)
 @limiter.limit("30/minute")
 async def get_scanner_health(request: Request):
     """
