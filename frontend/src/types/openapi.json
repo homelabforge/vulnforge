@@ -1914,6 +1914,720 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "ImageComplianceAlert": {
+        "description": "Alert detail from Trivy image misconfiguration check.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "ImageComplianceAlert",
+        "type": "object"
+      },
+      "ImageComplianceFindingResponse": {
+        "description": "A single image compliance finding.",
+        "properties": {
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/ImageComplianceAlert"
+            },
+            "title": "Alerts",
+            "type": "array"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "check_id": {
+            "title": "Check Id",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "first_seen": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Seen"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ignored_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ignored By"
+          },
+          "ignored_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ignored Reason"
+          },
+          "is_ignored": {
+            "title": "Is Ignored",
+            "type": "boolean"
+          },
+          "last_seen": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen"
+          },
+          "remediation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remediation"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "check_id",
+          "title",
+          "status",
+          "severity",
+          "category",
+          "alerts",
+          "is_ignored"
+        ],
+        "title": "ImageComplianceFindingResponse",
+        "type": "object"
+      },
+      "ImageComplianceImageEntry": {
+        "description": "A scanned image with its latest compliance data.",
+        "properties": {
+          "active_failures": {
+            "title": "Active Failures",
+            "type": "integer"
+          },
+          "affected_containers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Affected Containers",
+            "type": "array"
+          },
+          "compliance_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliance Score"
+          },
+          "failed_checks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed Checks"
+          },
+          "fatal_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fatal Count"
+          },
+          "image_name": {
+            "title": "Image Name",
+            "type": "string"
+          },
+          "last_scan_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan Date"
+          },
+          "passed_checks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passed Checks"
+          },
+          "total_checks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Checks"
+          },
+          "warn_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warn Count"
+          }
+        },
+        "required": [
+          "image_name",
+          "compliance_score",
+          "active_failures",
+          "last_scan_date",
+          "affected_containers"
+        ],
+        "title": "ImageComplianceImageEntry",
+        "type": "object"
+      },
+      "ImageComplianceScanHistoryEntry": {
+        "description": "A single entry in scan history.",
+        "properties": {
+          "compliance_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliance Score"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "failed_checks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed Checks"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "image_name": {
+            "title": "Image Name",
+            "type": "string"
+          },
+          "passed_checks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passed Checks"
+          },
+          "scan_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Date"
+          },
+          "scan_duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Duration Seconds"
+          },
+          "scan_status": {
+            "title": "Scan Status",
+            "type": "string"
+          },
+          "total_checks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Checks"
+          }
+        },
+        "required": [
+          "id",
+          "scan_date",
+          "scan_status",
+          "image_name"
+        ],
+        "title": "ImageComplianceScanHistoryEntry",
+        "type": "object"
+      },
+      "ImageComplianceSummaryResponse": {
+        "description": "Aggregated compliance summary across all scanned images.",
+        "properties": {
+          "category_breakdown": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Breakdown"
+          },
+          "compliance_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compliance Score"
+          },
+          "failed_checks": {
+            "title": "Failed Checks",
+            "type": "integer"
+          },
+          "fatal_count": {
+            "title": "Fatal Count",
+            "type": "integer"
+          },
+          "image_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Name"
+          },
+          "last_scan_date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan Date"
+          },
+          "last_scan_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan Status"
+          },
+          "passed_checks": {
+            "title": "Passed Checks",
+            "type": "integer"
+          },
+          "total_checks": {
+            "title": "Total Checks",
+            "type": "integer"
+          },
+          "total_images_scanned": {
+            "title": "Total Images Scanned",
+            "type": "integer"
+          },
+          "warn_count": {
+            "title": "Warn Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_images_scanned",
+          "compliance_score",
+          "total_checks",
+          "passed_checks",
+          "failed_checks",
+          "fatal_count",
+          "warn_count",
+          "last_scan_date",
+          "last_scan_status",
+          "image_name",
+          "category_breakdown"
+        ],
+        "title": "ImageComplianceSummaryResponse",
+        "type": "object"
+      },
+      "ImageFindingIgnoreResponse": {
+        "description": "Response after marking a finding as ignored.",
+        "properties": {
+          "check_id": {
+            "title": "Check Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ignored_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ignored At"
+          },
+          "ignored_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ignored By"
+          },
+          "is_ignored": {
+            "title": "Is Ignored",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "check_id",
+          "is_ignored",
+          "ignored_by",
+          "ignored_at"
+        ],
+        "title": "ImageFindingIgnoreResponse",
+        "type": "object"
+      },
+      "ImageFindingUnignoreResponse": {
+        "description": "Response after unmarking a finding as ignored.",
+        "properties": {
+          "check_id": {
+            "title": "Check Id",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_ignored": {
+            "title": "Is Ignored",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "check_id",
+          "is_ignored"
+        ],
+        "title": "ImageFindingUnignoreResponse",
+        "type": "object"
+      },
+      "ImageScanAllTriggerResponse": {
+        "description": "Response from triggering a batch image scan.",
+        "properties": {
+          "image_count": {
+            "title": "Image Count",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "image_count"
+        ],
+        "title": "ImageScanAllTriggerResponse",
+        "type": "object"
+      },
+      "ImageScanCurrentStatus": {
+        "description": "Union of idle/scanning/completed states \u2014 all fields optional except status.",
+        "properties": {
+          "current_image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Image"
+          },
+          "last_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageScanLastResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_scan_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan Id"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "progress_current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Current"
+          },
+          "progress_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Total"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targets"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ImageScanCurrentStatus",
+        "type": "object"
+      },
+      "ImageScanLastResult": {
+        "description": "Result of the most recently completed image scan.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "image_name": {
+            "title": "Image Name",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "image_name",
+          "success"
+        ],
+        "title": "ImageScanLastResult",
+        "type": "object"
+      },
+      "ImageScanTriggerResponse": {
+        "description": "Response from triggering a single image scan.",
+        "properties": {
+          "image_name": {
+            "title": "Image Name",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "image_name"
+        ],
+        "title": "ImageScanTriggerResponse",
+        "type": "object"
+      },
       "LoginRequest": {
         "description": "Login request schema.",
         "properties": {
@@ -5559,9 +6273,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Current Image Scan Status Api V1 Image Compliance Current Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ImageScanCurrentStatus"
                 }
               }
             },
@@ -5661,9 +6373,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Ignore Image Finding Api V1 Image Compliance Findings  Finding Id  Ignore Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ImageFindingIgnoreResponse"
                 }
               }
             },
@@ -5706,9 +6416,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Unignore Image Finding Api V1 Image Compliance Findings  Finding Id  Unignore Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ImageFindingUnignoreResponse"
                 }
               }
             },
@@ -5778,8 +6486,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "additionalProperties": true,
-                    "type": "object"
+                    "$ref": "#/components/schemas/ImageComplianceFindingResponse"
                   },
                   "title": "Response Get Image Findings Api V1 Image Compliance Findings  Image Name  Get",
                   "type": "array"
@@ -5815,8 +6522,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "additionalProperties": true,
-                    "type": "object"
+                    "$ref": "#/components/schemas/ImageComplianceImageEntry"
                   },
                   "title": "Response List Scanned Images Api V1 Image Compliance Images Get",
                   "type": "array"
@@ -5852,9 +6558,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Trigger Image Scan Api V1 Image Compliance Scan Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ImageScanTriggerResponse"
                 }
               }
             },
@@ -5886,9 +6590,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Trigger Image Scan All Api V1 Image Compliance Scan All Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ImageScanAllTriggerResponse"
                 }
               }
             },
@@ -5923,8 +6625,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "additionalProperties": true,
-                    "type": "object"
+                    "$ref": "#/components/schemas/ImageComplianceScanHistoryEntry"
                   },
                   "title": "Response Get Scan History Api V1 Image Compliance Scans History Get",
                   "type": "array"
@@ -5959,9 +6660,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Image Compliance Summary Api V1 Image Compliance Summary Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ImageComplianceSummaryResponse"
                 }
               }
             },

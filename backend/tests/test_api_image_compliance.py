@@ -7,6 +7,7 @@ This module tests the image misconfiguration scanning API which provides:
 - CSV export functionality
 """
 
+import asyncio
 import json
 from unittest.mock import MagicMock, patch
 
@@ -15,6 +16,83 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ImageComplianceFinding, ImageComplianceScan
+from app.services.image_misconfig_state import image_misconfig_state
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _reset_image_compliance_globals():
+    """Reset ALL process-local state between tests.
+
+    The image_compliance route module uses process-local globals for scan
+    tracking.  finish_scan() does NOT clear _last_result, so we reset every
+    field directly to prevent cross-test contamination and hangs.
+    """
+    import app.routes.image_compliance as ic
+
+    ic._current_scan_task = None
+    ic._current_scan_id = None
+    ic._last_scan_id = None
+    ic._completion_poll_count = 0
+
+    image_misconfig_state._is_scanning = False
+    image_misconfig_state._last_result = None
+    image_misconfig_state._mode = "single"
+    image_misconfig_state._targets = []
+    image_misconfig_state._current_image = None
+    image_misconfig_state._progress_current = 0
+    image_misconfig_state._progress_total = 0
+    image_misconfig_state._started_at = None
+
+    yield
+
+    # Cleanup: cancel any lingering tasks
+    if ic._current_scan_task and not ic._current_scan_task.done():
+        ic._current_scan_task.cancel()
+    ic._current_scan_task = None
+    ic._current_scan_id = None
+    ic._last_scan_id = None
+    ic._completion_poll_count = 0
+    image_misconfig_state._is_scanning = False
+    image_misconfig_state._last_result = None
+
+
+# ---------------------------------------------------------------------------
+# Fake task helpers
+# ---------------------------------------------------------------------------
+
+
+async def _noop_coro() -> None:
+    """Coroutine that never completes (blocks forever)."""
+    await asyncio.get_running_loop().create_future()
+
+
+def _make_pending_task() -> asyncio.Task:
+    """Create a task that stays pending until explicitly cancelled.
+
+    Used by conflict/in-progress tests that need ``_current_scan_task.done()``
+    to return False when the route handler checks it.
+    """
+    return asyncio.create_task(_noop_coro())
+
+
+def _make_completed_task() -> asyncio.Task:
+    """Create a task that is already done.
+
+    Used by success tests where we need the route to accept a new scan trigger
+    (it only blocks when an existing task is still running).
+    """
+    task = asyncio.create_task(asyncio.sleep(0))
+    # Ensure it's completed — sleep(0) completes on next iteration
+    return task
+
+
+# ===========================================================================
+# Trigger scan tests
+# ===========================================================================
 
 
 class TestTriggerImageScan:
@@ -25,37 +103,33 @@ class TestTriggerImageScan:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test triggering scan for a single image."""
-        # Arrange
         image_name = "nginx:latest"
 
-        # Mock DockerService and TrivyMisconfigService
-        with patch("app.routes.image_compliance.DockerService") as mock_docker:
-            mock_docker_instance = MagicMock()
-            mock_docker.return_value = mock_docker_instance
+        with (
+            patch("app.routes.image_compliance.DockerService") as mock_docker,
+            patch("app.routes.image_compliance.asyncio") as mock_asyncio,
+        ):
+            mock_docker.return_value = MagicMock()
+            mock_asyncio.create_task.return_value = _make_completed_task()
 
-            # Act
             response = await authenticated_client.post(
                 "/api/v1/image-compliance/scan",
                 params={"image_name": image_name},
             )
 
-            # Assert
-            assert response.status_code == 200
-            data = response.json()
-            assert "message" in data
-            assert "started" in data["message"].lower()
-            assert data["image_name"] == image_name
+        assert response.status_code == 200
+        data = response.json()
+        assert "message" in data
+        assert "started" in data["message"].lower()
+        assert data["image_name"] == image_name
 
     @pytest.mark.asyncio
     async def test_scan_empty_image_name(self, authenticated_client: AsyncClient):
         """Test scanning with empty image name."""
-        # Act
         response = await authenticated_client.post(
             "/api/v1/image-compliance/scan",
             params={"image_name": ""},
         )
-
-        # Assert
         assert response.status_code == 400
         data = response.json()
         assert "required" in data["detail"].lower()
@@ -65,35 +139,27 @@ class TestTriggerImageScan:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test triggering scan when one is already running."""
-        # Arrange
-        with patch("app.routes.image_compliance.DockerService"):
-            # Start first scan
-            await authenticated_client.post(
-                "/api/v1/image-compliance/scan",
-                params={"image_name": "nginx:latest"},
-            )
+        import app.routes.image_compliance as ic
 
-            # Act - Try to start second scan
-            response = await authenticated_client.post(
-                "/api/v1/image-compliance/scan",
-                params={"image_name": "redis:latest"},
-            )
+        # Simulate an in-progress scan
+        ic._current_scan_task = _make_pending_task()
 
-            # Assert
-            assert response.status_code == 409
-            data = response.json()
-            assert "already in progress" in data["detail"].lower()
+        response = await authenticated_client.post(
+            "/api/v1/image-compliance/scan",
+            params={"image_name": "redis:latest"},
+        )
+
+        assert response.status_code == 409
+        data = response.json()
+        assert "already in progress" in data["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_scan_whitespace_image_name(self, authenticated_client: AsyncClient):
         """Test scanning with whitespace-only image name."""
-        # Act
         response = await authenticated_client.post(
             "/api/v1/image-compliance/scan",
             params={"image_name": "   "},
         )
-
-        # Assert
         assert response.status_code == 400
 
     @pytest.mark.skip(reason="Auth disabled in tests - all requests pass through")
@@ -110,74 +176,69 @@ class TestTriggerScanAll:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test triggering batch scan for all images."""
-        # Arrange
-        with patch("app.routes.image_compliance.DockerService") as mock_docker:
-            mock_docker_instance = MagicMock()
-            mock_docker.return_value = mock_docker_instance
+        with (
+            patch("app.routes.image_compliance.DockerService") as mock_docker,
+            patch("app.routes.image_compliance._resolve_unique_images") as mock_resolve,
+            patch("app.routes.image_compliance.asyncio") as mock_asyncio,
+        ):
+            mock_docker.return_value = MagicMock()
+            mock_resolve.return_value = {
+                "nginx:latest": ["container1", "container2"],
+                "redis:alpine": ["container3"],
+            }
+            mock_asyncio.create_task.return_value = _make_completed_task()
 
-            # Mock _resolve_unique_images to return some images
-            with patch("app.routes.image_compliance._resolve_unique_images") as mock_resolve:
-                mock_resolve.return_value = {
-                    "nginx:latest": ["container1", "container2"],
-                    "redis:alpine": ["container3"],
-                }
+            response = await authenticated_client.post("/api/v1/image-compliance/scan-all")
 
-                # Act
-                response = await authenticated_client.post("/api/v1/image-compliance/scan-all")
-
-                # Assert
-                assert response.status_code == 200
-                data = response.json()
-                assert "message" in data
-                assert "started" in data["message"].lower()
-                assert data["image_count"] == 2
+        assert response.status_code == 200
+        data = response.json()
+        assert "message" in data
+        assert "started" in data["message"].lower()
+        assert data["image_count"] == 2
 
     @pytest.mark.asyncio
     async def test_scan_all_no_containers(
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test scan-all when no containers are found."""
-        # Arrange
-        with patch("app.routes.image_compliance.DockerService") as mock_docker:
-            mock_docker_instance = MagicMock()
-            mock_docker.return_value = mock_docker_instance
+        with (
+            patch("app.routes.image_compliance.DockerService") as mock_docker,
+            patch("app.routes.image_compliance._resolve_unique_images") as mock_resolve,
+        ):
+            mock_docker.return_value = MagicMock()
+            mock_resolve.return_value = {}
 
-            with patch("app.routes.image_compliance._resolve_unique_images") as mock_resolve:
-                mock_resolve.return_value = {}  # No images found
+            response = await authenticated_client.post("/api/v1/image-compliance/scan-all")
 
-                # Act
-                response = await authenticated_client.post("/api/v1/image-compliance/scan-all")
-
-                # Assert
-                assert response.status_code == 404
-                data = response.json()
-                assert "no container images" in data["detail"].lower()
+        assert response.status_code == 404
+        data = response.json()
+        assert "no container images" in data["detail"].lower()
 
     @pytest.mark.asyncio
     async def test_scan_all_already_running(
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test scan-all when scan is already in progress."""
-        # Arrange
-        with patch("app.routes.image_compliance.DockerService"):
-            with patch("app.routes.image_compliance._resolve_unique_images") as mock_resolve:
-                mock_resolve.return_value = {"nginx:latest": ["container1"]}
+        import app.routes.image_compliance as ic
 
-                # Start first scan
-                await authenticated_client.post("/api/v1/image-compliance/scan-all")
+        # Simulate an in-progress scan
+        ic._current_scan_task = _make_pending_task()
 
-                # Act - Try to start second scan
-                response = await authenticated_client.post("/api/v1/image-compliance/scan-all")
+        response = await authenticated_client.post("/api/v1/image-compliance/scan-all")
 
-                # Assert
-                assert response.status_code == 409
-                data = response.json()
-                assert "already in progress" in data["detail"].lower()
+        assert response.status_code == 409
+        data = response.json()
+        assert "already in progress" in data["detail"].lower()
 
     @pytest.mark.skip(reason="Auth disabled in tests - all requests pass through")
     async def test_scan_all_requires_admin_auth(self, authenticated_client: AsyncClient):
         """Test scan-all endpoint requires admin authentication."""
         pass
+
+
+# ===========================================================================
+# Current scan status tests
+# ===========================================================================
 
 
 class TestGetCurrentScan:
@@ -188,14 +249,11 @@ class TestGetCurrentScan:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test getting current scan status when idle."""
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/current")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert "status" in data
-        # Status should be "idle" or similar when no scan is running
         assert data["status"] in ["idle", "completed", None]
 
     @pytest.mark.asyncio
@@ -203,39 +261,37 @@ class TestGetCurrentScan:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test getting current scan status during execution."""
-        # Arrange
-        with patch("app.routes.image_compliance.DockerService"):
-            with patch("app.routes.image_compliance._resolve_unique_images") as mock_resolve:
-                mock_resolve.return_value = {"nginx:latest": ["container1"]}
+        import app.routes.image_compliance as ic
 
-                # Start scan
-                await authenticated_client.post("/api/v1/image-compliance/scan-all")
+        # Simulate an in-progress scan
+        ic._current_scan_task = _make_pending_task()
+        image_misconfig_state._is_scanning = True
+        image_misconfig_state._mode = "batch"
+        image_misconfig_state._current_image = "nginx:latest"
+        image_misconfig_state._progress_current = 1
+        image_misconfig_state._progress_total = 3
 
-                # Act
-                response = await authenticated_client.get("/api/v1/image-compliance/current")
+        response = await authenticated_client.get("/api/v1/image-compliance/current")
 
-                # Assert
-                assert response.status_code == 200
-                data = response.json()
-                assert "status" in data
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "scanning"
 
     @pytest.mark.asyncio
     async def test_get_current_scan_includes_last_scan_id(
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test that completed scan returns last_scan_id."""
-        # Note: This test verifies the completion polling mechanism
-        # In real usage, the frontend polls this endpoint to detect completion
-        # and retrieve the scan ID for result fetching
-
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/current")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
-        # last_scan_id may or may not be present depending on scan history
         assert "status" in data
+
+
+# ===========================================================================
+# Summary tests
+# ===========================================================================
 
 
 class TestGetSummary:
@@ -246,10 +302,8 @@ class TestGetSummary:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test getting summary with no scans."""
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/summary")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert data["total_images_scanned"] == 0
@@ -262,7 +316,6 @@ class TestGetSummary:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test getting summary with completed scans."""
-        # Arrange - Create test scans
         scan1 = ImageComplianceScan(
             image_name="nginx:latest",
             scan_status="completed",
@@ -286,10 +339,8 @@ class TestGetSummary:
         db_session.add_all([scan1, scan2])
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/summary")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert data["total_images_scanned"] == 2
@@ -303,7 +354,6 @@ class TestGetSummary:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test summary only includes completed scans."""
-        # Arrange
         scan_completed = ImageComplianceScan(
             image_name="nginx:latest",
             scan_status="completed",
@@ -322,13 +372,16 @@ class TestGetSummary:
         db_session.add_all([scan_completed, scan_failed])
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/summary")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert data["total_images_scanned"] == 1  # Only completed scan
+
+
+# ===========================================================================
+# List images tests
+# ===========================================================================
 
 
 class TestListImages:
@@ -339,10 +392,8 @@ class TestListImages:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test listing images with no scans."""
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/images")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
@@ -353,7 +404,6 @@ class TestListImages:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test listing scanned images."""
-        # Arrange
         scan = ImageComplianceScan(
             image_name="nginx:latest",
             scan_status="completed",
@@ -368,10 +418,8 @@ class TestListImages:
         db_session.add(scan)
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/images")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
@@ -393,7 +441,6 @@ class TestListImages:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test images are sorted by compliance score (worst first)."""
-        # Arrange
         scan1 = ImageComplianceScan(
             image_name="nginx:latest",
             scan_status="completed",
@@ -412,18 +459,20 @@ class TestListImages:
         db_session.add_all([scan1, scan2, scan3])
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/images")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert len(data) >= 3
 
-        # Verify sorted by score ascending (worst first)
         scores = [img["compliance_score"] for img in data]
         assert scores == sorted(scores)
         assert scores[0] == 60.0  # Worst score first
+
+
+# ===========================================================================
+# Findings tests
+# ===========================================================================
 
 
 class TestGetFindings:
@@ -434,7 +483,6 @@ class TestGetFindings:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test getting findings for a specific image."""
-        # Arrange
         finding = ImageComplianceFinding(
             check_id="AVD-DS-0001",
             title="Test Finding",
@@ -449,10 +497,8 @@ class TestGetFindings:
         await db_session.commit()
         await db_session.refresh(finding)
 
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/findings/nginx:latest")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
@@ -469,7 +515,6 @@ class TestGetFindings:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test filtering findings by status."""
-        # Arrange
         image_name = "test-nginx-filter"
 
         finding_fail = ImageComplianceFinding(
@@ -491,13 +536,11 @@ class TestGetFindings:
         db_session.add_all([finding_fail, finding_pass])
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get(
             f"/api/v1/image-compliance/findings/{image_name}",
             params={"status_filter": "FAIL"},
         )
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert len(data) >= 1
@@ -508,7 +551,6 @@ class TestGetFindings:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test that ignored findings are excluded by default."""
-        # Arrange
         image_name = "test-nginx-ignored"
 
         finding_active = ImageComplianceFinding(
@@ -533,13 +575,10 @@ class TestGetFindings:
         db_session.add_all([finding_active, finding_ignored])
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get(f"/api/v1/image-compliance/findings/{image_name}")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
-        # Should only include non-ignored finding
         assert all(not f["is_ignored"] for f in data)
 
     @pytest.mark.asyncio
@@ -547,7 +586,6 @@ class TestGetFindings:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test including ignored findings when requested."""
-        # Arrange
         finding_ignored = ImageComplianceFinding(
             check_id="AVD-DS-0001",
             title="Ignored Finding",
@@ -561,19 +599,21 @@ class TestGetFindings:
         db_session.add(finding_ignored)
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get(
             "/api/v1/image-compliance/findings/nginx:latest",
             params={"include_ignored": True},
         )
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert len(data) >= 1
-        # Should find the ignored finding
         ignored_findings = [f for f in data if f["is_ignored"]]
         assert len(ignored_findings) >= 1
+
+
+# ===========================================================================
+# Ignore / unignore tests
+# ===========================================================================
 
 
 class TestIgnoreFinding:
@@ -584,7 +624,6 @@ class TestIgnoreFinding:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test marking a finding as ignored."""
-        # Arrange
         finding = ImageComplianceFinding(
             check_id="AVD-DS-0001",
             title="Test Finding",
@@ -598,13 +637,11 @@ class TestIgnoreFinding:
         await db_session.commit()
         await db_session.refresh(finding)
 
-        # Act
         response = await authenticated_client.post(
             f"/api/v1/image-compliance/findings/{finding.id}/ignore",
             params={"reason": "False positive - test environment"},
         )
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert data["is_ignored"] is True
@@ -612,7 +649,6 @@ class TestIgnoreFinding:
         assert "ignored_by" in data
         assert "ignored_at" in data
 
-        # Verify in database
         await db_session.refresh(finding)
         assert finding.is_ignored is True
         assert finding.ignored_reason == "False positive - test environment"
@@ -623,13 +659,10 @@ class TestIgnoreFinding:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test ignoring non-existent finding."""
-        # Act
         response = await authenticated_client.post(
             "/api/v1/image-compliance/findings/99999/ignore",
             params={"reason": "Test"},
         )
-
-        # Assert
         assert response.status_code == 404
         data = response.json()
         assert "not found" in data["detail"].lower()
@@ -648,7 +681,6 @@ class TestUnignoreFinding:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test unmarking a finding as ignored."""
-        # Arrange
         finding = ImageComplianceFinding(
             check_id="AVD-DS-0001",
             title="Test Finding",
@@ -664,18 +696,15 @@ class TestUnignoreFinding:
         await db_session.commit()
         await db_session.refresh(finding)
 
-        # Act
         response = await authenticated_client.post(
             f"/api/v1/image-compliance/findings/{finding.id}/unignore"
         )
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert data["is_ignored"] is False
         assert data["check_id"] == "AVD-DS-0001"
 
-        # Verify in database
         await db_session.refresh(finding)
         assert finding.is_ignored is False
         assert finding.ignored_reason is None
@@ -686,12 +715,9 @@ class TestUnignoreFinding:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test unignoring non-existent finding."""
-        # Act
         response = await authenticated_client.post(
             "/api/v1/image-compliance/findings/99999/unignore"
         )
-
-        # Assert
         assert response.status_code == 404
         data = response.json()
         assert "not found" in data["detail"].lower()
@@ -702,6 +728,11 @@ class TestUnignoreFinding:
         pass
 
 
+# ===========================================================================
+# Scan history tests
+# ===========================================================================
+
+
 class TestScanHistory:
     """Test GET /api/v1/image-compliance/scans/history endpoint."""
 
@@ -710,10 +741,8 @@ class TestScanHistory:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test getting scan history with no scans."""
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/scans/history")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
@@ -724,7 +753,6 @@ class TestScanHistory:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test getting scan history with multiple scans."""
-        # Arrange
         scan1 = ImageComplianceScan(
             image_name="nginx:latest",
             scan_status="completed",
@@ -745,16 +773,13 @@ class TestScanHistory:
         db_session.add_all([scan1, scan2, scan3])
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/scans/history")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
         assert len(data) >= 3
 
-        # Verify scan data structure
         for scan in data:
             assert "id" in scan
             assert "scan_date" in scan
@@ -767,7 +792,6 @@ class TestScanHistory:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test scan history respects limit parameter."""
-        # Arrange - Create more scans than default limit
         for i in range(15):
             scan = ImageComplianceScan(
                 image_name=f"image{i}:latest",
@@ -777,13 +801,11 @@ class TestScanHistory:
             db_session.add(scan)
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get(
             "/api/v1/image-compliance/scans/history",
             params={"limit": 5},
         )
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 5
@@ -793,7 +815,6 @@ class TestScanHistory:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test scan history is ordered by date (most recent first)."""
-        # Arrange
         from datetime import timedelta
 
         from app.utils.timezone import get_now
@@ -817,16 +838,17 @@ class TestScanHistory:
         db_session.add_all([scan1, scan2, scan3])
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/scans/history")
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert len(data) >= 3
-
-        # Most recent should be first (postgres:14)
         assert data[0]["image_name"] == "postgres:14"
+
+
+# ===========================================================================
+# CSV export tests
+# ===========================================================================
 
 
 class TestExportCSV:
@@ -837,7 +859,6 @@ class TestExportCSV:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test exporting all findings to CSV."""
-        # Arrange
         image_name = "test-nginx-csv"
         finding = ImageComplianceFinding(
             check_id="AVD-DS-0001",
@@ -852,15 +873,12 @@ class TestExportCSV:
         db_session.add(finding)
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/export/csv")
 
-        # Assert
         assert response.status_code == 200
         assert response.headers["content-type"] == "text/csv; charset=utf-8"
         assert "attachment" in response.headers["content-disposition"]
 
-        # Verify CSV content
         content = response.content.decode("utf-8")
         assert "Check ID" in content
         assert "Image Name" in content
@@ -872,7 +890,6 @@ class TestExportCSV:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test exporting findings filtered by image name."""
-        # Arrange
         image1 = "test-nginx-csv-filter"
         image2 = "test-redis-csv-filter"
         finding1 = ImageComplianceFinding(
@@ -894,13 +911,11 @@ class TestExportCSV:
         db_session.add_all([finding1, finding2])
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get(
             "/api/v1/image-compliance/export/csv",
             params={"image_name": image1},
         )
 
-        # Assert
         assert response.status_code == 200
         content = response.content.decode("utf-8")
         assert image1 in content
@@ -911,7 +926,6 @@ class TestExportCSV:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test CSV export excludes ignored findings by default."""
-        # Arrange
         image_name = "test-nginx-csv-ignored"
         finding_active = ImageComplianceFinding(
             check_id="AVD-DS-0001",
@@ -934,10 +948,8 @@ class TestExportCSV:
         db_session.add_all([finding_active, finding_ignored])
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/export/csv")
 
-        # Assert
         assert response.status_code == 200
         content = response.content.decode("utf-8")
         assert "Active" in content
@@ -950,7 +962,6 @@ class TestExportCSV:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test CSV export includes ignored findings when requested."""
-        # Arrange
         finding_ignored = ImageComplianceFinding(
             check_id="AVD-DS-0001",
             title="Ignored Finding",
@@ -964,13 +975,11 @@ class TestExportCSV:
         db_session.add(finding_ignored)
         await db_session.commit()
 
-        # Act
         response = await authenticated_client.get(
             "/api/v1/image-compliance/export/csv",
             params={"include_ignored": True},
         )
 
-        # Assert
         assert response.status_code == 200
         content = response.content.decode("utf-8")
         assert "Ignored Finding" in content
@@ -981,13 +990,10 @@ class TestExportCSV:
         self, authenticated_client: AsyncClient, db_session: AsyncSession
     ):
         """Test CSV export with no findings."""
-        # Act
         response = await authenticated_client.get("/api/v1/image-compliance/export/csv")
 
-        # Assert
         assert response.status_code == 200
         content = response.content.decode("utf-8")
-        # Should have headers but no data rows
         assert "Check ID" in content
         lines = content.strip().split("\n")
         assert len(lines) == 1  # Only header row

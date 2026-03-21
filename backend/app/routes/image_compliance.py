@@ -20,6 +20,17 @@ from app.dependencies.auth import require_admin
 from app.models import ImageComplianceFinding, ImageComplianceScan
 from app.models.user import User
 from app.repositories.dependencies import get_activity_logger
+from app.schemas.image_compliance import (
+    ImageComplianceFindingResponse,
+    ImageComplianceImageEntry,
+    ImageComplianceScanHistoryEntry,
+    ImageComplianceSummaryResponse,
+    ImageFindingIgnoreResponse,
+    ImageFindingUnignoreResponse,
+    ImageScanAllTriggerResponse,
+    ImageScanCurrentStatus,
+    ImageScanTriggerResponse,
+)
 from app.services.activity_logger import ActivityLogger
 from app.services.docker_client import DockerService
 from app.services.image_compliance_scan_service import perform_image_compliance_scan
@@ -143,7 +154,7 @@ async def _run_batch_image_scan_task(
         _current_scan_task = None
 
 
-@router.post("/scan", response_model=dict)
+@router.post("/scan", response_model=ImageScanTriggerResponse)
 async def trigger_image_scan(
     image_name: str,
     user: User = Depends(require_admin),
@@ -188,7 +199,7 @@ async def trigger_image_scan(
     return {"message": "Image misconfiguration scan started", "image_name": normalized_image}
 
 
-@router.post("/scan-all", response_model=dict)
+@router.post("/scan-all", response_model=ImageScanAllTriggerResponse)
 async def trigger_image_scan_all(
     user: User = Depends(require_admin),
 ):
@@ -228,7 +239,7 @@ async def trigger_image_scan_all(
     return {"message": "Batch image misconfiguration scan started", "image_count": len(image_map)}
 
 
-@router.get("/current", response_model=dict)
+@router.get("/current", response_model=ImageScanCurrentStatus)
 async def get_current_image_scan_status():
     """
     Poll current image misconfiguration scan status for UI updates.
@@ -268,7 +279,7 @@ async def get_current_image_scan_status():
     return state_status
 
 
-@router.get("/summary", response_model=dict)
+@router.get("/summary", response_model=ImageComplianceSummaryResponse)
 async def get_image_compliance_summary(db: AsyncSession = Depends(get_db)):
     """
     Get image compliance summary aggregated across all scanned images.
@@ -336,14 +347,14 @@ async def get_image_compliance_summary(db: AsyncSession = Depends(get_db)):
         "failed_checks": total_failures,
         "fatal_count": total_critical,
         "warn_count": total_warn,
-        "last_scan_date": str(most_recent.scan_date) if most_recent.scan_date else None,
+        "last_scan_date": most_recent.scan_date,
         "last_scan_status": most_recent.scan_status,
         "image_name": most_recent.image_name,
         "category_breakdown": None,
     }
 
 
-@router.get("/images", response_model=list[dict])
+@router.get("/images", response_model=list[ImageComplianceImageEntry])
 async def list_scanned_images(db: AsyncSession = Depends(get_db)):
     """
     List all scanned images with their latest scores.
@@ -411,7 +422,7 @@ async def list_scanned_images(db: AsyncSession = Depends(get_db)):
     return images
 
 
-@router.get("/findings/{image_name:path}", response_model=list[dict])
+@router.get("/findings/{image_name:path}", response_model=list[ImageComplianceFindingResponse])
 async def get_image_findings(
     image_name: str,
     include_ignored: bool = False,
@@ -479,7 +490,7 @@ async def get_image_findings(
     return findings_list
 
 
-@router.post("/findings/{finding_id}/ignore", response_model=dict)
+@router.post("/findings/{finding_id}/ignore", response_model=ImageFindingIgnoreResponse)
 async def ignore_image_finding(
     finding_id: int,
     reason: str,
@@ -532,7 +543,7 @@ async def ignore_image_finding(
     }
 
 
-@router.post("/findings/{finding_id}/unignore", response_model=dict)
+@router.post("/findings/{finding_id}/unignore", response_model=ImageFindingUnignoreResponse)
 async def unignore_image_finding(
     finding_id: int,
     db: AsyncSession = Depends(get_db),
@@ -581,7 +592,7 @@ async def unignore_image_finding(
     }
 
 
-@router.get("/scans/history", response_model=list[dict])
+@router.get("/scans/history", response_model=list[ImageComplianceScanHistoryEntry])
 async def get_scan_history(limit: int = 10, db: AsyncSession = Depends(get_db)):
     """
     Get image compliance scan history.

@@ -3282,6 +3282,217 @@ export interface components {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * ImageComplianceAlert
+         * @description Alert detail from Trivy image misconfiguration check.
+         */
+        ImageComplianceAlert: {
+            /** Code */
+            code: string;
+            /** Line */
+            line?: number | null;
+        };
+        /**
+         * ImageComplianceFindingResponse
+         * @description A single image compliance finding.
+         */
+        ImageComplianceFindingResponse: {
+            /** Alerts */
+            alerts: components["schemas"]["ImageComplianceAlert"][];
+            /** Category */
+            category: string;
+            /** Check Id */
+            check_id: string;
+            /** Description */
+            description?: string | null;
+            /** First Seen */
+            first_seen?: string | null;
+            /** Id */
+            id: number;
+            /** Ignored By */
+            ignored_by?: string | null;
+            /** Ignored Reason */
+            ignored_reason?: string | null;
+            /** Is Ignored */
+            is_ignored: boolean;
+            /** Last Seen */
+            last_seen?: string | null;
+            /** Remediation */
+            remediation?: string | null;
+            /** Severity */
+            severity: string;
+            /** Status */
+            status: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * ImageComplianceImageEntry
+         * @description A scanned image with its latest compliance data.
+         */
+        ImageComplianceImageEntry: {
+            /** Active Failures */
+            active_failures: number;
+            /** Affected Containers */
+            affected_containers: string[];
+            /** Compliance Score */
+            compliance_score: number | null;
+            /** Failed Checks */
+            failed_checks?: number | null;
+            /** Fatal Count */
+            fatal_count?: number | null;
+            /** Image Name */
+            image_name: string;
+            /** Last Scan Date */
+            last_scan_date: string | null;
+            /** Passed Checks */
+            passed_checks?: number | null;
+            /** Total Checks */
+            total_checks?: number | null;
+            /** Warn Count */
+            warn_count?: number | null;
+        };
+        /**
+         * ImageComplianceScanHistoryEntry
+         * @description A single entry in scan history.
+         */
+        ImageComplianceScanHistoryEntry: {
+            /** Compliance Score */
+            compliance_score?: number | null;
+            /** Error Message */
+            error_message?: string | null;
+            /** Failed Checks */
+            failed_checks?: number | null;
+            /** Id */
+            id: number;
+            /** Image Name */
+            image_name: string;
+            /** Passed Checks */
+            passed_checks?: number | null;
+            /** Scan Date */
+            scan_date: string | null;
+            /** Scan Duration Seconds */
+            scan_duration_seconds?: number | null;
+            /** Scan Status */
+            scan_status: string;
+            /** Total Checks */
+            total_checks?: number | null;
+        };
+        /**
+         * ImageComplianceSummaryResponse
+         * @description Aggregated compliance summary across all scanned images.
+         */
+        ImageComplianceSummaryResponse: {
+            /** Category Breakdown */
+            category_breakdown: {
+                [key: string]: number;
+            } | null;
+            /** Compliance Score */
+            compliance_score: number | null;
+            /** Failed Checks */
+            failed_checks: number;
+            /** Fatal Count */
+            fatal_count: number;
+            /** Image Name */
+            image_name: string | null;
+            /** Last Scan Date */
+            last_scan_date: string | null;
+            /** Last Scan Status */
+            last_scan_status: string | null;
+            /** Passed Checks */
+            passed_checks: number;
+            /** Total Checks */
+            total_checks: number;
+            /** Total Images Scanned */
+            total_images_scanned: number;
+            /** Warn Count */
+            warn_count: number;
+        };
+        /**
+         * ImageFindingIgnoreResponse
+         * @description Response after marking a finding as ignored.
+         */
+        ImageFindingIgnoreResponse: {
+            /** Check Id */
+            check_id: string;
+            /** Id */
+            id: number;
+            /** Ignored At */
+            ignored_at: string | null;
+            /** Ignored By */
+            ignored_by: string | null;
+            /** Is Ignored */
+            is_ignored: boolean;
+        };
+        /**
+         * ImageFindingUnignoreResponse
+         * @description Response after unmarking a finding as ignored.
+         */
+        ImageFindingUnignoreResponse: {
+            /** Check Id */
+            check_id: string;
+            /** Id */
+            id: number;
+            /** Is Ignored */
+            is_ignored: boolean;
+        };
+        /**
+         * ImageScanAllTriggerResponse
+         * @description Response from triggering a batch image scan.
+         */
+        ImageScanAllTriggerResponse: {
+            /** Image Count */
+            image_count: number;
+            /** Message */
+            message: string;
+        };
+        /**
+         * ImageScanCurrentStatus
+         * @description Union of idle/scanning/completed states — all fields optional except status.
+         */
+        ImageScanCurrentStatus: {
+            /** Current Image */
+            current_image?: string | null;
+            last_result?: components["schemas"]["ImageScanLastResult"] | null;
+            /** Last Scan Id */
+            last_scan_id?: number | null;
+            /** Mode */
+            mode?: string | null;
+            /** Progress Current */
+            progress_current?: number | null;
+            /** Progress Total */
+            progress_total?: number | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Status */
+            status: string;
+            /** Targets */
+            targets?: string[] | null;
+        };
+        /**
+         * ImageScanLastResult
+         * @description Result of the most recently completed image scan.
+         */
+        ImageScanLastResult: {
+            /** Error */
+            error?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Image Name */
+            image_name: string;
+            /** Success */
+            success: boolean;
+        };
+        /**
+         * ImageScanTriggerResponse
+         * @description Response from triggering a single image scan.
+         */
+        ImageScanTriggerResponse: {
+            /** Image Name */
+            image_name: string;
+            /** Message */
+            message: string;
+        };
+        /**
          * LoginRequest
          * @description Login request schema.
          */
@@ -4987,9 +5198,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ImageScanCurrentStatus"];
                 };
             };
         };
@@ -5045,9 +5254,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ImageFindingIgnoreResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5078,9 +5285,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ImageFindingUnignoreResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5114,9 +5319,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["ImageComplianceFindingResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -5145,9 +5348,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["ImageComplianceImageEntry"][];
                 };
             };
         };
@@ -5169,9 +5370,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ImageScanTriggerResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5200,9 +5399,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ImageScanAllTriggerResponse"];
                 };
             };
         };
@@ -5224,9 +5421,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["ImageComplianceScanHistoryEntry"][];
                 };
             };
             /** @description Validation Error */
@@ -5255,9 +5450,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ImageComplianceSummaryResponse"];
                 };
             };
         };
