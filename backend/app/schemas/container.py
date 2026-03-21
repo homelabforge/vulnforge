@@ -130,3 +130,12 @@ class ContainerLastScan(BaseModel):
     low: int
     vulnerabilities: list[ContainerScanVulnerability]
     cves: list[str]
+
+
+class ContainerDiscoverResponse(BaseModel):
+    """Response from container discovery."""
+
+    total: int
+    discovered: list[str]
+    removed: int
+    message: str

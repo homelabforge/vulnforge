@@ -18,6 +18,15 @@ from app.database import get_db
 from app.dependencies.auth import require_admin
 from app.models import Vulnerability
 from app.models.user import User
+from app.schemas.common import StatusMessageResponse
+from app.schemas.maintenance import (
+    BackupCreateResponse,
+    BackupListResponse,
+    BackupRestoreResponse,
+    CacheStatsResponse,
+    KevRefreshResponse,
+    KevStatusResponse,
+)
 from app.services.cache_manager import get_cache
 from app.services.cleanup_service import CleanupService
 from app.services.kev import get_kev_service
@@ -83,14 +92,14 @@ async def get_cleanup_stats(
     return stats
 
 
-@router.get("/cache/stats")
+@router.get("/cache/stats", response_model=CacheStatsResponse)
 async def get_cache_stats(user: User = Depends(require_admin)):
     """Get cache statistics."""
     cache = get_cache()
     return cache.get_stats()
 
 
-@router.post("/cache/clear")
+@router.post("/cache/clear", response_model=StatusMessageResponse)
 async def clear_cache(user: User = Depends(require_admin)):
     """Clear all cached data."""
     cache = get_cache()
@@ -98,7 +107,7 @@ async def clear_cache(user: User = Depends(require_admin)):
     return {"status": "cleared", "message": "All cache entries cleared"}
 
 
-@router.post("/backup")
+@router.post("/backup", response_model=BackupCreateResponse)
 async def create_backup(user: User = Depends(require_admin)):
     """
     Create a manual backup of the database.
@@ -150,7 +159,7 @@ async def create_backup(user: User = Depends(require_admin)):
         raise HTTPException(status_code=500, detail=f"File system error during backup: {e}")
 
 
-@router.get("/backup/list")
+@router.get("/backup/list", response_model=BackupListResponse)
 async def list_backups(user: User = Depends(require_admin)):
     """
     List all available database backups.
@@ -224,7 +233,7 @@ async def download_backup(filename: str, user: User = Depends(require_admin)):
         raise HTTPException(status_code=500, detail=f"File system error during download: {e}")
 
 
-@router.delete("/backup/{filename}")
+@router.delete("/backup/{filename}", response_model=StatusMessageResponse)
 async def delete_backup(filename: str, user: User = Depends(require_admin)):
     """
     Delete a specific backup file.
@@ -260,7 +269,7 @@ async def delete_backup(filename: str, user: User = Depends(require_admin)):
         raise HTTPException(status_code=500, detail=f"File system error during deletion: {e}")
 
 
-@router.post("/backup/restore/{filename}")
+@router.post("/backup/restore/{filename}", response_model=BackupRestoreResponse)
 async def restore_backup(filename: str, user: User = Depends(require_admin)):
     """
     Restore database from a backup file.
@@ -360,7 +369,7 @@ async def upload_backup(file: bytes | None = None):
     )
 
 
-@router.post("/kev/refresh")
+@router.post("/kev/refresh", response_model=KevRefreshResponse)
 async def refresh_kev_catalog(
     db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)
 ):
@@ -445,7 +454,7 @@ async def refresh_kev_catalog(
         raise HTTPException(status_code=500, detail="Invalid KEV catalog format received from CISA")
 
 
-@router.get("/kev/status")
+@router.get("/kev/status", response_model=KevStatusResponse)
 async def get_kev_status(db: AsyncSession = Depends(get_db), user: User = Depends(require_admin)):
     """
     Get KEV catalog status and statistics.

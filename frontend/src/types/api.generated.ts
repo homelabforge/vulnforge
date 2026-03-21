@@ -2630,6 +2630,16 @@ export interface components {
             revoked_at: string | null;
         };
         /**
+         * ActionResponse
+         * @description Response for simple action endpoints (delete, clear, etc.).
+         */
+        ActionResponse: {
+            /** Detail */
+            detail?: string | null;
+            /** Message */
+            message: string;
+        };
+        /**
          * ActivityList
          * @description Paginated activity list response.
          */
@@ -2707,6 +2717,50 @@ export interface components {
             /** Version */
             version: string;
         };
+        /**
+         * BackupCreateResponse
+         * @description Response from creating a backup.
+         */
+        BackupCreateResponse: {
+            /** Created At */
+            created_at: string;
+            /** Filename */
+            filename: string;
+            /** Path */
+            path: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Size Mb */
+            size_mb: number;
+            /** Status */
+            status: string;
+        };
+        /**
+         * BackupListResponse
+         * @description Response listing available backups.
+         */
+        BackupListResponse: {
+            /** Backups */
+            backups: {
+                [key: string]: unknown;
+            }[];
+            /** Total */
+            total: number;
+        };
+        /**
+         * BackupRestoreResponse
+         * @description Response from restoring a backup.
+         */
+        BackupRestoreResponse: {
+            /** Message */
+            message: string;
+            /** Note */
+            note: string;
+            /** Safety Backup */
+            safety_backup: string;
+            /** Status */
+            status: string;
+        };
         /** Body_bulk_update_secrets_api_v1_secrets_bulk_update_post */
         Body_bulk_update_secrets_api_v1_secrets_bulk_update_post: {
             /** Secret Ids */
@@ -2737,6 +2791,37 @@ export interface components {
             settings: {
                 [key: string]: string;
             };
+        };
+        /**
+         * CacheStatsResponse
+         * @description Cache statistics.
+         */
+        CacheStatsResponse: {
+            /**
+             * Hit Rate
+             * @default 0
+             */
+            hit_rate: number;
+            /**
+             * Hits
+             * @default 0
+             */
+            hits: number;
+            /**
+             * Misses
+             * @default 0
+             */
+            misses: number;
+            /**
+             * Total Keys
+             * @default 0
+             */
+            total_keys: number;
+            /**
+             * Total Size Bytes
+             * @default 0
+             */
+            total_size_bytes: number;
         };
         /**
          * ChangePasswordRequest
@@ -2900,6 +2985,16 @@ export interface components {
             warned_checks: number;
         };
         /**
+         * ComplianceScanTriggerResponse
+         * @description Response from triggering a compliance scan.
+         */
+        ComplianceScanTriggerResponse: {
+            /** Message */
+            message: string;
+            /** Trigger Type */
+            trigger_type: string;
+        };
+        /**
          * ComplianceSummary
          * @description Summary of current compliance status.
          */
@@ -3040,6 +3135,20 @@ export interface components {
              */
             updated_at: string;
             vulnerability_summary?: components["schemas"]["ContainerVulnerabilitySummary"] | null;
+        };
+        /**
+         * ContainerDiscoverResponse
+         * @description Response from container discovery.
+         */
+        ContainerDiscoverResponse: {
+            /** Discovered */
+            discovered: string[];
+            /** Message */
+            message: string;
+            /** Removed */
+            removed: number;
+            /** Total */
+            total: number;
         };
         /**
          * ContainerLastScan
@@ -3249,6 +3358,16 @@ export interface components {
             total_cves_fixed: number;
             /** Total Cves Introduced */
             total_cves_introduced: number;
+        };
+        /**
+         * FPPatternDeleteResponse
+         * @description Response from deleting a false-positive pattern.
+         */
+        FPPatternDeleteResponse: {
+            /** Message */
+            message: string;
+            /** Unsuppressed Secrets */
+            unsuppressed_secrets: number;
         };
         /**
          * FPPatternSchema
@@ -3493,6 +3612,46 @@ export interface components {
             message: string;
         };
         /**
+         * KevRefreshResponse
+         * @description Response from refreshing the KEV catalog.
+         */
+        KevRefreshResponse: {
+            /** Kev Catalog Size */
+            kev_catalog_size: number;
+            /** Last Refresh */
+            last_refresh: string | null;
+            /** Message */
+            message: string;
+            /** Newly Flagged As Kev */
+            newly_flagged_as_kev: number;
+            /** Newly Unflagged As Kev */
+            newly_unflagged_as_kev: number;
+            /** Status */
+            status: string;
+            /** Vulnerabilities Checked */
+            vulnerabilities_checked: number;
+            /** Vulnerabilities Updated */
+            vulnerabilities_updated: number;
+        };
+        /**
+         * KevStatusResponse
+         * @description KEV catalog status.
+         */
+        KevStatusResponse: {
+            /** Cache Hours */
+            cache_hours: number;
+            /** Catalog Size */
+            catalog_size: number;
+            /** Kev Enabled */
+            kev_enabled: boolean;
+            /** Kev Vulnerabilities In Db */
+            kev_vulnerabilities_in_db: number;
+            /** Last Refresh */
+            last_refresh: string | null;
+            /** Needs Refresh */
+            needs_refresh: boolean;
+        };
+        /**
          * LoginRequest
          * @description Login request schema.
          */
@@ -3501,6 +3660,16 @@ export interface components {
             password: string;
             /** Username */
             username: string;
+        };
+        /**
+         * MessageResponse
+         * @description Generic success/failure response with a message.
+         */
+        MessageResponse: {
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
         };
         /**
          * NotificationLog
@@ -3665,6 +3834,40 @@ export interface components {
             title_template?: string | null;
         };
         /**
+         * NotificationStatsResponse
+         * @description Notification delivery statistics.
+         */
+        NotificationStatsResponse: {
+            /** By Type */
+            by_type: {
+                [key: string]: number;
+            };
+            /** Failed */
+            failed: number;
+            /** Sent */
+            sent: number;
+            /** Success Rate */
+            success_rate: number;
+            /** Total Notifications */
+            total_notifications: number;
+        };
+        /**
+         * OidcTestResponse
+         * @description Response from OIDC provider connectivity test.
+         */
+        OidcTestResponse: {
+            /** Endpoints Found */
+            endpoints_found: boolean;
+            /** Errors */
+            errors: string[];
+            /** Metadata Valid */
+            metadata_valid: boolean;
+            /** Provider Reachable */
+            provider_reachable: boolean;
+            /** Success */
+            success: boolean;
+        };
+        /**
          * PaginatedVulnerabilities
          * @description Paginated vulnerability response.
          */
@@ -3795,6 +3998,62 @@ export interface components {
             status: string;
         };
         /**
+         * ScanProgressSnapshot
+         * @description Combined scan and queue status for polling clients.
+         */
+        ScanProgressSnapshot: {
+            /** Current Container */
+            current_container?: string | null;
+            /** Progress Current */
+            progress_current?: number | null;
+            /** Progress Total */
+            progress_total?: number | null;
+            queue?: components["schemas"]["ScanQueueStatus"] | null;
+            /** Scan */
+            scan?: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status: string;
+        };
+        /**
+         * ScanQueueStatus
+         * @description Current scan queue status.
+         */
+        ScanQueueStatus: {
+            /**
+             * Active Scans
+             * @default 0
+             */
+            active_scans: number;
+            /**
+             * Batch Completed
+             * @default 0
+             */
+            batch_completed: number;
+            /**
+             * Batch Total
+             * @default 0
+             */
+            batch_total: number;
+            /** Current Scan */
+            current_scan?: string | null;
+            /**
+             * Queue Size
+             * @default 0
+             */
+            queue_size: number;
+            /** Scanner Stats */
+            scanner_stats?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Workers Active
+             * @default 0
+             */
+            workers_active: number;
+        };
+        /**
          * ScanRequest
          * @description Schema for requesting a scan.
          */
@@ -3915,6 +4174,16 @@ export interface components {
             title: string;
             /** Updated At */
             updated_at?: string | null;
+        };
+        /**
+         * SecretBulkUpdateResponse
+         * @description Response from bulk secret status update.
+         */
+        SecretBulkUpdateResponse: {
+            /** Total */
+            total: number;
+            /** Updated */
+            updated: number;
         };
         /**
          * SecretSummary
@@ -4083,6 +4352,16 @@ export interface components {
             username: string;
         };
         /**
+         * StatusMessageResponse
+         * @description Response with status and message fields.
+         */
+        StatusMessageResponse: {
+            /** Message */
+            message: string;
+            /** Status */
+            status: string;
+        };
+        /**
          * TestConnectionResult
          * @description Schema for test-connection responses.
          */
@@ -4112,6 +4391,20 @@ export interface components {
              * @default bearer
              */
             token_type: string;
+        };
+        /**
+         * TrivyDbInfoResponse
+         * @description Trivy vulnerability database information.
+         */
+        TrivyDbInfoResponse: {
+            /** Db Version */
+            db_version: string | null;
+            /** Downloaded At */
+            downloaded_at: string | null;
+            /** Next Update */
+            next_update: string | null;
+            /** Updated At */
+            updated_at: string | null;
         };
         /**
          * UpdateProfileRequest
@@ -4756,9 +5049,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ComplianceScanTriggerResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4964,7 +5255,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContainerDiscoverResponse"];
                 };
             };
         };
@@ -5169,7 +5460,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FPPatternDeleteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5470,7 +5761,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BackupCreateResponse"];
                 };
             };
         };
@@ -5521,7 +5812,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BackupListResponse"];
                 };
             };
         };
@@ -5543,7 +5834,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BackupRestoreResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5605,7 +5896,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StatusMessageResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5634,7 +5925,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StatusMessageResponse"];
                 };
             };
         };
@@ -5654,7 +5945,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CacheStatsResponse"];
                 };
             };
         };
@@ -5714,7 +6005,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["KevRefreshResponse"];
                 };
             };
         };
@@ -5734,7 +6025,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["KevStatusResponse"];
                 };
             };
         };
@@ -6040,7 +6331,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["NotificationStatsResponse"];
                 };
             };
         };
@@ -6060,7 +6351,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StatusMessageResponse"];
                 };
             };
         };
@@ -6080,7 +6371,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
         };
@@ -6100,7 +6391,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
         };
@@ -6120,7 +6411,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
         };
@@ -6140,7 +6431,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
         };
@@ -6160,7 +6451,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
         };
@@ -6180,7 +6471,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
         };
@@ -6200,7 +6491,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MessageResponse"];
                 };
             };
         };
@@ -6220,7 +6511,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScanProgressSnapshot"];
                 };
             };
         };
@@ -6340,7 +6631,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScanQueueStatus"];
                 };
             };
         };
@@ -6596,7 +6887,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SecretBulkUpdateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -6924,7 +7215,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TrivyDbInfoResponse"];
                 };
             };
         };
@@ -6944,7 +7235,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActionResponse"];
                 };
             };
         };
@@ -6997,7 +7288,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActionResponse"];
                 };
             };
         };
@@ -7126,7 +7417,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OidcTestResponse"];
                 };
             };
             /** @description Validation Error */
@@ -7159,7 +7450,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActionResponse"];
                 };
             };
             /** @description Validation Error */

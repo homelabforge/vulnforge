@@ -100,6 +100,13 @@ class ComplianceTriggerRequest(BaseModel):
     trigger_type: str = Field(default="manual", pattern="^(manual|scheduled)$")
 
 
+class ComplianceScanTriggerResponse(BaseModel):
+    """Response from triggering a compliance scan."""
+
+    message: str
+    trigger_type: str
+
+
 class ComplianceCurrentScan(BaseModel):
     """Current compliance scan status."""
 

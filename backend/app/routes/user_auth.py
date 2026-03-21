@@ -7,6 +7,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.schemas.common import ActionResponse
+from app.schemas.notification import OidcTestResponse
 from app.schemas.user_auth import (
     ChangePasswordRequest,
     LoginRequest,
@@ -112,7 +114,7 @@ async def setup_admin_account(
     }
 
 
-@router.post("/cancel-setup")
+@router.post("/cancel-setup", response_model=ActionResponse)
 async def cancel_setup(db: AsyncSession = Depends(get_db)):
     """Cancel setup and disable user authentication (only during initial setup).
 
@@ -195,7 +197,7 @@ async def login(
 # ============================================================================
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=ActionResponse)
 async def logout(
     response: Response,
     admin: dict = Depends(require_user_auth),
@@ -274,7 +276,7 @@ async def update_admin_profile_endpoint(
     }
 
 
-@router.put("/password")
+@router.put("/password", response_model=ActionResponse)
 async def change_password(
     password_data: ChangePasswordRequest,
     admin: dict = Depends(require_user_auth),
@@ -562,7 +564,7 @@ async def oidc_callback(
         )
 
 
-@router.post("/oidc/test")
+@router.post("/oidc/test", response_model=OidcTestResponse)
 async def test_oidc_connection(
     issuer_url: str = Body(...),
     client_id: str = Body(...),

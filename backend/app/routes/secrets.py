@@ -17,7 +17,12 @@ from app.repositories.dependencies import (
 from app.repositories.false_positive_pattern_repository import FalsePositivePatternRepository
 from app.repositories.secret_repository import SecretRepository
 from app.schemas.secret import Secret as SecretSchema
-from app.schemas.secret import SecretSummary, SecretUpdate, SecretWithContainer
+from app.schemas.secret import (
+    SecretBulkUpdateResponse,
+    SecretSummary,
+    SecretUpdate,
+    SecretWithContainer,
+)
 from app.services.activity_logger import ActivityLogger
 from app.validators import validate_status_filter
 
@@ -318,7 +323,7 @@ async def update_secret(
     return SecretSchema.model_validate(secret)
 
 
-@router.post("/secrets/bulk-update")
+@router.post("/secrets/bulk-update", response_model=SecretBulkUpdateResponse)
 async def bulk_update_secrets(
     secret_ids: list[int],
     update: SecretUpdate,

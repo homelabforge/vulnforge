@@ -7,6 +7,7 @@ from app.dependencies.auth import require_admin
 from app.models.user import User
 from app.repositories.dependencies import get_activity_logger, get_fp_pattern_repository
 from app.repositories.false_positive_pattern_repository import FalsePositivePatternRepository
+from app.schemas.common import FPPatternDeleteResponse
 from app.services.activity_logger import ActivityLogger
 
 router = APIRouter()
@@ -144,7 +145,7 @@ async def create_fp_pattern(
     )
 
 
-@router.delete("/{pattern_id}")
+@router.delete("/{pattern_id}", response_model=FPPatternDeleteResponse)
 async def delete_fp_pattern(
     pattern_id: int,
     fp_repo: FalsePositivePatternRepository = Depends(get_fp_pattern_repository),

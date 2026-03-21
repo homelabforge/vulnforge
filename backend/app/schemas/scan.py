@@ -143,3 +143,26 @@ class CveDeltaResponse(BaseModel):
     total_scans: int
     summary: CveDeltaSummary
     scans: list[CveDeltaScanEntry]
+
+
+class ScanQueueStatus(BaseModel):
+    """Current scan queue status."""
+
+    queue_size: int = 0
+    active_scans: int = 0
+    current_scan: str | None = None
+    workers_active: int = 0
+    batch_total: int = 0
+    batch_completed: int = 0
+    scanner_stats: dict | None = None
+
+
+class ScanProgressSnapshot(BaseModel):
+    """Combined scan and queue status for polling clients."""
+
+    status: str  # idle, scanning
+    current_container: str | None = None
+    progress_current: int | None = None
+    progress_total: int | None = None
+    scan: dict | None = None
+    queue: ScanQueueStatus | None = None

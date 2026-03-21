@@ -84,3 +84,23 @@ class NotificationRule(NotificationRuleBase):
     id: int
     created_at: datetime
     updated_at: datetime
+
+
+class NotificationStatsResponse(BaseModel):
+    """Notification delivery statistics."""
+
+    total_notifications: int
+    sent: int
+    failed: int
+    success_rate: float
+    by_type: dict[str, int]
+
+
+class OidcTestResponse(BaseModel):
+    """Response from OIDC provider connectivity test."""
+
+    success: bool
+    provider_reachable: bool
+    metadata_valid: bool
+    endpoints_found: bool
+    errors: list[str]

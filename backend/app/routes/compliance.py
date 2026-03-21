@@ -27,6 +27,7 @@ from app.schemas.compliance import (
     ComplianceCurrentScan,
     ComplianceFindingIgnoreRequest,
     ComplianceFindingUnignoreRequest,
+    ComplianceScanTriggerResponse,
     ComplianceSummary,
     ComplianceTriggerRequest,
 )
@@ -74,7 +75,7 @@ async def _run_compliance_scan(docker_service: DockerService, trigger_type: str)
         _current_scan_id = None
 
 
-@router.post("/scan", response_model=dict)
+@router.post("/scan", response_model=ComplianceScanTriggerResponse)
 async def trigger_compliance_scan(
     request: ComplianceTriggerRequest,
     _user: User = Depends(require_admin),  # Admin required but not used

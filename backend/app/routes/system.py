@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.config import settings
+from app.schemas.common import TrivyDbInfoResponse
 from app.services.docker_client import DockerService
 from app.services.docker_hub import get_docker_hub_client
 from app.services.trivy_scanner import TrivyScanner
@@ -54,7 +55,7 @@ async def get_app_info() -> AppInfoResponse:
     return AppInfoResponse(name="VulnForge", version=_APP_VERSION)
 
 
-@router.get("/trivy-db-info")
+@router.get("/trivy-db-info", response_model=TrivyDbInfoResponse)
 async def get_trivy_db_info():
     """Get Trivy vulnerability database information."""
     docker_service = DockerService()

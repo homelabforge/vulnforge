@@ -188,6 +188,31 @@
         "title": "APIKeyResponse",
         "type": "object"
       },
+      "ActionResponse": {
+        "description": "Response for simple action endpoints (delete, clear, etc.).",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "ActionResponse",
+        "type": "object"
+      },
       "ActivityList": {
         "description": "Paginated activity list response.",
         "properties": {
@@ -368,6 +393,97 @@
         "title": "AppInfoResponse",
         "type": "object"
       },
+      "BackupCreateResponse": {
+        "description": "Response from creating a backup.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "size_mb": {
+            "title": "Size Mb",
+            "type": "number"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "filename",
+          "path",
+          "size_bytes",
+          "size_mb",
+          "created_at"
+        ],
+        "title": "BackupCreateResponse",
+        "type": "object"
+      },
+      "BackupListResponse": {
+        "description": "Response listing available backups.",
+        "properties": {
+          "backups": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Backups",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "backups",
+          "total"
+        ],
+        "title": "BackupListResponse",
+        "type": "object"
+      },
+      "BackupRestoreResponse": {
+        "description": "Response from restoring a backup.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "safety_backup": {
+            "title": "Safety Backup",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message",
+          "safety_backup",
+          "note"
+        ],
+        "title": "BackupRestoreResponse",
+        "type": "object"
+      },
       "Body_bulk_update_secrets_api_v1_secrets_bulk_update_post": {
         "properties": {
           "secret_ids": {
@@ -446,6 +562,38 @@
           "settings"
         ],
         "title": "BulkSettingsUpdate",
+        "type": "object"
+      },
+      "CacheStatsResponse": {
+        "description": "Cache statistics.",
+        "properties": {
+          "hit_rate": {
+            "default": 0.0,
+            "title": "Hit Rate",
+            "type": "number"
+          },
+          "hits": {
+            "default": 0,
+            "title": "Hits",
+            "type": "integer"
+          },
+          "misses": {
+            "default": 0,
+            "title": "Misses",
+            "type": "integer"
+          },
+          "total_keys": {
+            "default": 0,
+            "title": "Total Keys",
+            "type": "integer"
+          },
+          "total_size_bytes": {
+            "default": 0,
+            "title": "Total Size Bytes",
+            "type": "integer"
+          }
+        },
+        "title": "CacheStatsResponse",
         "type": "object"
       },
       "ChangePasswordRequest": {
@@ -864,6 +1012,25 @@
         "title": "ComplianceScan",
         "type": "object"
       },
+      "ComplianceScanTriggerResponse": {
+        "description": "Response from triggering a compliance scan.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "trigger_type": {
+            "title": "Trigger Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "trigger_type"
+        ],
+        "title": "ComplianceScanTriggerResponse",
+        "type": "object"
+      },
       "ComplianceSummary": {
         "description": "Summary of current compliance status.",
         "properties": {
@@ -1190,6 +1357,38 @@
           "updated_at"
         ],
         "title": "Container",
+        "type": "object"
+      },
+      "ContainerDiscoverResponse": {
+        "description": "Response from container discovery.",
+        "properties": {
+          "discovered": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Discovered",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "discovered",
+          "removed",
+          "message"
+        ],
+        "title": "ContainerDiscoverResponse",
         "type": "object"
       },
       "ContainerLastScan": {
@@ -1820,6 +2019,25 @@
           "net_change"
         ],
         "title": "CveDeltaSummary",
+        "type": "object"
+      },
+      "FPPatternDeleteResponse": {
+        "description": "Response from deleting a false-positive pattern.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "unsuppressed_secrets": {
+            "title": "Unsuppressed Secrets",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "message",
+          "unsuppressed_secrets"
+        ],
+        "title": "FPPatternDeleteResponse",
         "type": "object"
       },
       "FPPatternSchema": {
@@ -2628,6 +2846,108 @@
         "title": "ImageScanTriggerResponse",
         "type": "object"
       },
+      "KevRefreshResponse": {
+        "description": "Response from refreshing the KEV catalog.",
+        "properties": {
+          "kev_catalog_size": {
+            "title": "Kev Catalog Size",
+            "type": "integer"
+          },
+          "last_refresh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Refresh"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "newly_flagged_as_kev": {
+            "title": "Newly Flagged As Kev",
+            "type": "integer"
+          },
+          "newly_unflagged_as_kev": {
+            "title": "Newly Unflagged As Kev",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "vulnerabilities_checked": {
+            "title": "Vulnerabilities Checked",
+            "type": "integer"
+          },
+          "vulnerabilities_updated": {
+            "title": "Vulnerabilities Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "message",
+          "kev_catalog_size",
+          "last_refresh",
+          "vulnerabilities_checked",
+          "vulnerabilities_updated",
+          "newly_flagged_as_kev",
+          "newly_unflagged_as_kev"
+        ],
+        "title": "KevRefreshResponse",
+        "type": "object"
+      },
+      "KevStatusResponse": {
+        "description": "KEV catalog status.",
+        "properties": {
+          "cache_hours": {
+            "title": "Cache Hours",
+            "type": "integer"
+          },
+          "catalog_size": {
+            "title": "Catalog Size",
+            "type": "integer"
+          },
+          "kev_enabled": {
+            "title": "Kev Enabled",
+            "type": "boolean"
+          },
+          "kev_vulnerabilities_in_db": {
+            "title": "Kev Vulnerabilities In Db",
+            "type": "integer"
+          },
+          "last_refresh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Refresh"
+          },
+          "needs_refresh": {
+            "title": "Needs Refresh",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kev_enabled",
+          "catalog_size",
+          "last_refresh",
+          "needs_refresh",
+          "kev_vulnerabilities_in_db",
+          "cache_hours"
+        ],
+        "title": "KevStatusResponse",
+        "type": "object"
+      },
       "LoginRequest": {
         "description": "Login request schema.",
         "properties": {
@@ -2649,6 +2969,25 @@
           "password"
         ],
         "title": "LoginRequest",
+        "type": "object"
+      },
+      "MessageResponse": {
+        "description": "Generic success/failure response with a message.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ],
+        "title": "MessageResponse",
         "type": "object"
       },
       "NotificationLog": {
@@ -3151,6 +3490,80 @@
         "title": "NotificationRuleUpdate",
         "type": "object"
       },
+      "NotificationStatsResponse": {
+        "description": "Notification delivery statistics.",
+        "properties": {
+          "by_type": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Type",
+            "type": "object"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "sent": {
+            "title": "Sent",
+            "type": "integer"
+          },
+          "success_rate": {
+            "title": "Success Rate",
+            "type": "number"
+          },
+          "total_notifications": {
+            "title": "Total Notifications",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_notifications",
+          "sent",
+          "failed",
+          "success_rate",
+          "by_type"
+        ],
+        "title": "NotificationStatsResponse",
+        "type": "object"
+      },
+      "OidcTestResponse": {
+        "description": "Response from OIDC provider connectivity test.",
+        "properties": {
+          "endpoints_found": {
+            "title": "Endpoints Found",
+            "type": "boolean"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "metadata_valid": {
+            "title": "Metadata Valid",
+            "type": "boolean"
+          },
+          "provider_reachable": {
+            "title": "Provider Reachable",
+            "type": "boolean"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "provider_reachable",
+          "metadata_valid",
+          "endpoints_found",
+          "errors"
+        ],
+        "title": "OidcTestResponse",
+        "type": "object"
+      },
       "PaginatedVulnerabilities": {
         "description": "Paginated vulnerability response.",
         "properties": {
@@ -3473,6 +3886,130 @@
           "created_at"
         ],
         "title": "ScanJobSchema",
+        "type": "object"
+      },
+      "ScanProgressSnapshot": {
+        "description": "Combined scan and queue status for polling clients.",
+        "properties": {
+          "current_container": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Container"
+          },
+          "progress_current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Current"
+          },
+          "progress_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Total"
+          },
+          "queue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScanQueueStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scan": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ScanProgressSnapshot",
+        "type": "object"
+      },
+      "ScanQueueStatus": {
+        "description": "Current scan queue status.",
+        "properties": {
+          "active_scans": {
+            "default": 0,
+            "title": "Active Scans",
+            "type": "integer"
+          },
+          "batch_completed": {
+            "default": 0,
+            "title": "Batch Completed",
+            "type": "integer"
+          },
+          "batch_total": {
+            "default": 0,
+            "title": "Batch Total",
+            "type": "integer"
+          },
+          "current_scan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Scan"
+          },
+          "queue_size": {
+            "default": 0,
+            "title": "Queue Size",
+            "type": "integer"
+          },
+          "scanner_stats": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scanner Stats"
+          },
+          "workers_active": {
+            "default": 0,
+            "title": "Workers Active",
+            "type": "integer"
+          }
+        },
+        "title": "ScanQueueStatus",
         "type": "object"
       },
       "ScanRequest": {
@@ -3805,6 +4342,25 @@
           "created_at"
         ],
         "title": "Secret",
+        "type": "object"
+      },
+      "SecretBulkUpdateResponse": {
+        "description": "Response from bulk secret status update.",
+        "properties": {
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated",
+          "total"
+        ],
+        "title": "SecretBulkUpdateResponse",
         "type": "object"
       },
       "SecretSummary": {
@@ -4177,6 +4733,25 @@
         "title": "SetupResponse",
         "type": "object"
       },
+      "StatusMessageResponse": {
+        "description": "Response with status and message fields.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "StatusMessageResponse",
+        "type": "object"
+      },
       "TestConnectionResult": {
         "description": "Schema for test-connection responses.",
         "properties": {
@@ -4243,6 +4818,63 @@
           "expires_in"
         ],
         "title": "TokenResponse",
+        "type": "object"
+      },
+      "TrivyDbInfoResponse": {
+        "description": "Trivy vulnerability database information.",
+        "properties": {
+          "db_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Db Version"
+          },
+          "downloaded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Downloaded At"
+          },
+          "next_update": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Update"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "db_version",
+          "updated_at",
+          "next_update",
+          "downloaded_at"
+        ],
+        "title": "TrivyDbInfoResponse",
         "type": "object"
       },
       "UpdateProfileRequest": {
@@ -5636,9 +6268,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Trigger Compliance Scan Api V1 Compliance Scan Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ComplianceScanTriggerResponse"
                 }
               }
             },
@@ -5947,7 +6577,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ContainerDiscoverResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -6242,7 +6874,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/FPPatternDeleteResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -6681,7 +7315,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/BackupCreateResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -6742,7 +7378,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/BackupListResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -6773,7 +7411,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/BackupRestoreResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -6863,7 +7503,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/StatusMessageResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -6893,7 +7535,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/StatusMessageResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -6913,7 +7557,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CacheStatsResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -6973,7 +7619,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/KevRefreshResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -6993,7 +7641,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/KevStatusResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7452,7 +8102,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationStatsResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7472,7 +8124,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/StatusMessageResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7492,7 +8146,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7512,7 +8168,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7532,7 +8190,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7552,7 +8212,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7572,7 +8234,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7592,7 +8256,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7612,7 +8278,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -7632,7 +8300,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ScanProgressSnapshot"
+                }
               }
             },
             "description": "Successful Response"
@@ -7836,7 +8506,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ScanQueueStatus"
+                }
               }
             },
             "description": "Successful Response"
@@ -8236,7 +8908,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/SecretBulkUpdateResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -8698,7 +9372,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TrivyDbInfoResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -8718,7 +9394,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -8782,7 +9460,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -8964,7 +9644,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/OidcTestResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -9010,7 +9692,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResponse"
+                }
               }
             },
             "description": "Successful Response"

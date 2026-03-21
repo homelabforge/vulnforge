@@ -12,11 +12,13 @@ from app.dependencies.auth import require_admin
 from app.models import NotificationLog as NotificationLogModel
 from app.models import NotificationRule as NotificationRuleModel
 from app.models.user import User
+from app.schemas.common import MessageResponse, StatusMessageResponse
 from app.schemas.notification import (
     NotificationLog,
     NotificationRule,
     NotificationRuleCreate,
     NotificationRuleUpdate,
+    NotificationStatsResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -93,7 +95,7 @@ async def get_notifications_for_scan(
     return [NotificationLog.model_validate(log) for log in logs]
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=NotificationStatsResponse)
 async def get_notification_stats(db: AsyncSession = Depends(get_db)):
     """Get notification statistics."""
     # Total notifications
@@ -260,7 +262,7 @@ async def toggle_notification_rule(
 # ============================================
 
 
-@router.post("/test")
+@router.post("/test", response_model=StatusMessageResponse)
 async def send_test_notification(db: AsyncSession = Depends(get_db)):
     """Send a test notification to verify ntfy configuration (legacy endpoint)."""
     from app.services.notifications.ntfy import NtfyNotificationService
@@ -301,7 +303,7 @@ async def send_test_notification(db: AsyncSession = Depends(get_db)):
         await service.close()
 
 
-@router.post("/test/ntfy")
+@router.post("/test/ntfy", response_model=MessageResponse)
 async def test_ntfy_connection(db: AsyncSession = Depends(get_db)):
     """Test ntfy server connection."""
     from app.services.settings_manager import SettingsManager
@@ -340,7 +342,7 @@ async def test_ntfy_connection(db: AsyncSession = Depends(get_db)):
         return {"success": False, "message": "Connection test failed. Check logs for details."}
 
 
-@router.post("/test/gotify")
+@router.post("/test/gotify", response_model=MessageResponse)
 async def test_gotify_connection(db: AsyncSession = Depends(get_db)):
     """Test Gotify server connection."""
     from app.services.settings_manager import SettingsManager
@@ -374,7 +376,7 @@ async def test_gotify_connection(db: AsyncSession = Depends(get_db)):
         return {"success": False, "message": "Connection test failed. Check logs for details."}
 
 
-@router.post("/test/pushover")
+@router.post("/test/pushover", response_model=MessageResponse)
 async def test_pushover_connection(db: AsyncSession = Depends(get_db)):
     """Test Pushover connection."""
     from app.services.settings_manager import SettingsManager
@@ -428,7 +430,7 @@ async def test_pushover_connection(db: AsyncSession = Depends(get_db)):
         return {"success": False, "message": "Connection test failed. Check logs for details."}
 
 
-@router.post("/test/slack")
+@router.post("/test/slack", response_model=MessageResponse)
 async def test_slack_connection(db: AsyncSession = Depends(get_db)):
     """Test Slack webhook connection."""
     from app.services.settings_manager import SettingsManager
@@ -467,7 +469,7 @@ async def test_slack_connection(db: AsyncSession = Depends(get_db)):
         return {"success": False, "message": "Connection test failed. Check logs for details."}
 
 
-@router.post("/test/discord")
+@router.post("/test/discord", response_model=MessageResponse)
 async def test_discord_connection(db: AsyncSession = Depends(get_db)):
     """Test Discord webhook connection."""
     from app.services.settings_manager import SettingsManager
@@ -506,7 +508,7 @@ async def test_discord_connection(db: AsyncSession = Depends(get_db)):
         return {"success": False, "message": "Connection test failed. Check logs for details."}
 
 
-@router.post("/test/telegram")
+@router.post("/test/telegram", response_model=MessageResponse)
 async def test_telegram_connection(db: AsyncSession = Depends(get_db)):
     """Test Telegram bot connection."""
     from app.services.settings_manager import SettingsManager
@@ -563,7 +565,7 @@ async def test_telegram_connection(db: AsyncSession = Depends(get_db)):
         return {"success": False, "message": "Connection test failed. Check logs for details."}
 
 
-@router.post("/test/email")
+@router.post("/test/email", response_model=MessageResponse)
 async def test_email_connection(db: AsyncSession = Depends(get_db)):
     """Test SMTP email connection."""
     from app.services.settings_manager import SettingsManager

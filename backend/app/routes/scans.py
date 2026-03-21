@@ -22,6 +22,7 @@ from app.schemas import (
     ScanTriggerResponse,
 )
 from app.schemas import Scan as ScanSchema
+from app.schemas.scan import ScanProgressSnapshot, ScanQueueStatus
 from app.services.scan_events import scan_events
 from app.services.scan_queue import ScanPriority, get_scan_queue
 from app.services.scan_trends import build_scan_trends
@@ -92,7 +93,7 @@ async def get_scan_history(
     return [ScanSchema.model_validate(s) for s in scans]
 
 
-@router.get("/current")
+@router.get("/current", response_model=ScanProgressSnapshot)
 @limiter.limit("120/minute")
 async def get_current_scan(request: Request):
     """
@@ -151,7 +152,7 @@ async def get_scan_trends(
     return await build_scan_trends(db, window_days=window_days)
 
 
-@router.get("/queue/status")
+@router.get("/queue/status", response_model=ScanQueueStatus)
 @limiter.limit("120/minute")
 async def get_queue_status(request: Request):
     """Get scan queue status."""

@@ -16,6 +16,7 @@ from app.schemas import (
     ContainerSummary,
     ContainerUpdate,
 )
+from app.schemas.container import ContainerDiscoverResponse
 from app.services.activity_logger import ActivityLogger
 from app.services.container_schema_builder import build_last_scan, build_vuln_summary
 from app.services.docker_client import DockerService
@@ -178,7 +179,7 @@ async def update_container(
     return await get_container(container_id, container_repo)
 
 
-@router.post("/discover")
+@router.post("/discover", response_model=ContainerDiscoverResponse)
 async def discover_containers(
     container_repo: ContainerRepository = Depends(get_container_repository),
     db: AsyncSession = Depends(get_db),

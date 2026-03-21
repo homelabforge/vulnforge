@@ -79,3 +79,10 @@ class SecretSummary(BaseModel):
     low_count: int
     affected_containers: int
     top_categories: dict[str, int]
+
+
+class SecretBulkUpdateResponse(BaseModel):
+    """Response from bulk secret status update."""
+
+    updated: int
+    total: int
