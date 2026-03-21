@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dev Dependencies
+- **@tailwindcss/vite**: 4.2.1 → 4.2.2
+- **eslint**: 10.0.3 → 10.1.0
+- **jsdom**: 29.0.0 → 29.0.1
+- **pytest-cov**: 7.0.0 → 7.1.0
+- **ruff**: 0.15.6 → 0.15.7
+- **tailwindcss**: 4.2.1 → 4.2.2
+- **vite**: 8.0.0 → 8.0.1
+
+### App Dependencies
+- **@tanstack/react-query**: 5.90.21 → 5.94.5
+- **croniter**: 6.0.0 → 6.2.2
+
 ### Changed
 - Extract compliance and image compliance scan logic from routes to services
 - Extract scan result persistence from ScanQueue to ScanResultProcessor
