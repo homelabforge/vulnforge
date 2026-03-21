@@ -124,10 +124,11 @@ class TestCreateSetting:
             json={"value": "7200"},
         )
 
-        # Assert
+        # Assert — write endpoints now return SettingUpdateResponse wrapper
         assert response.status_code == 200
         data = response.json()
-        assert data["value"] == "7200"
+        assert data["setting"]["value"] == "7200"
+        assert data["restart_required"] is False  # scan_interval is not a boot-time setting
 
         # Verify in database
         result = await db_session.execute(select(Setting).where(Setting.key == "scan_interval"))

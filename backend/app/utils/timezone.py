@@ -1,4 +1,13 @@
-"""Timezone utilities for VulnForge."""
+"""Timezone utilities for VulnForge.
+
+Reads timezone from ``app.config.settings.timezone`` synchronously. This value
+is mutated in-process by the settings route when the user changes timezone.
+This pattern is intentional — VulnForge runs as a single Granian worker (see
+``main.py`` docstring), so ``settings`` is a shared in-process object.
+
+Do NOT route this through SettingsManager — ``get_now()`` is synchronous and
+used in ORM model defaults (``container.py``, ``scan.py``).
+"""
 
 from datetime import datetime
 from zoneinfo import ZoneInfo

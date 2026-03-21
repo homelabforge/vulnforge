@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-import subprocess
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -13,18 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Container, Scan, ScanJob, Vulnerability
+from app.models import Container, Scan, ScanJob
 from app.schemas import Scan as ScanSchema
 from app.schemas import ScanJobSchema, ScanRequest
-from app.services.docker_client import DockerService
-from app.services.kev import get_kev_service
-from app.services.notifications import NotificationDispatcher
-from app.services.scan_errors import get_error_classifier
 from app.services.scan_events import scan_events
 from app.services.scan_queue import ScanPriority, get_scan_queue
 from app.services.scan_trends import build_scan_trends
-from app.services.settings_manager import SettingsManager
-from app.services.trivy_scanner import TrivyScanner
 from app.utils.timezone import get_now
 
 logger = logging.getLogger(__name__)
@@ -38,177 +31,6 @@ limiter = Limiter(key_func=get_remote_address)
 def _format_sse(payload: dict, event: str = "scan-status") -> str:
     """Format a payload for Server-Sent Events."""
     return f"event: {event}\ndata: {json.dumps(payload)}\n\n"
-
-
-async def perform_scan(container_id: int, db: AsyncSession, docker_service: DockerService):
-    """Perform a single container scan.
-
-    .. deprecated::
-        This legacy synchronous scan path is deprecated. Use
-        :class:`~app.services.scan_orchestrator.ScanOrchestrator` instead,
-        which routes through the scan queue and provides ScanJob correlation,
-        CVE delta, Dive analysis, secret scanning, and batch notifications.
-        This function will be removed in the next major release.
-    """
-    logger.warning(
-        "perform_scan() is deprecated — use ScanOrchestrator.enqueue_containers() instead"
-    )
-    # Get container
-    result = await db.execute(select(Container).where(Container.id == container_id))
-    container = result.scalar_one_or_none()
-
-    if not container:
-        return
-
-    # Create scan record
-    scan = Scan(
-        container_id=container.id,
-        image_scanned=f"{container.image}:{container.image_tag}",
-        scan_status="in_progress",
-    )
-    db.add(scan)
-    await db.commit()
-    await db.refresh(scan)
-
-    try:
-        # Execute Trivy scan
-        scanner = TrivyScanner(docker_service)
-        scan_data = await scanner.scan_image(f"{container.image}:{container.image_tag}")
-
-        if scan_data is None:
-            # Scan failed
-            scan.scan_status = "failed"
-            scan.error_message = "Trivy scan returned no data"
-            await db.commit()
-            return
-
-        # Update scan with results
-        scan.scan_status = "completed"
-        scan.scan_duration_seconds = scan_data["scan_duration_seconds"]
-        scan.total_vulns = scan_data["total_count"]
-        scan.fixable_vulns = scan_data["fixable_count"]
-        scan.critical_count = scan_data["critical_count"]
-        scan.high_count = scan_data["high_count"]
-        scan.medium_count = scan_data["medium_count"]
-        scan.low_count = scan_data["low_count"]
-
-        # Check if KEV checking is enabled
-        settings_manager = SettingsManager(db)
-        kev_enabled = await settings_manager.get_bool("kev_checking_enabled", default=True)
-
-        # Get KEV service and ensure catalog is loaded
-        kev_service = get_kev_service()
-        if kev_enabled:
-            await kev_service.ensure_catalog_loaded()
-
-        # Store vulnerabilities
-        kev_count = 0
-        for vuln_data in scan_data["vulnerabilities"]:
-            # Check KEV status
-            is_kev = False
-            kev_added_date = None
-            kev_due_date = None
-
-            if kev_enabled:
-                kev_info = kev_service.get_kev_info(vuln_data["cve_id"])
-                if kev_info:
-                    is_kev = True
-                    kev_added_date = kev_info.get("date_added")
-                    kev_due_date = kev_info.get("due_date")
-                    kev_count += 1
-
-            vuln = Vulnerability(
-                scan_id=scan.id,
-                cve_id=vuln_data["cve_id"],
-                package_name=vuln_data["package_name"],
-                severity=vuln_data["severity"],
-                cvss_score=vuln_data["cvss_score"],
-                title=vuln_data.get("title"),
-                description=vuln_data.get("description"),
-                installed_version=vuln_data["installed_version"],
-                fixed_version=vuln_data.get("fixed_version"),
-                is_fixable=vuln_data["is_fixable"],
-                primary_url=vuln_data.get("primary_url"),
-                references=vuln_data.get("references"),
-                is_kev=is_kev,
-                kev_added_date=kev_added_date,
-                kev_due_date=kev_due_date,
-            )
-            db.add(vuln)
-
-        # Update container summary
-        container.last_scan_date = get_now()
-        container.last_scan_status = "completed"
-        container.total_vulns = scan.total_vulns
-        container.fixable_vulns = scan.fixable_vulns
-        container.critical_count = scan.critical_count
-        container.high_count = scan.high_count
-        container.medium_count = scan.medium_count
-        container.low_count = scan.low_count
-
-        await db.commit()
-
-        # Send notifications via multi-service dispatcher
-        dispatcher = NotificationDispatcher(db)
-
-        # Send notification if KEV vulnerabilities found (highest priority)
-        if kev_count > 0:
-            await dispatcher.notify_kev_detected(container.name, kev_count)
-
-        # Send notification if critical vulnerabilities found
-        if scan.critical_count > 0:
-            fixable_critical = sum(
-                1
-                for v in scan_data["vulnerabilities"]
-                if v["severity"] == "CRITICAL" and v["is_fixable"]
-            )
-            await dispatcher.notify_critical_vulnerabilities(
-                container.name, scan.critical_count, fixable_critical
-            )
-
-    except subprocess.TimeoutExpired as e:
-        logger.error(f"Scan timed out for container {container.name}: {e}")
-        scan.scan_status = "failed"
-        scan.error_message = "Scan timed out"
-        await db.commit()
-        dispatcher = NotificationDispatcher(db)
-        await dispatcher.notify_scan_failed(
-            container.name, "Scan timed out - try increasing timeout in settings"
-        )
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Scanner process failed for {container.name}: exit code {e.returncode}")
-        error_classifier = get_error_classifier()
-        classified = error_classifier.classify_error("Trivy", str(e.stderr) if e.stderr else str(e))
-        scan.scan_status = "failed"
-        scan.error_message = classified.user_message
-        await db.commit()
-        dispatcher = NotificationDispatcher(db)
-        await dispatcher.notify_scan_failed(container.name, classified.user_message)
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse scan output for {container.name}: {e}")
-        scan.scan_status = "failed"
-        scan.error_message = "Invalid scan output format"
-        await db.commit()
-        dispatcher = NotificationDispatcher(db)
-        await dispatcher.notify_scan_failed(container.name, "Scanner returned invalid output")
-    except FileNotFoundError as e:
-        logger.error(f"Scanner binary not found: {e}")
-        scan.scan_status = "failed"
-        scan.error_message = "Scanner binary not found"
-        await db.commit()
-        dispatcher = NotificationDispatcher(db)
-        await dispatcher.notify_scan_failed(container.name, "Trivy scanner not installed")
-    except Exception as e:
-        # INTENTIONAL: Catch-all for unexpected scanner errors to ensure scan record is updated.
-        # The error is classified for user-friendly messaging.
-        logger.error(f"Unexpected scan error for {container.name}: {e}", exc_info=True)
-        error_classifier = get_error_classifier()
-        classified = error_classifier.classify_error("Trivy", str(e))
-        scan.scan_status = "failed"
-        scan.error_message = classified.user_message
-        await db.commit()
-        dispatcher = NotificationDispatcher(db)
-        await dispatcher.notify_scan_failed(container.name, classified.user_message)
 
 
 @router.post("/scan", response_model=dict)

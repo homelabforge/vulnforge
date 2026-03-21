@@ -12,6 +12,8 @@ from app.models import Setting
 from app.models.user import User
 from app.schemas import Setting as SettingSchema
 from app.schemas import SettingUpdate
+from app.schemas.setting import SettingUpdateResponse
+from app.services.settings_manager import SettingsManager
 
 router = APIRouter()
 
@@ -52,29 +54,35 @@ async def get_setting(
     return SettingSchema.model_validate(setting)
 
 
-@router.put("/{key}", response_model=SettingSchema)
+@router.put("/{key}", response_model=SettingUpdateResponse)
 async def update_setting(
     key: str,
     update: SettingUpdate,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ):
-    """Update setting value with validation. Requires admin privileges."""
-    from app.services.settings_manager import SettingsManager
+    """Update setting value with validation. Requires admin privileges.
 
+    Returns the updated setting plus a ``restart_required`` flag for
+    boot-time settings (parallel_scans, scan_schedule, etc.).
+    """
     settings_manager = SettingsManager(db)
 
     # Use SettingsManager.set() which includes validation
     setting = await settings_manager.set(key, update.value)
 
-    # Keep runtime config in sync for timezone setting
+    # Timezone is an in-process runtime value — mutate app_settings directly.
+    # This works because VulnForge runs as a single Granian worker (see main.py).
     if key == "timezone":
         app_settings.timezone = update.value
 
-    return SettingSchema.model_validate(setting)
+    return SettingUpdateResponse(
+        setting=SettingSchema.model_validate(setting),
+        restart_required=key in SettingsManager.BOOT_SETTINGS,
+    )
 
 
-@router.post("/bulk", response_model=list[SettingSchema])
+@router.post("/bulk", response_model=list[SettingUpdateResponse])
 async def bulk_update_settings(
     bulk_update: BulkSettingsUpdate,
     db: AsyncSession = Depends(get_db),
@@ -84,23 +92,26 @@ async def bulk_update_settings(
     Bulk update multiple settings at once with validation.
     Requires admin privileges.
 
-    All settings are validated before being saved to ensure data integrity.
+    Each response item includes ``restart_required`` if the setting is boot-time.
     """
-    from app.services.settings_manager import SettingsManager
-
     settings_manager = SettingsManager(db)
-    updated_settings = []
+    results: list[SettingUpdateResponse] = []
 
     for key, value in bulk_update.settings.items():
-        # Use SettingsManager.set() which includes validation
         setting = await settings_manager.set(key, value)
-        updated_settings.append(setting)
 
-        # Keep runtime config in sync for timezone setting
+        # Timezone is an in-process runtime value (single-worker pattern)
         if key == "timezone":
             app_settings.timezone = value
 
-    return [SettingSchema.model_validate(s) for s in updated_settings]
+        results.append(
+            SettingUpdateResponse(
+                setting=SettingSchema.model_validate(setting),
+                restart_required=key in SettingsManager.BOOT_SETTINGS,
+            )
+        )
+
+    return results
 
 
 @router.post("/test/docker", response_model=TestConnectionResult)

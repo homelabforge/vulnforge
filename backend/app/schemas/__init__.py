@@ -17,7 +17,7 @@ from app.schemas.container import (
     ContainerVulnerabilitySummary,
 )
 from app.schemas.scan import Scan, ScanCreate, ScanJobSchema, ScanProgress, ScanRequest, ScanSummary
-from app.schemas.setting import Setting, SettingUpdate
+from app.schemas.setting import Setting, SettingUpdate, SettingUpdateResponse
 from app.schemas.vulnerability import (
     PaginatedVulnerabilities,
     RemediationGroup,
@@ -64,6 +64,7 @@ __all__ = [
     "VulnerabilityStats",
     "Setting",
     "SettingUpdate",
+    "SettingUpdateResponse",
     "WidgetSummary",
     "WidgetCritical",
     "WidgetTopContainers",

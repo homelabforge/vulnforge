@@ -1,4 +1,4 @@
-"""Dependency injection for repositories."""
+"""Dependency injection for repositories and services."""
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,7 @@ from app.repositories.false_positive_pattern_repository import FalsePositivePatt
 from app.repositories.secret_repository import SecretRepository
 from app.repositories.vulnerability_repository import VulnerabilityRepository
 from app.services.activity_logger import ActivityLogger
+from app.services.vulnerability_status_service import VulnerabilityStatusService
 
 
 def get_secret_repository(db: AsyncSession = Depends(get_db)) -> SecretRepository:
@@ -78,3 +79,10 @@ def get_activity_logger(db: AsyncSession = Depends(get_db)) -> ActivityLogger:
         ActivityLogger instance
     """
     return ActivityLogger(db)
+
+
+def get_vulnerability_status_service(
+    db: AsyncSession = Depends(get_db),
+) -> VulnerabilityStatusService:
+    """Get VulnerabilityStatusService instance."""
+    return VulnerabilityStatusService(db)

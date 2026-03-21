@@ -125,11 +125,11 @@ class TestVulnerabilitiesBulkUpdate:
         from app.main import app
         from app.repositories.dependencies import (
             get_activity_logger,
-            get_vulnerability_repository,
+            get_vulnerability_status_service,
         )
 
-        class DummyVulnRepo:
-            async def bulk_update_status(self, vuln_ids, status, notes=None):
+        class DummyStatusService:
+            async def update_bulk(self, vuln_ids, status, notes=None):
                 return len(vuln_ids)
 
         class DummyActivityLogger:
@@ -138,7 +138,7 @@ class TestVulnerabilitiesBulkUpdate:
             ):
                 return None
 
-        app.dependency_overrides[get_vulnerability_repository] = lambda: DummyVulnRepo()
+        app.dependency_overrides[get_vulnerability_status_service] = lambda: DummyStatusService()
         app.dependency_overrides[get_activity_logger] = lambda: DummyActivityLogger()
 
         response = await authenticated_client.post(

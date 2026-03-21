@@ -1205,7 +1205,8 @@ class ScanQueue:
             docker_service.close()
 
 
-# Global scan queue instance
+# Global scan queue instance — requires single-worker deployment (see main.py docstring).
+# Multiple workers would cause duplicate scans and split-brain queue state.
 _scan_queue: ScanQueue | None = None
 
 

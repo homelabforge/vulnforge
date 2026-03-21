@@ -2,6 +2,9 @@
 
 Replaces Docker Bench with a Python-based checker that queries the Docker API
 directly for faster, more relevant compliance scanning.
+
+Scan execution is delegated to compliance_scan_service.py. This route module
+retains asyncio.Task lifecycle management and polling-endpoint globals.
 """
 
 import asyncio
@@ -15,7 +18,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import db_session, get_db
+from app.database import get_db
 from app.dependencies.auth import require_admin
 from app.models import ComplianceFinding, ComplianceScan
 from app.models.user import User
@@ -34,199 +37,41 @@ from app.schemas.compliance import (
     ComplianceScan as ComplianceScanSchema,
 )
 from app.services.activity_logger import ActivityLogger
-from app.services.compliance_checker import ComplianceChecker
+from app.services.compliance_scan_service import perform_compliance_scan
 from app.services.compliance_state import compliance_state
 from app.services.docker_client import DockerService
-from app.services.enhanced_notifier import get_enhanced_notifier
-from app.services.settings_manager import SettingsManager
 from app.utils.log_redaction import sanitize_for_log
 from app.utils.timezone import get_now
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Track current scan state
+# Track current scan state — process-local globals require single-worker deployment
+# (see main.py docstring). Multiple workers would cause split-brain scan tracking.
 _current_scan_task: asyncio.Task | None = None
 _current_scan_id: int | None = None
 _last_scan_id: int | None = None  # Track most recent completed scan
 _completion_poll_count: int = 0  # Count polls since completion
 
 
-async def perform_compliance_scan(docker_service: DockerService, trigger_type: str = "manual"):
-    """
-    Perform a compliance scan using VulnForge native compliance checker.
+def _on_scan_created(scan_id: int) -> None:
+    """Callback from compliance_scan_service to track the current scan ID."""
+    global _current_scan_id
+    _current_scan_id = scan_id
 
-    Args:
-        docker_service: Docker service instance
-        trigger_type: Scan trigger type (manual or scheduled)
-    """
-    global _current_scan_id, _last_scan_id
 
-    # Create new database session for background task
-    async with db_session() as db:
-        # Create scan record
-        scan = ComplianceScan(
-            scan_date=get_now(),
-            scan_status="in_progress",
-            trigger_type=trigger_type,
+async def _run_compliance_scan(docker_service: DockerService, trigger_type: str) -> None:
+    """Wrapper that runs the service and updates route-level globals on completion."""
+    global _last_scan_id, _current_scan_id
+
+    try:
+        scan_id = await perform_compliance_scan(
+            docker_service, trigger_type, on_scan_created=_on_scan_created
         )
-        db.add(scan)
-        await db.commit()
-        await db.refresh(scan)
-
-        _current_scan_id = scan.id
-
-        try:
-            # Run native compliance checker
-            checker = ComplianceChecker(docker_service)
-            scan_result = await checker.run_scan()
-
-            # Update scan record with results
-            scan.scan_status = "completed"
-            scan.scan_duration_seconds = scan_result.duration_seconds
-            scan.total_checks = scan_result.total_checks
-            scan.passed_checks = scan_result.passed
-            scan.warned_checks = scan_result.warned
-            scan.failed_checks = scan_result.failed
-            scan.info_checks = scan_result.info
-            scan.note_checks = scan_result.skipped  # Map skipped to note_checks
-            scan.compliance_score = scan_result.compliance_score
-            scan.category_scores = json.dumps(scan_result.category_scores)
-
-            # Store findings
-            for finding_result in scan_result.findings:
-                # For per-target checks, use check_id + target as unique key
-                # For global checks (daemon, host), use just check_id
-                if finding_result.target:
-                    # Per-target finding: check by check_id AND target
-                    result = await db.execute(
-                        select(ComplianceFinding).where(
-                            ComplianceFinding.check_id == finding_result.check_id,
-                            ComplianceFinding.target == finding_result.target,
-                        )
-                    )
-                else:
-                    # Global finding: check by check_id only
-                    result = await db.execute(
-                        select(ComplianceFinding).where(
-                            ComplianceFinding.check_id == finding_result.check_id,
-                            ComplianceFinding.target.is_(None),
-                        )
-                    )
-                existing_finding = result.scalar_one_or_none()
-
-                # Serialize remediation dict to JSON string for storage
-                remediation_json = (
-                    json.dumps(finding_result.remediation) if finding_result.remediation else None
-                )
-
-                if existing_finding:
-                    # Update existing finding
-                    existing_finding.status = finding_result.status.value
-                    existing_finding.severity = finding_result.severity.value
-                    existing_finding.actual_value = finding_result.actual_value
-                    existing_finding.expected_value = finding_result.expected_value
-                    existing_finding.remediation = remediation_json
-                    existing_finding.last_seen = get_now()
-                    existing_finding.scan_date = get_now()
-                    # Don't change ignore status if it was previously ignored
-                else:
-                    # Create new finding
-                    finding = ComplianceFinding(
-                        check_id=finding_result.check_id,
-                        check_number=None,  # Not used in native checker
-                        title=finding_result.title,
-                        description=finding_result.description,
-                        status=finding_result.status.value,
-                        severity=finding_result.severity.value,
-                        category=finding_result.category,
-                        target=finding_result.target,
-                        remediation=remediation_json,
-                        actual_value=finding_result.actual_value,
-                        expected_value=finding_result.expected_value,
-                        first_seen=get_now(),
-                        last_seen=get_now(),
-                        scan_date=get_now(),
-                    )
-                    db.add(finding)
-
-            await db.commit()
-            logger.info(
-                f"Compliance scan completed: {scan_result.compliance_score:.1f}% score, "
-                f"{scan_result.failed} failed, {scan_result.warned} warned, {scan_result.passed} passed"
-            )
-
-            # Send notifications if enabled
-            try:
-                settings_manager = SettingsManager(db)
-                notify_on_scan = await settings_manager.get_bool(
-                    "compliance_notify_on_scan", default=True
-                )
-                notify_on_failures = await settings_manager.get_bool(
-                    "compliance_notify_on_failures", default=True
-                )
-
-                notifier = get_enhanced_notifier()
-
-                # Send scan complete notification
-                if notify_on_scan:
-                    await notifier.send_notification_with_logging(
-                        notification_type="compliance_scan_complete",
-                        title="VulnForge: Compliance Scan Complete",
-                        message=(
-                            "Compliance scan completed\n"
-                            f"Compliance Score: {scan_result.compliance_score:.1f}%\n"
-                            f"Checks: {scan_result.passed} passed, {scan_result.warned} warned, {scan_result.failed} failed"
-                        ),
-                        priority=3,
-                        tags=["shield", "VulnForge", "compliance"],
-                        scan_id=scan.id,
-                    )
-
-                # Send failure notification if there are critical failures
-                if notify_on_failures and scan_result.failed > 0:
-                    await notifier.send_notification_with_logging(
-                        notification_type="compliance_failures",
-                        title="VulnForge: Compliance Failures Detected",
-                        message=(
-                            f"Compliance scan found {scan_result.failed} failures\n"
-                            f"Compliance Score: {scan_result.compliance_score:.1f}%\n"
-                            "Review required on Compliance page"
-                        ),
-                        priority=4,
-                        tags=["warning", "VulnForge", "compliance"],
-                        scan_id=scan.id,
-                    )
-
-            except Exception as notif_error:
-                # INTENTIONAL: Notification failures should not affect scan success.
-                logger.error(f"Failed to send compliance notifications: {notif_error}")
-
-        except PermissionError as e:
-            logger.error(f"Permission denied running compliance scan: {e}")
-            scan.scan_status = "failed"
-            scan.error_message = "Permission denied - Docker socket access required"
-            await db.commit()
-        except ConnectionError as e:
-            logger.error(f"Docker connection error: {e}")
-            scan.scan_status = "failed"
-            scan.error_message = "Could not connect to Docker - check DOCKER_HOST setting"
-            await db.commit()
-        except Exception as e:
-            # INTENTIONAL: Catch-all for unexpected compliance scan errors.
-            # We must update the scan record to prevent orphaned in_progress scans.
-            logger.error(f"Unexpected compliance scan error: {e}", exc_info=True)
-            scan.scan_status = "failed"
-            scan.error_message = str(e)
-            await db.commit()
-        finally:
-            # Store last scan ID before clearing current
-            if _current_scan_id is not None:
-                _last_scan_id = _current_scan_id
-
-            # Finish progress tracking AFTER all DB operations complete
-            compliance_state.finish_scan()
-            _current_scan_id = None
+        if scan_id is not None:
+            _last_scan_id = scan_id
+    finally:
+        _current_scan_id = None
 
 
 @router.post("/scan", response_model=dict)
@@ -257,7 +102,7 @@ async def trigger_compliance_scan(
 
     # Run scan in background (creates its own DB session)
     _current_scan_task = asyncio.create_task(
-        perform_compliance_scan(docker_service, request.trigger_type)
+        _run_compliance_scan(docker_service, request.trigger_type)
     )
 
     logger.debug(

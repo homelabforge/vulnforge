@@ -37,6 +37,8 @@ Container Security Insights for Your Homelab
 
 **Default Mode**: Runs with no authentication for easy setup. Configure authentication in Settings before exposing to the internet.
 
+**Deployment Note**: VulnForge must run as a single worker (`--workers 1`). The scan queue, compliance state, and settings cache use in-process memory. Do not increase Granian workers — this will cause duplicate scans and stale data.
+
 📖 **[Complete Installation Guide](https://github.com/homelabforge/vulnforge/wiki/Installation)**
 
 ## Support

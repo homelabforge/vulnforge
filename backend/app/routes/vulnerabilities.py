@@ -9,7 +9,11 @@ from fastapi.responses import StreamingResponse
 
 from app.dependencies.auth import require_admin
 from app.models.user import User
-from app.repositories.dependencies import get_activity_logger, get_vulnerability_repository
+from app.repositories.dependencies import (
+    get_activity_logger,
+    get_vulnerability_repository,
+    get_vulnerability_status_service,
+)
 from app.repositories.vulnerability_repository import VulnerabilityRepository
 from app.schemas import (
     PaginatedVulnerabilities,
@@ -21,6 +25,7 @@ from app.schemas import (
     Vulnerability as VulnSchema,
 )
 from app.services.activity_logger import ActivityLogger
+from app.services.vulnerability_status_service import VulnerabilityStatusService
 
 router = APIRouter()
 
@@ -66,15 +71,18 @@ async def list_vulnerabilities(
 async def bulk_update_vulnerabilities(
     vuln_ids: list[int],
     update: VulnerabilityUpdate,
-    vuln_repo: VulnerabilityRepository = Depends(get_vulnerability_repository),
+    status_service: VulnerabilityStatusService = Depends(get_vulnerability_status_service),
     activity_logger: ActivityLogger = Depends(get_activity_logger),
     user: User = Depends(require_admin),
 ):
-    """Bulk update multiple vulnerabilities status/notes. Admin only."""
+    """Bulk update multiple vulnerabilities status/notes. Admin only.
+
+    Resyncs affected container counts and invalidates widget cache.
+    """
     if not vuln_ids:
         raise HTTPException(status_code=400, detail="No vulnerability IDs provided")
 
-    updated_count = await vuln_repo.bulk_update_status(
+    updated_count = await status_service.update_bulk(
         vuln_ids=vuln_ids, status=update.status or "to_fix", notes=update.notes
     )
 
@@ -188,12 +196,15 @@ async def get_vulnerability(
 async def update_vulnerability(
     vuln_id: int,
     update: VulnerabilityUpdate,
-    vuln_repo: VulnerabilityRepository = Depends(get_vulnerability_repository),
+    status_service: VulnerabilityStatusService = Depends(get_vulnerability_status_service),
     activity_logger: ActivityLogger = Depends(get_activity_logger),
     user: User = Depends(require_admin),
 ):
-    """Update vulnerability status/notes. Admin only."""
-    vuln = await vuln_repo.update_status(
+    """Update vulnerability status/notes. Admin only.
+
+    Resyncs affected container counts and invalidates widget cache.
+    """
+    vuln = await status_service.update_single(
         vuln_id=vuln_id, status=update.status or "to_fix", notes=update.notes
     )
 

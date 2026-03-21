@@ -111,8 +111,10 @@ class TestSettingsAuthorization:
         )
 
         assert response.status_code == 200
-        assert response.json()["key"] == "scan_on_startup"
-        assert response.json()["value"] == "true"
+        data = response.json()
+        assert data["setting"]["key"] == "scan_on_startup"
+        assert data["setting"]["value"] == "true"
+        assert data["restart_required"] is False
 
         app.dependency_overrides.clear()
 

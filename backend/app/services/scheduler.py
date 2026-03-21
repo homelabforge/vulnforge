@@ -81,7 +81,7 @@ async def scheduled_scan_task():
 
 async def scheduled_compliance_scan_task():
     """Execute scheduled compliance scan using VulnForge native checker."""
-    from app.routes.compliance import perform_compliance_scan
+    from app.services.compliance_scan_service import perform_compliance_scan
     from app.services.docker_client import DockerService
 
     logger.info("Starting scheduled compliance scan...")

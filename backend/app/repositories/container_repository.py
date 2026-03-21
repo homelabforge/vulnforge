@@ -1,9 +1,18 @@
 """Container repository for centralized container queries."""
 
-from sqlalchemy import func, select
+import logging
+
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Container, Scan, Vulnerability
+
+logger = logging.getLogger(__name__)
+
+# Vulnerability statuses that are excluded from actionable counts.
+# Scan row counts (Scan.critical_count etc.) are immutable historical snapshots
+# and are NEVER resynced — only Container counts are actionable.
+NON_ACTIONABLE_STATUSES = frozenset({"false_positive", "accepted"})
 
 
 class ContainerRepository:
@@ -283,6 +292,71 @@ class ContainerRepository:
             "medium_count": stats[4] or 0,
             "low_count": stats[5] or 0,
         }
+
+    async def resync_container_counts(self, container_id: int) -> None:
+        """
+        Recompute a container's denormalized vulnerability counts from its
+        latest scan's vulnerabilities, excluding non-actionable statuses.
+
+        Only updates Container fields — Scan row counts are immutable historical
+        snapshots and are never modified.
+
+        Args:
+            container_id: Container to resync
+        """
+        container = await self.db.get(Container, container_id)
+        if not container:
+            return
+
+        # Find the latest completed scan for this container
+        latest_scan_result = await self.db.execute(
+            select(Scan.id)
+            .where(Scan.container_id == container_id, Scan.scan_status == "completed")
+            .order_by(Scan.scan_date.desc())
+            .limit(1)
+        )
+        latest_scan_id = latest_scan_result.scalar_one_or_none()
+
+        if latest_scan_id is None:
+            # No completed scans — zero out counts
+            container.total_vulns = 0
+            container.fixable_vulns = 0
+            container.critical_count = 0
+            container.high_count = 0
+            container.medium_count = 0
+            container.low_count = 0
+            return
+
+        # Aggregate counts from that scan's vulnerabilities, excluding non-actionable
+        result = await self.db.execute(
+            select(
+                func.count(Vulnerability.id),
+                func.sum(case((Vulnerability.is_fixable.is_(True), 1), else_=0)),
+                func.sum(case((Vulnerability.severity == "CRITICAL", 1), else_=0)),
+                func.sum(case((Vulnerability.severity == "HIGH", 1), else_=0)),
+                func.sum(case((Vulnerability.severity == "MEDIUM", 1), else_=0)),
+                func.sum(case((Vulnerability.severity == "LOW", 1), else_=0)),
+            ).where(
+                Vulnerability.scan_id == latest_scan_id,
+                Vulnerability.status.notin_(NON_ACTIONABLE_STATUSES),
+            )
+        )
+        row = result.one()
+
+        container.total_vulns = row[0] or 0
+        container.fixable_vulns = row[1] or 0
+        container.critical_count = row[2] or 0
+        container.high_count = row[3] or 0
+        container.medium_count = row[4] or 0
+        container.low_count = row[5] or 0
+
+        logger.debug(
+            "Resynced container %d counts: total=%d critical=%d high=%d",
+            container_id,
+            container.total_vulns,
+            container.critical_count,
+            container.high_count,
+        )
 
     async def get_top_vulnerable(self, limit: int = 10) -> list[dict]:
         """

@@ -18,6 +18,24 @@ class SettingsManager:
     worker, so a class-level dict is effectively process-global.
     """
 
+    # --- Settings mutability classification ---
+    # Boot-time settings require a restart to take effect. They are read once at
+    # startup and cached in process memory or used to size structures.
+    BOOT_SETTINGS: frozenset[str] = frozenset(
+        {
+            "log_level",  # read at startup in main.py
+            "parallel_scans",  # sizes scan queue workers/semaphores in main.py:139
+            "scan_schedule",  # consumed by scheduler.start(); update methods exist but aren't wired
+            "compliance_scan_schedule",  # same pattern as scan_schedule
+        }
+    )
+    # Note: database_url, docker_socket_proxy, port, cors_origins are env-var-only
+    # (in config.py) and never appear in the settings DB.
+
+    # All other DB settings are runtime-mutable: notification credentials, toggles,
+    # timeouts, etc. Timezone is a special case — mutated in-process on app_settings
+    # by the settings route (single-worker pattern, see main.py docstring).
+
     # --- Cache ---
     _cache: dict[str, tuple[str, float]] = {}  # {key: (value, expiry_timestamp)}
     _CACHE_TTL: float = 60.0  # seconds

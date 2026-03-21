@@ -1,4 +1,20 @@
-"""VulnForge FastAPI application."""
+"""VulnForge FastAPI application.
+
+Architecture Contract: Single-Worker, Process-Local
+====================================================
+VulnForge MUST run as a single Granian worker (--workers 1). Multiple
+subsystems rely on in-process state that is not shared across workers:
+
+- ScanQueue singleton (scan_queue.py) — priority queue, active scan tracking
+- Compliance module globals (compliance.py) — task state for running scans
+- SettingsManager TTL cache (settings_manager.py) — avoids DB round-trips
+- app_settings.timezone mutation (settings.py / timezone.py) — in-process hot-reload
+
+Scaling to multiple workers would cause: duplicate scans, stale caches,
+split-brain queue state, and timezone reads returning stale values.
+
+This is intentional — VulnForge scans a homelab, not a fleet.
+"""
 
 import json
 import logging

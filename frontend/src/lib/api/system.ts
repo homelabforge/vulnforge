@@ -3,6 +3,7 @@ import type {
   ScannersInfoResponse,
   AppInfo,
   Setting,
+  SettingUpdateResponse,
   TestConnectionResult,
 } from '../../types/api/system';
 import { API_BASE, handleResponse } from './client';
@@ -35,7 +36,7 @@ export const settingsApi = {
     return handleResponse(res);
   },
 
-  update: async (key: string, value: string): Promise<Setting> => {
+  update: async (key: string, value: string): Promise<SettingUpdateResponse> => {
     const res = await fetch(`${API_BASE}/settings/${key}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -44,7 +45,7 @@ export const settingsApi = {
     return handleResponse(res);
   },
 
-  bulkUpdate: async (settings: Record<string, string>): Promise<Setting[]> => {
+  bulkUpdate: async (settings: Record<string, string>): Promise<SettingUpdateResponse[]> => {
     const res = await fetch(`${API_BASE}/settings/bulk`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

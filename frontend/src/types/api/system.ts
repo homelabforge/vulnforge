@@ -35,6 +35,11 @@ export interface Setting {
   updated_at: string;
 }
 
+export interface SettingUpdateResponse {
+  setting: Setting;
+  restart_required: boolean;
+}
+
 export interface TestConnectionResult {
   success: boolean;
   message: string;
