@@ -1,12 +1,15 @@
 /**
  * NotificationsTab - All notification service configs + event notifications.
+ *
+ * Uses useSettingsForm to manage all notification settings as a single state
+ * object instead of 30+ individual useState calls.
  */
 
 import { useState } from "react";
 import { toast } from "sonner";
 import { handleApiError } from "@/lib/errorHandler";
 import { settingsApi } from "@/lib/api";
-import { useAutoSave } from "@/hooks/useAutoSave";
+import { useSettingsForm, type SettingsFieldDef } from "@/hooks/useSettingsForm";
 import {
   NotificationSubTabs,
   type NotificationSubTab,
@@ -21,6 +24,52 @@ import {
   EmailConfig,
 } from "@/components/notifications";
 
+/** All notification settings field definitions. */
+const NOTIFICATION_FIELDS: SettingsFieldDef[] = [
+  // Service toggles + configs
+  { key: "ntfy_enabled", type: "bool", defaultValue: true },
+  { key: "ntfy_url", type: "string", defaultValue: "http://ntfy:80" },
+  { key: "ntfy_topic", type: "string", defaultValue: "vulnforge" },
+  { key: "ntfy_token", type: "string", defaultValue: "" },
+  { key: "gotify_enabled", type: "bool", defaultValue: false, boolDefault: "falsy" },
+  { key: "gotify_server", type: "string", defaultValue: "" },
+  { key: "gotify_token", type: "string", defaultValue: "" },
+  { key: "pushover_enabled", type: "bool", defaultValue: false, boolDefault: "falsy" },
+  { key: "pushover_user_key", type: "string", defaultValue: "" },
+  { key: "pushover_api_token", type: "string", defaultValue: "" },
+  { key: "slack_enabled", type: "bool", defaultValue: false, boolDefault: "falsy" },
+  { key: "slack_webhook_url", type: "string", defaultValue: "" },
+  { key: "discord_enabled", type: "bool", defaultValue: false, boolDefault: "falsy" },
+  { key: "discord_webhook_url", type: "string", defaultValue: "" },
+  { key: "telegram_enabled", type: "bool", defaultValue: false, boolDefault: "falsy" },
+  { key: "telegram_bot_token", type: "string", defaultValue: "" },
+  { key: "telegram_chat_id", type: "string", defaultValue: "" },
+  { key: "email_enabled", type: "bool", defaultValue: false, boolDefault: "falsy" },
+  { key: "email_smtp_host", type: "string", defaultValue: "" },
+  { key: "email_smtp_port", type: "string", defaultValue: "587" },
+  { key: "email_smtp_user", type: "string", defaultValue: "" },
+  { key: "email_smtp_password", type: "string", defaultValue: "" },
+  { key: "email_smtp_tls", type: "bool", defaultValue: true },
+  { key: "email_from", type: "string", defaultValue: "" },
+  { key: "email_to", type: "string", defaultValue: "" },
+  // Event notification toggles
+  { key: "notify_security_enabled", type: "bool", defaultValue: true },
+  { key: "notify_security_kev", type: "bool", defaultValue: true },
+  { key: "notify_security_critical", type: "bool", defaultValue: true },
+  { key: "notify_security_secrets", type: "bool", defaultValue: true },
+  { key: "notify_scans_enabled", type: "bool", defaultValue: true },
+  { key: "notify_scans_complete", type: "bool", defaultValue: true },
+  { key: "notify_scans_failed", type: "bool", defaultValue: true },
+  { key: "notify_scans_compliance_complete", type: "bool", defaultValue: false, boolDefault: "falsy" },
+  { key: "notify_scans_compliance_failures", type: "bool", defaultValue: true },
+  { key: "notify_system_enabled", type: "bool", defaultValue: false, boolDefault: "falsy" },
+  { key: "notify_system_kev_refresh", type: "bool", defaultValue: false, boolDefault: "falsy" },
+  { key: "notify_system_backup", type: "bool", defaultValue: false, boolDefault: "falsy" },
+  // Advanced
+  { key: "notification_retry_attempts", type: "string", defaultValue: "3" },
+  { key: "notification_retry_delay", type: "string", defaultValue: "2.0" },
+];
+
 interface NotificationsTabProps {
   settingsMap: Record<string, string>;
   onSave: (payload: Record<string, string>) => void;
@@ -29,133 +78,22 @@ interface NotificationsTabProps {
 
 export function NotificationsTab({ settingsMap, onSave, isSaving }: NotificationsTabProps): React.ReactElement {
   const [notificationSubTab, setNotificationSubTab] = useState<NotificationSubTab>("ntfy");
-
-  // --- Service settings ---
-  const [ntfyEnabled, setNtfyEnabled] = useState(settingsMap.ntfy_enabled !== "false");
-  const [ntfyUrl, setNtfyUrl] = useState(settingsMap.ntfy_url || "http://ntfy:80");
-  const [ntfyTopic, setNtfyTopic] = useState(settingsMap.ntfy_topic || "vulnforge");
-  const [ntfyToken, setNtfyToken] = useState(settingsMap.ntfy_token || "");
-
-  const [gotifyEnabled, setGotifyEnabled] = useState(settingsMap.gotify_enabled === "true");
-  const [gotifyServer, setGotifyServer] = useState(settingsMap.gotify_server || "");
-  const [gotifyToken, setGotifyToken] = useState(settingsMap.gotify_token || "");
-
-  const [pushoverEnabled, setPushoverEnabled] = useState(settingsMap.pushover_enabled === "true");
-  const [pushoverUserKey, setPushoverUserKey] = useState(settingsMap.pushover_user_key || "");
-  const [pushoverApiToken, setPushoverApiToken] = useState(settingsMap.pushover_api_token || "");
-
-  const [slackEnabled, setSlackEnabled] = useState(settingsMap.slack_enabled === "true");
-  const [slackWebhookUrl, setSlackWebhookUrl] = useState(settingsMap.slack_webhook_url || "");
-
-  const [discordEnabled, setDiscordEnabled] = useState(settingsMap.discord_enabled === "true");
-  const [discordWebhookUrl, setDiscordWebhookUrl] = useState(settingsMap.discord_webhook_url || "");
-
-  const [telegramEnabled, setTelegramEnabled] = useState(settingsMap.telegram_enabled === "true");
-  const [telegramBotToken, setTelegramBotToken] = useState(settingsMap.telegram_bot_token || "");
-  const [telegramChatId, setTelegramChatId] = useState(settingsMap.telegram_chat_id || "");
-
-  const [emailEnabled, setEmailEnabled] = useState(settingsMap.email_enabled === "true");
-  const [emailSmtpHost, setEmailSmtpHost] = useState(settingsMap.email_smtp_host || "");
-  const [emailSmtpPort, setEmailSmtpPort] = useState(settingsMap.email_smtp_port || "587");
-  const [emailSmtpUser, setEmailSmtpUser] = useState(settingsMap.email_smtp_user || "");
-  const [emailSmtpPassword, setEmailSmtpPassword] = useState(settingsMap.email_smtp_password || "");
-  const [emailSmtpTls, setEmailSmtpTls] = useState(settingsMap.email_smtp_tls !== "false");
-  const [emailFrom, setEmailFrom] = useState(settingsMap.email_from || "");
-  const [emailTo, setEmailTo] = useState(settingsMap.email_to || "");
-
-  // --- Event notification settings ---
-  const [notifySecurityEnabled, setNotifySecurityEnabled] = useState(settingsMap.notify_security_enabled !== "false");
-  const [notifySecurityKev, setNotifySecurityKev] = useState(settingsMap.notify_security_kev !== "false");
-  const [notifySecurityCritical, setNotifySecurityCritical] = useState(settingsMap.notify_security_critical !== "false");
-  const [notifySecuritySecrets, setNotifySecuritySecrets] = useState(settingsMap.notify_security_secrets !== "false");
-  const [notifyScansEnabled, setNotifyScansEnabled] = useState(settingsMap.notify_scans_enabled !== "false");
-  const [notifyScansComplete, setNotifyScansComplete] = useState(settingsMap.notify_scans_complete !== "false");
-  const [notifyScansFailed, setNotifyScansFailed] = useState(settingsMap.notify_scans_failed !== "false");
-  const [notifyScansComplianceComplete, setNotifyScansComplianceComplete] = useState(settingsMap.notify_scans_compliance_complete !== "false");
-  const [notifyScansComplianceFailures, setNotifyScansComplianceFailures] = useState(settingsMap.notify_scans_compliance_failures !== "false");
-  const [notifySystemEnabled, setNotifySystemEnabled] = useState(settingsMap.notify_system_enabled === "true");
-  const [notifySystemKevRefresh, setNotifySystemKevRefresh] = useState(settingsMap.notify_system_kev_refresh === "true");
-  const [notifySystemBackup, setNotifySystemBackup] = useState(settingsMap.notify_system_backup === "true");
-  const [notificationRetryAttempts, setNotificationRetryAttempts] = useState(settingsMap.notification_retry_attempts || "3");
-  const [notificationRetryDelay, setNotificationRetryDelay] = useState(settingsMap.notification_retry_delay || "2.0");
-
-  // --- Test button states ---
-  const [testingNtfy, setTestingNtfy] = useState(false);
-  const [testingGotify, setTestingGotify] = useState(false);
-  const [testingPushover, setTestingPushover] = useState(false);
-  const [testingSlack, setTestingSlack] = useState(false);
-  const [testingDiscord, setTestingDiscord] = useState(false);
-  const [testingTelegram, setTestingTelegram] = useState(false);
-  const [testingEmail, setTestingEmail] = useState(false);
-
-  // --- Auto-save ---
-  useAutoSave(
-    () => ({
-      ntfy_enabled: ntfyEnabled.toString(),
-      ntfy_url: ntfyUrl,
-      ntfy_topic: ntfyTopic,
-      ntfy_token: ntfyToken,
-      gotify_enabled: gotifyEnabled.toString(),
-      gotify_server: gotifyServer,
-      gotify_token: gotifyToken,
-      pushover_enabled: pushoverEnabled.toString(),
-      pushover_user_key: pushoverUserKey,
-      pushover_api_token: pushoverApiToken,
-      slack_enabled: slackEnabled.toString(),
-      slack_webhook_url: slackWebhookUrl,
-      discord_enabled: discordEnabled.toString(),
-      discord_webhook_url: discordWebhookUrl,
-      telegram_enabled: telegramEnabled.toString(),
-      telegram_bot_token: telegramBotToken,
-      telegram_chat_id: telegramChatId,
-      email_enabled: emailEnabled.toString(),
-      email_smtp_host: emailSmtpHost,
-      email_smtp_port: emailSmtpPort,
-      email_smtp_user: emailSmtpUser,
-      email_smtp_password: emailSmtpPassword,
-      email_smtp_tls: emailSmtpTls.toString(),
-      email_from: emailFrom,
-      email_to: emailTo,
-      notify_security_enabled: notifySecurityEnabled.toString(),
-      notify_security_kev: notifySecurityKev.toString(),
-      notify_security_critical: notifySecurityCritical.toString(),
-      notify_security_secrets: notifySecuritySecrets.toString(),
-      notify_scans_enabled: notifyScansEnabled.toString(),
-      notify_scans_complete: notifyScansComplete.toString(),
-      notify_scans_failed: notifyScansFailed.toString(),
-      notify_scans_compliance_complete: notifyScansComplianceComplete.toString(),
-      notify_scans_compliance_failures: notifyScansComplianceFailures.toString(),
-      notify_system_enabled: notifySystemEnabled.toString(),
-      notify_system_kev_refresh: notifySystemKevRefresh.toString(),
-      notify_system_backup: notifySystemBackup.toString(),
-      notification_retry_attempts: notificationRetryAttempts,
-      notification_retry_delay: notificationRetryDelay,
-    }),
+  const { values: rawValues, setBool, setText } = useSettingsForm(
+    settingsMap,
+    NOTIFICATION_FIELDS,
     onSave,
-    [
-      ntfyEnabled, ntfyUrl, ntfyTopic, ntfyToken,
-      gotifyEnabled, gotifyServer, gotifyToken,
-      pushoverEnabled, pushoverUserKey, pushoverApiToken,
-      slackEnabled, slackWebhookUrl,
-      discordEnabled, discordWebhookUrl,
-      telegramEnabled, telegramBotToken, telegramChatId,
-      emailEnabled, emailSmtpHost, emailSmtpPort, emailSmtpUser, emailSmtpPassword, emailSmtpTls, emailFrom, emailTo,
-      notifySecurityEnabled, notifySecurityKev, notifySecurityCritical, notifySecuritySecrets,
-      notifyScansEnabled, notifyScansComplete, notifyScansFailed,
-      notifyScansComplianceComplete, notifyScansComplianceFailures,
-      notifySystemEnabled, notifySystemKevRefresh, notifySystemBackup,
-      notificationRetryAttempts, notificationRetryDelay,
-    ],
-    true,
   );
+  // Cast to NotificationSettings — field definitions guarantee the keys match
+  const values = rawValues as unknown as NotificationSettings;
 
-  // --- Test handlers ---
+  // Test button states (UI-only, not persisted)
+  const [testingService, setTestingService] = useState<string | null>(null);
+
   const testService = async (
     name: string,
     fn: () => Promise<{ success: boolean; message: string }>,
-    setTesting: (v: boolean) => void,
   ): Promise<void> => {
-    setTesting(true);
+    setTestingService(name);
     try {
       const result = await fn();
       if (result.success) toast.success(result.message);
@@ -163,74 +101,19 @@ export function NotificationsTab({ settingsMap, onSave, isSaving }: Notification
     } catch (error) {
       handleApiError(error, `Failed to test ${name} connection`);
     } finally {
-      setTesting(false);
+      setTestingService(null);
     }
   };
 
-  // --- Settings map for notification components ---
-  const notificationSettings: NotificationSettings = {
-    ntfy_enabled: ntfyEnabled, ntfy_server: ntfyUrl, ntfy_topic: ntfyTopic, ntfy_token: ntfyToken,
-    gotify_enabled: gotifyEnabled, gotify_server: gotifyServer, gotify_token: gotifyToken,
-    pushover_enabled: pushoverEnabled, pushover_user_key: pushoverUserKey, pushover_api_token: pushoverApiToken,
-    slack_enabled: slackEnabled, slack_webhook_url: slackWebhookUrl,
-    discord_enabled: discordEnabled, discord_webhook_url: discordWebhookUrl,
-    telegram_enabled: telegramEnabled, telegram_bot_token: telegramBotToken, telegram_chat_id: telegramChatId,
-    email_enabled: emailEnabled, email_smtp_host: emailSmtpHost, email_smtp_port: emailSmtpPort,
-    email_smtp_user: emailSmtpUser, email_smtp_password: emailSmtpPassword, email_smtp_tls: emailSmtpTls,
-    email_from: emailFrom, email_to: emailTo,
-    notify_security_enabled: notifySecurityEnabled, notify_security_kev: notifySecurityKev,
-    notify_security_critical: notifySecurityCritical, notify_security_secrets: notifySecuritySecrets,
-    notify_scans_enabled: notifyScansEnabled, notify_scans_complete: notifyScansComplete,
-    notify_scans_failed: notifyScansFailed,
-    notify_scans_compliance_complete: notifyScansComplianceComplete,
-    notify_scans_compliance_failures: notifyScansComplianceFailures,
-    notify_system_enabled: notifySystemEnabled, notify_system_kev_refresh: notifySystemKevRefresh,
-    notify_system_backup: notifySystemBackup,
-    notification_retry_attempts: notificationRetryAttempts,
-    notification_retry_delay: notificationRetryDelay,
-  };
-
-  const handleBoolChange = (key: string, value: boolean): void => {
-    const setters: Record<string, (v: boolean) => void> = {
-      ntfy_enabled: setNtfyEnabled, gotify_enabled: setGotifyEnabled, pushover_enabled: setPushoverEnabled,
-      slack_enabled: setSlackEnabled, discord_enabled: setDiscordEnabled, telegram_enabled: setTelegramEnabled,
-      email_enabled: setEmailEnabled, email_smtp_tls: setEmailSmtpTls,
-      notify_security_enabled: setNotifySecurityEnabled, notify_security_kev: setNotifySecurityKev,
-      notify_security_critical: setNotifySecurityCritical, notify_security_secrets: setNotifySecuritySecrets,
-      notify_scans_enabled: setNotifyScansEnabled, notify_scans_complete: setNotifyScansComplete,
-      notify_scans_failed: setNotifyScansFailed,
-      notify_scans_compliance_complete: setNotifyScansComplianceComplete,
-      notify_scans_compliance_failures: setNotifyScansComplianceFailures,
-      notify_system_enabled: setNotifySystemEnabled, notify_system_kev_refresh: setNotifySystemKevRefresh,
-      notify_system_backup: setNotifySystemBackup,
-    };
-    setters[key]?.(value);
-  };
-
-  const handleTextChange = (key: string, value: string): void => {
-    const setters: Record<string, (v: string) => void> = {
-      ntfy_server: setNtfyUrl, ntfy_topic: setNtfyTopic, ntfy_token: setNtfyToken,
-      gotify_server: setGotifyServer, gotify_token: setGotifyToken,
-      pushover_user_key: setPushoverUserKey, pushover_api_token: setPushoverApiToken,
-      slack_webhook_url: setSlackWebhookUrl,
-      discord_webhook_url: setDiscordWebhookUrl,
-      telegram_bot_token: setTelegramBotToken, telegram_chat_id: setTelegramChatId,
-      email_smtp_host: setEmailSmtpHost, email_smtp_port: setEmailSmtpPort,
-      email_smtp_user: setEmailSmtpUser, email_smtp_password: setEmailSmtpPassword,
-      email_from: setEmailFrom, email_to: setEmailTo,
-      notification_retry_attempts: setNotificationRetryAttempts,
-      notification_retry_delay: setNotificationRetryDelay,
-    };
-    setters[key]?.(value);
-  };
-
-  const hasAnyServiceEnabled = ntfyEnabled || gotifyEnabled || pushoverEnabled ||
-    slackEnabled || discordEnabled || telegramEnabled || emailEnabled;
+  const hasAnyServiceEnabled =
+    values.ntfy_enabled || values.gotify_enabled || values.pushover_enabled ||
+    values.slack_enabled || values.discord_enabled || values.telegram_enabled ||
+    values.email_enabled;
 
   const configProps = {
-    settings: notificationSettings,
-    onSettingChange: handleBoolChange,
-    onTextChange: handleTextChange,
+    settings: values,
+    onSettingChange: setBool,
+    onTextChange: setText,
     saving: isSaving,
   };
 
@@ -240,26 +123,26 @@ export function NotificationsTab({ settingsMap, onSave, isSaving }: Notification
         activeSubTab={notificationSubTab}
         onSubTabChange={setNotificationSubTab}
         enabledServices={{
-          ntfy: ntfyEnabled, gotify: gotifyEnabled, pushover: pushoverEnabled,
-          slack: slackEnabled, discord: discordEnabled, telegram: telegramEnabled, email: emailEnabled,
+          ntfy: values.ntfy_enabled, gotify: values.gotify_enabled, pushover: values.pushover_enabled,
+          slack: values.slack_enabled, discord: values.discord_enabled, telegram: values.telegram_enabled, email: values.email_enabled,
         }}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div>
-          {notificationSubTab === "ntfy" && <NtfyConfig {...configProps} onTest={() => testService("ntfy", settingsApi.testNtfy, setTestingNtfy)} testing={testingNtfy} />}
-          {notificationSubTab === "gotify" && <GotifyConfig {...configProps} onTest={() => testService("Gotify", settingsApi.testGotify, setTestingGotify)} testing={testingGotify} />}
-          {notificationSubTab === "pushover" && <PushoverConfig {...configProps} onTest={() => testService("Pushover", settingsApi.testPushover, setTestingPushover)} testing={testingPushover} />}
-          {notificationSubTab === "slack" && <SlackConfig {...configProps} onTest={() => testService("Slack", settingsApi.testSlack, setTestingSlack)} testing={testingSlack} />}
-          {notificationSubTab === "discord" && <DiscordConfig {...configProps} onTest={() => testService("Discord", settingsApi.testDiscord, setTestingDiscord)} testing={testingDiscord} />}
-          {notificationSubTab === "telegram" && <TelegramConfig {...configProps} onTest={() => testService("Telegram", settingsApi.testTelegram, setTestingTelegram)} testing={testingTelegram} />}
-          {notificationSubTab === "email" && <EmailConfig {...configProps} onTest={() => testService("email", settingsApi.testEmail, setTestingEmail)} testing={testingEmail} />}
+          {notificationSubTab === "ntfy" && <NtfyConfig {...configProps} onTest={() => testService("ntfy", settingsApi.testNtfy)} testing={testingService === "ntfy"} />}
+          {notificationSubTab === "gotify" && <GotifyConfig {...configProps} onTest={() => testService("Gotify", settingsApi.testGotify)} testing={testingService === "gotify"} />}
+          {notificationSubTab === "pushover" && <PushoverConfig {...configProps} onTest={() => testService("Pushover", settingsApi.testPushover)} testing={testingService === "pushover"} />}
+          {notificationSubTab === "slack" && <SlackConfig {...configProps} onTest={() => testService("Slack", settingsApi.testSlack)} testing={testingService === "slack"} />}
+          {notificationSubTab === "discord" && <DiscordConfig {...configProps} onTest={() => testService("Discord", settingsApi.testDiscord)} testing={testingService === "discord"} />}
+          {notificationSubTab === "telegram" && <TelegramConfig {...configProps} onTest={() => testService("Telegram", settingsApi.testTelegram)} testing={testingService === "telegram"} />}
+          {notificationSubTab === "email" && <EmailConfig {...configProps} onTest={() => testService("email", settingsApi.testEmail)} testing={testingService === "email"} />}
         </div>
 
         <EventNotificationsCard
-          settings={notificationSettings}
-          onSettingChange={handleBoolChange}
-          onTextChange={handleTextChange}
+          settings={values}
+          onSettingChange={setBool}
+          onTextChange={setText}
           saving={isSaving}
           hasEnabledService={hasAnyServiceEnabled}
         />
