@@ -1,0 +1,6 @@
+name: "VulnForge CodeQL Config"
+
+# Use security-extended queries
+query-filters:
+  - include:
+      tags contain: security

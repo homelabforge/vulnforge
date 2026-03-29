@@ -154,8 +154,8 @@ jobs:
           path: frontend/test-results/
           retention-days: 7
 
-  api-freshness:
-    name: API Freshness Check
+  api-types-freshness:
+    name: API Types Freshness
     runs-on: ubuntu-latest
     needs: [test-backend]
 
@@ -185,7 +185,7 @@ jobs:
           cd frontend
           if [ "${{ github.actor }}" = "dependabot[bot]" ]; then bun install; else bun install --frozen-lockfile; fi
 
-      - name: Check API types are up to date
+      - name: Check API types freshness
         run: |
           cd frontend
           bun run check:api-freshness
