@@ -140,6 +140,7 @@ jobs:
           bun run e2e
         env:
           CI: true
+          VULNFORGE_BOOTSTRAP_TOKEN: e2e-ci-test-token
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7

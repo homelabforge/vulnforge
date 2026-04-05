@@ -44,6 +44,7 @@ export default defineConfig({
         DATABASE_URL: 'sqlite+aiosqlite:////tmp/vulnforge-e2e.db',
         LOG_LEVEL: 'WARNING',
         VULNFORGE_TESTING: 'true',
+        VULNFORGE_BOOTSTRAP_TOKEN: process.env.VULNFORGE_BOOTSTRAP_TOKEN ?? 'e2e-test-token',
       },
     },
     {
