@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.6.0] - 2026-04-05
+
 ### Dev Dependencies
 - **@playwright/test**: 1.58.2 → 1.59.1
 - **@typescript-eslint/eslint-plugin**: 8.57.1 → 8.58.0
