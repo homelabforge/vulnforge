@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dev Dependencies
+- **@playwright/test**: 1.58.2 → 1.59.1
+- **@typescript-eslint/eslint-plugin**: 8.57.1 → 8.58.0
+- **@typescript-eslint/parser**: 8.57.1 → 8.58.0
+- **@vitest/coverage-v8**: 4.1.0 → 4.1.2
+- **@vitest/ui**: 4.1.0 → 4.1.2
+- **eslint**: 10.1.0 → 10.2.0
+- **ruff**: 0.15.7 → 0.15.9
+- **typescript**: 5.9.3 → 6.0.2
+- **typescript-eslint**: 8.57.1 → 8.58.0
+- **vite**: 8.0.1 → 8.0.3
+- **vitest**: 4.1.0 → 4.1.2
+
+### App Dependencies
+- **@tanstack/react-query**: 5.94.5 → 5.96.2
+- **fastapi**: 0.135.1 → 0.135.3
+- **lucide-react**: 0.577.0 → 1.7.0
+- **react-router-dom**: 7.13.1 → 7.14.0
+- **recharts**: 3.8.0 → 3.8.1
+- **requests**: 2.33.0 → 2.33.1
+- **sqlalchemy**: 2.0.48 → 2.0.49
+
 ### Security
 - Add bootstrap token for first-run setup protection (prevents unauthenticated admin takeover)
 - Add `require_admin` defense-in-depth to 23 unguarded API endpoints
