@@ -17,6 +17,7 @@ export default function Setup() {
   const { setupComplete, checkAuth } = useAuth();
 
   // Form state
+  const [bootstrapToken, setBootstrapToken] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -73,19 +74,23 @@ export default function Setup() {
 
   // Handle cancel - disable auth and go back to dashboard
   const handleCancel = async () => {
+    if (!bootstrapToken.trim()) {
+      toast.error('Setup token is required to cancel setup');
+      return;
+    }
     if (!confirm('Cancel setup? Authentication will be disabled and all API endpoints will be publicly accessible.')) {
       return;
     }
 
     try {
       setIsCancelling(true);
-      await userAuthApi.cancelSetup();
+      await userAuthApi.cancelSetup({ bootstrap_token: bootstrapToken.trim() });
       toast.success('Authentication disabled. Redirecting...');
       setTimeout(() => {
         window.location.href = '/';
       }, 1000);
     } catch {
-      toast.error('Failed to disable authentication');
+      toast.error('Failed to disable authentication. Check your setup token.');
       setIsCancelling(false);
     }
   };
@@ -93,6 +98,12 @@ export default function Setup() {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate bootstrap token
+    if (!bootstrapToken.trim()) {
+      toast.error('Setup token is required');
+      return;
+    }
 
     // Validate username
     const userError = validateUsername(username);
@@ -120,6 +131,7 @@ export default function Setup() {
 
       // Create admin account
       await userAuthApi.setup({
+        bootstrap_token: bootstrapToken.trim(),
         username,
         email,
         password,
@@ -168,6 +180,26 @@ export default function Setup() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Bootstrap Token */}
+            <div>
+              <label htmlFor="bootstrapToken" className="block text-sm font-medium text-vuln-text mb-1">
+                Setup Token *
+              </label>
+              <input
+                id="bootstrapToken"
+                type="text"
+                value={bootstrapToken}
+                onChange={(e) => setBootstrapToken(e.target.value)}
+                disabled={isSubmitting}
+                placeholder="Check container logs for your setup token"
+                className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text placeholder:text-vuln-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary disabled:opacity-50 transition-colors font-mono text-sm"
+                required
+              />
+              <p className="text-vuln-text-muted text-xs mt-1">
+                Run <code className="bg-vuln-bg px-1 rounded">docker logs vulnforge</code> to find the token
+              </p>
+            </div>
+
             {/* Username */}
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-vuln-text mb-1">

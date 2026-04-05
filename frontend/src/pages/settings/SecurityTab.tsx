@@ -3,7 +3,7 @@
  */
 
 import { useState } from "react";
-import { Shield } from "lucide-react";
+import { Globe, Shield } from "lucide-react";
 import { HelpTooltip } from "@/components/HelpTooltip";
 import { Toggle } from "@/components/Toggle";
 import { ApiKeysCard } from "@/components/ApiKeysCard";
@@ -17,6 +17,9 @@ interface SecurityTabProps {
 }
 
 export function SecurityTab({ settingsMap, onSave }: SecurityTabProps): React.ReactElement {
+  // Public Base URL
+  const [publicBaseUrl, setPublicBaseUrl] = useState(settingsMap.public_base_url || "");
+
   // KEV settings
   const [kevCheckingEnabled, setKevCheckingEnabled] = useState(settingsMap.kev_checking_enabled !== "false");
   const [kevCacheHours, setKevCacheHours] = useState(parseSettingInt(settingsMap.kev_cache_hours, 12));
@@ -24,11 +27,12 @@ export function SecurityTab({ settingsMap, onSave }: SecurityTabProps): React.Re
 
   useAutoSave(
     () => ({
+      public_base_url: publicBaseUrl,
       kev_checking_enabled: kevCheckingEnabled.toString(),
       kev_cache_hours: kevCacheHours.toString(),
     }),
     onSave,
-    [kevCheckingEnabled, kevCacheHours],
+    [publicBaseUrl, kevCheckingEnabled, kevCacheHours],
     true,
   );
 
@@ -37,6 +41,35 @@ export function SecurityTab({ settingsMap, onSave }: SecurityTabProps): React.Re
       {/* Left Column */}
       <div className="space-y-4">
         <ApiKeysCard />
+
+        {/* Public Base URL */}
+        <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Globe className="w-6 h-6 text-blue-500" />
+              <div>
+                <h2 className="text-xl font-semibold text-vuln-text">Public Base URL</h2>
+                <p className="text-sm text-vuln-text-muted mt-0.5">
+                  External URL used for OIDC redirects and cookie security.
+                </p>
+              </div>
+            </div>
+            <HelpTooltip content="The public URL that users access VulnForge from. Required for OIDC/SSO to work correctly. If unset, VulnForge falls back to request headers (less secure)." />
+          </div>
+          <div>
+            <input
+              type="text"
+              value={publicBaseUrl}
+              onChange={(e) => setPublicBaseUrl(e.target.value)}
+              placeholder="https://vulnforge.yourdomain.com"
+              autoComplete="off"
+              className="w-full px-3 py-2 bg-vuln-surface-light border border-vuln-border rounded-lg text-vuln-text placeholder-vuln-text-disabled focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-vuln-text-disabled mt-1">
+              Full URL including scheme (e.g., https://vulnforge.example.com). Leave empty to derive from request headers.
+            </p>
+          </div>
+        </div>
 
         {/* KEV Settings */}
         <div className="bg-vuln-surface border border-vuln-border rounded-lg p-4">

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Add bootstrap token for first-run setup protection (prevents unauthenticated admin takeover)
+- Add `require_admin` defense-in-depth to 23 unguarded API endpoints
+- Add login rate limiting (5/minute) and fix dead-code limiter in scan endpoints
+- Add JWT session versioning (`sv` claim) with invalidation on password change
+- Add in-memory token denylist for immediate logout revocation
+- Reject pre-upgrade JWTs (missing `sv` claim) on deploy
+- Add `public_base_url` setting for OIDC redirects (falls back to X-Forwarded-* headers if unset)
+- Remove unauthenticated widget endpoint bypass (CWE-200 information disclosure)
+- Add pagination upper bounds to 11 endpoints to prevent memory exhaustion
+- Parameterize migration 010 SQL to eliminate string interpolation
+- Pin Python base image to `python:3.14.0-slim`
+
 ## [4.5.0] - 2026-03-21
 
 ### Added

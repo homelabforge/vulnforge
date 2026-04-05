@@ -18,6 +18,7 @@ This is intentional — VulnForge scans a homelab, not a fleet.
 
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from importlib.metadata import version as pkg_version
 from pathlib import Path
@@ -26,9 +27,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 from sqlalchemy import select
 
 from app.config import settings as app_settings
@@ -54,6 +54,7 @@ from app.routes import (
 from app.routes import (
     settings as settings_api,
 )
+from app.services.bootstrap import consume_bootstrap_token, ensure_bootstrap_token
 from app.services.docker_client import DockerService
 from app.services.enhanced_notifier import get_enhanced_notifier
 from app.services.scan_queue import get_scan_queue
@@ -156,6 +157,28 @@ async def lifespan(app: FastAPI):
         # Get parallel_scans setting for queue workers
         parallel_scans = await settings_manager.get_int("parallel_scans", default=3) or 3
 
+    # Bootstrap token for first-run setup protection
+    async with db_session() as db:
+        sm = SettingsManager(db)
+        admin_username = await sm.get("user_auth_admin_username")
+        if admin_username and admin_username.strip():
+            # Admin exists — clean up any leftover bootstrap token
+            consume_bootstrap_token()
+        else:
+            # No admin — ensure a bootstrap token exists
+            token = ensure_bootstrap_token()
+            if os.environ.get("VULNFORGE_BOOTSTRAP_TOKEN"):
+                logger.info("Bootstrap token provided via environment")
+            else:
+                logger.info(
+                    "\n"
+                    "========================================================\n"
+                    "  FIRST-RUN SETUP TOKEN: %s\n"
+                    "  Enter this token at /setup to create the admin account.\n"
+                    "========================================================",
+                    token,
+                )
+
     # Auto-discover containers on startup
     await discover_containers_startup()
 
@@ -231,8 +254,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Rate limiter setup
-limiter = Limiter(key_func=get_remote_address)
+# Rate limiter setup — shared instance from app.rate_limit
+from app.rate_limit import limiter  # noqa: E402
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 

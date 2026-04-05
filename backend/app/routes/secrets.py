@@ -4,7 +4,7 @@ import csv
 import io
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.dependencies.auth import require_admin
@@ -32,7 +32,7 @@ router = APIRouter()
 @router.get("/containers/{container_id}/secrets", response_model=list[SecretSchema])
 async def get_container_secrets(
     container_id: int,
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=500),
     secret_repo: SecretRepository = Depends(get_secret_repository),
     user: User = Depends(require_admin),
 ):
@@ -53,7 +53,7 @@ async def get_container_secrets(
 @router.get("/scans/{scan_id}/secrets", response_model=list[SecretSchema])
 async def get_scan_secrets(
     scan_id: int,
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=500),
     secret_repo: SecretRepository = Depends(get_secret_repository),
     user: User = Depends(require_admin),
 ):
@@ -193,8 +193,8 @@ async def list_all_secrets(
     severity: str | None = None,
     category: str | None = None,
     status: str | None = None,
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     secret_repo: SecretRepository = Depends(get_secret_repository),
     user: User = Depends(require_admin),
 ):

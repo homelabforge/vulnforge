@@ -69,7 +69,9 @@ def validate_cron_expression(cron_expr: str) -> str:
     return cron_expr
 
 
-def validate_url(url: str, allowed_schemes: list[str] | None = None) -> str:
+def validate_url(
+    url: str, allowed_schemes: list[str] | None = None, allow_empty: bool = False
+) -> str:
     """
     Validate URL format and scheme.
 
@@ -83,6 +85,9 @@ def validate_url(url: str, allowed_schemes: list[str] | None = None) -> str:
     Raises:
         ValidationError: If URL is invalid
     """
+    if allow_empty and url == "":
+        return url
+
     if not url or not isinstance(url, str):
         raise ValidationError("URL must be a non-empty string")
 

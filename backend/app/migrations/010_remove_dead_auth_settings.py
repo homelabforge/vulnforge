@@ -45,9 +45,11 @@ async def migrate(conn) -> None:
         return
 
     # Delete only the known dead keys (not any future auth keys)
-    placeholders = ", ".join(f"'{k}'" for k in DEAD_AUTH_KEYS)
+    placeholders = ", ".join(f":k{i}" for i in range(len(DEAD_AUTH_KEYS)))
+    params = {f"k{i}": key for i, key in enumerate(DEAD_AUTH_KEYS)}
     result = await conn.execute(
-        text(f"DELETE FROM settings WHERE key IN ({placeholders})")  # noqa: S608
+        text(f"DELETE FROM settings WHERE key IN ({placeholders})"),
+        params,
     )
     deleted = result.rowcount
     logger.info(f"Removed {deleted} dead auth settings from database")

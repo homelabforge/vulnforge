@@ -596,6 +596,22 @@
         "title": "CacheStatsResponse",
         "type": "object"
       },
+      "CancelSetupRequest": {
+        "description": "Schema for cancelling first-time setup.",
+        "properties": {
+          "bootstrap_token": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Bootstrap Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bootstrap_token"
+        ],
+        "title": "CancelSetupRequest",
+        "type": "object"
+      },
       "ChangePasswordRequest": {
         "description": "Schema for changing password.",
         "properties": {
@@ -5001,6 +5017,12 @@
       "SetupRequest": {
         "description": "Schema for initial admin account setup.",
         "properties": {
+          "bootstrap_token": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Bootstrap Token",
+            "type": "string"
+          },
           "email": {
             "format": "email",
             "maxLength": 255,
@@ -5033,6 +5055,7 @@
           }
         },
         "required": [
+          "bootstrap_token",
           "username",
           "email",
           "password"
@@ -6645,6 +6668,8 @@
             "required": false,
             "schema": {
               "default": 10,
+              "maximum": 200,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -6756,15 +6781,11 @@
             "name": "limit",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Limit"
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           },
           {
@@ -6773,6 +6794,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "minimum": 0,
               "title": "Offset",
               "type": "integer"
             }
@@ -7048,6 +7070,8 @@
             "required": false,
             "schema": {
               "default": 100,
+              "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -7591,6 +7615,8 @@
             "required": false,
             "schema": {
               "default": 10,
+              "maximum": 200,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -8011,6 +8037,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "minimum": 0,
               "title": "Skip",
               "type": "integer"
             }
@@ -8021,6 +8048,8 @@
             "required": false,
             "schema": {
               "default": 100,
+              "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -8763,6 +8792,8 @@
             "required": false,
             "schema": {
               "default": 10,
+              "maximum": 200,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -9096,6 +9127,8 @@
             "required": false,
             "schema": {
               "default": 100,
+              "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -9192,6 +9225,8 @@
             "required": false,
             "schema": {
               "default": 100,
+              "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -9202,6 +9237,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "minimum": 0,
               "title": "Offset",
               "type": "integer"
             }
@@ -9737,8 +9773,18 @@
     },
     "/api/v1/user-auth/cancel-setup": {
       "post": {
-        "description": "Cancel setup and disable user authentication (only during initial setup).\n\nThis endpoint allows users to cancel the setup process from the setup page.\nIt can only be called before setup is complete to prevent unauthorized\nauth mode changes.",
+        "description": "Cancel setup and disable user authentication (only during initial setup).\n\nRequires bootstrap token. This endpoint allows users to cancel the setup\nprocess from the setup page.  It can only be called before setup is complete\nto prevent unauthorized auth mode changes.",
         "operationId": "cancel_setup_api_v1_user_auth_cancel_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelSetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -9749,6 +9795,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Cancel Setup",
@@ -9803,7 +9859,7 @@
     },
     "/api/v1/user-auth/logout": {
       "post": {
-        "description": "Logout admin user by clearing JWT cookie.",
+        "description": "Logout admin user by clearing JWT cookie and denying the token.",
         "operationId": "logout_api_v1_user_auth_logout_post",
         "responses": {
           "200": {
@@ -10216,6 +10272,8 @@
             "required": false,
             "schema": {
               "default": 100,
+              "maximum": 500,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -10226,6 +10284,7 @@
             "required": false,
             "schema": {
               "default": 0,
+              "minimum": 0,
               "title": "Offset",
               "type": "integer"
             }
@@ -10574,6 +10633,8 @@
             "required": false,
             "schema": {
               "default": 5,
+              "maximum": 50,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -10640,6 +10701,8 @@
             "required": false,
             "schema": {
               "default": 10,
+              "maximum": 50,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }

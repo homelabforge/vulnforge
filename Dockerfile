@@ -22,7 +22,7 @@ RUN bun run build
 RUN test -d dist && test -f dist/index.html
 
 # Stage 2: Build backend
-FROM python:3.14-slim AS backend-builder
+FROM python:3.14.0-slim AS backend-builder
 
 WORKDIR /app
 
@@ -34,7 +34,7 @@ COPY backend ./
 RUN pip install --no-cache-dir .
 
 # Stage 3: Production image
-FROM python:3.14-slim
+FROM python:3.14.0-slim
 
 # Build arguments for metadata
 ARG BUILD_DATE

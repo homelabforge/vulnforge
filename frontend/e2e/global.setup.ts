@@ -2,6 +2,7 @@ import { test as setup, expect } from '@playwright/test';
 
 const AUTH_FILE = './e2e/.auth/user.json';
 const API_BASE = 'http://localhost:8789/api/v1';
+const BOOTSTRAP_TOKEN = process.env.VULNFORGE_BOOTSTRAP_TOKEN ?? 'e2e-test-token';
 
 const ADMIN = {
   username: 'e2e-admin',
@@ -18,6 +19,7 @@ setup('create admin account and authenticate', async ({ page, request }) => {
   if (!status.setup_complete || status.auth_mode === 'none') {
     const setupResp = await request.post(`${API_BASE}/user-auth/setup`, {
       data: {
+        bootstrap_token: BOOTSTRAP_TOKEN,
         username: ADMIN.username,
         email: ADMIN.email,
         password: ADMIN.password,

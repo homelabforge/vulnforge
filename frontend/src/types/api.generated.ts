@@ -2109,9 +2109,9 @@ export interface paths {
          * Cancel Setup
          * @description Cancel setup and disable user authentication (only during initial setup).
          *
-         *     This endpoint allows users to cancel the setup process from the setup page.
-         *     It can only be called before setup is complete to prevent unauthorized
-         *     auth mode changes.
+         *     Requires bootstrap token. This endpoint allows users to cancel the setup
+         *     process from the setup page.  It can only be called before setup is complete
+         *     to prevent unauthorized auth mode changes.
          */
         post: operations["cancel_setup_api_v1_user_auth_cancel_setup_post"];
         delete?: never;
@@ -2151,7 +2151,7 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description Logout admin user by clearing JWT cookie.
+         * @description Logout admin user by clearing JWT cookie and denying the token.
          */
         post: operations["logout_api_v1_user_auth_logout_post"];
         delete?: never;
@@ -2822,6 +2822,14 @@ export interface components {
              * @default 0
              */
             total_size_bytes: number;
+        };
+        /**
+         * CancelSetupRequest
+         * @description Schema for cancelling first-time setup.
+         */
+        CancelSetupRequest: {
+            /** Bootstrap Token */
+            bootstrap_token: string;
         };
         /**
          * ChangePasswordRequest
@@ -4536,6 +4544,8 @@ export interface components {
          * @description Schema for initial admin account setup.
          */
         SetupRequest: {
+            /** Bootstrap Token */
+            bootstrap_token: string;
             /**
              * Email
              * Format: email
@@ -5362,7 +5372,7 @@ export interface operations {
     list_containers_api_v1_containers__get: {
         parameters: {
             query?: {
-                limit?: number | null;
+                limit?: number;
                 offset?: number;
             };
             header?: never;
@@ -7441,7 +7451,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelSetupRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -7450,6 +7464,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

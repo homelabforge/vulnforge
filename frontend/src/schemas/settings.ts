@@ -42,6 +42,7 @@ export const settingsFieldSchemas = {
 
   // URLs
   ntfy_url: urlOrEmpty,
+  public_base_url: urlOrEmpty,
 
   // Enums
   log_level: z.enum(LOG_LEVELS),

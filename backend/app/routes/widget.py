@@ -1,6 +1,6 @@
 """Homepage widget API endpoints."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.repositories.container_repository import ContainerRepository
 from app.repositories.dependencies import (
@@ -111,7 +111,7 @@ async def get_widget_critical(
 
 @router.get("/top-containers", response_model=WidgetTopContainers)
 async def get_widget_top_containers(
-    limit: int = 10,
+    limit: int = Query(10, ge=1, le=50),
     container_repo: ContainerRepository = Depends(get_container_repository),
 ):
     """
@@ -132,7 +132,7 @@ async def get_widget_top_containers(
 
 @router.get("/remediation", response_model=WidgetRemediation)
 async def get_widget_remediation(
-    limit: int = 5,
+    limit: int = Query(5, ge=1, le=50),
     vuln_repo: VulnerabilityRepository = Depends(get_vulnerability_repository),
 ):
     """

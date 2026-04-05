@@ -7,9 +7,11 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.rate_limit import limiter
 from app.schemas.common import ActionResponse
 from app.schemas.notification import OidcTestResponse
 from app.schemas.user_auth import (
+    CancelSetupRequest,
     ChangePasswordRequest,
     LoginRequest,
     SetupRequest,
@@ -19,12 +21,18 @@ from app.schemas.user_auth import (
     UserAuthStatusResponse,
     UserProfile,
 )
+from app.services.bootstrap import consume_bootstrap_token, get_bootstrap_token
 from app.services.settings_manager import SettingsManager
 from app.services.user_auth import (
     JWT_COOKIE_MAX_AGE,
     JWT_COOKIE_NAME,
     authenticate_user_admin,
+    bump_session_version,
     create_access_token,
+    decode_token,
+    deny_token,
+    get_public_base_url,
+    get_session_version,
     get_user_admin_profile,
     get_user_auth_mode,
     hash_password,
@@ -87,6 +95,14 @@ async def setup_admin_account(
             detail="Setup already complete. Admin account exists.",
         )
 
+    # Validate bootstrap token
+    expected_token = get_bootstrap_token()
+    if not expected_token or setup_data.bootstrap_token != expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid bootstrap token. Check container logs for the setup token.",
+        )
+
     # Hash password
     password_hash = hash_password(setup_data.password)
 
@@ -103,6 +119,9 @@ async def setup_admin_account(
     # Enable local authentication
     await settings_manager.set("user_auth_mode", "local")
 
+    # Consume bootstrap token so it cannot be reused
+    consume_bootstrap_token()
+
     logger.info("User auth admin account created: %s", sanitize_for_log(setup_data.username))
     logger.info("User authentication mode set to: local")
 
@@ -115,12 +134,15 @@ async def setup_admin_account(
 
 
 @router.post("/cancel-setup", response_model=ActionResponse)
-async def cancel_setup(db: AsyncSession = Depends(get_db)):
+async def cancel_setup(
+    cancel_data: CancelSetupRequest,
+    db: AsyncSession = Depends(get_db),
+):
     """Cancel setup and disable user authentication (only during initial setup).
 
-    This endpoint allows users to cancel the setup process from the setup page.
-    It can only be called before setup is complete to prevent unauthorized
-    auth mode changes.
+    Requires bootstrap token. This endpoint allows users to cancel the setup
+    process from the setup page.  It can only be called before setup is complete
+    to prevent unauthorized auth mode changes.
     """
     # Only allow canceling if setup is not complete yet
     setup_complete = await is_user_auth_setup_complete(db)
@@ -129,9 +151,20 @@ async def cancel_setup(db: AsyncSession = Depends(get_db)):
             status_code=403, detail="Cannot cancel setup after it has been completed"
         )
 
+    # Validate bootstrap token
+    expected_token = get_bootstrap_token()
+    if not expected_token or cancel_data.bootstrap_token != expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid bootstrap token. Check container logs for the setup token.",
+        )
+
     # Set user_auth_mode to none
     settings_manager = SettingsManager(db)
     await settings_manager.set("user_auth_mode", "none")
+
+    # Consume bootstrap token
+    consume_bootstrap_token()
 
     logger.info("User auth setup cancelled - authentication disabled")
 
@@ -139,6 +172,7 @@ async def cancel_setup(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def login(
     request: Request,
     response: Response,
@@ -163,10 +197,12 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Create JWT token
+    # Create JWT token with session version
+    sv = await get_session_version(db)
     access_token_expires = timedelta(minutes=24 * 60)  # 24 hours
     access_token = create_access_token(
-        data={"sub": "admin", "username": profile["username"]}, expires_delta=access_token_expires
+        data={"sub": "admin", "username": profile["username"], "sv": sv},
+        expires_delta=access_token_expires,
     )
 
     # Set httpOnly cookie
@@ -199,14 +235,27 @@ async def login(
 
 @router.post("/logout", response_model=ActionResponse)
 async def logout(
+    request: Request,
     response: Response,
     admin: dict = Depends(require_user_auth),
     db: AsyncSession = Depends(get_db),
 ):
-    """Logout admin user by clearing JWT cookie."""
+    """Logout admin user by clearing JWT cookie and denying the token."""
     if not admin:
         # user_auth_mode is "none", no cookie to clear
         return {"message": "Authentication is disabled"}
+
+    # Deny the current token so it cannot be reused before expiry
+    token = request.cookies.get(JWT_COOKIE_NAME)
+    if token:
+        try:
+            payload = decode_token(token)
+            jti = payload.get("jti")
+            exp = payload.get("exp", 0)
+            if jti:
+                deny_token(jti, float(exp))
+        except Exception:
+            pass  # Token already expired/invalid
 
     # Clear JWT cookie
     response.delete_cookie(key=JWT_COOKIE_NAME)
@@ -318,6 +367,10 @@ async def change_password(
     # Update password
     await update_user_admin_password(db, new_hash)
 
+    # Invalidate all existing sessions after password change
+    await bump_session_version(db)
+    logger.info("All sessions invalidated after password change")
+
     logger.info("User auth admin password changed")
 
     return {"message": "Password changed successfully"}
@@ -385,12 +438,18 @@ async def oidc_login(
             detail="Invalid OIDC issuer URL (SSRF protection)",
         )
 
-    # Determine base URL (handles reverse proxy headers from Traefik)
-    base_url = str(request.base_url).rstrip("/")
-    if request.headers.get("x-forwarded-proto"):
-        scheme = request.headers.get("x-forwarded-proto")
-        host = request.headers.get("x-forwarded-host", request.headers.get("host"))
+    # Use configured public base URL (trusted origin), fall back to headers for upgrades
+    base_url = await get_public_base_url(db)
+    if not base_url:
+        # Fallback for existing installs that haven't set public_base_url yet
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get("x-forwarded-host", request.headers.get("host", "localhost"))
         base_url = f"{scheme}://{host}"
+        logger.warning(
+            "public_base_url not configured — deriving OIDC base URL from request "
+            "headers (%s). Set public_base_url in Settings for better security.",
+            base_url,
+        )
 
     # Create authorization URL with state/nonce
     auth_url, state = await oidc_service.create_authorization_url(db, config, metadata, base_url)
@@ -523,26 +582,37 @@ async def oidc_callback(
         if not admin_profile:
             raise HTTPException(status_code=500, detail="Admin profile not found")
 
-        # CREATE JWT TOKEN
+        # CREATE JWT TOKEN with session version
+        sv = await get_session_version(db)
         access_token_expires = timedelta(minutes=24 * 60)  # 24 hours
         jwt_token = create_access_token(
-            data={"sub": "admin", "username": admin_profile["username"]},
+            data={"sub": "admin", "username": admin_profile["username"], "sv": sv},
             expires_delta=access_token_expires,
         )
 
         # SET HTTPONLY COOKIE AND REDIRECT
-        scheme = request.headers.get("x-forwarded-proto", "http")
-        host = request.headers.get("x-forwarded-host", request.headers.get("host", "localhost"))
+        base_url = await get_public_base_url(db)
+        if not base_url:
+            # Fallback for existing installs that haven't set public_base_url yet
+            scheme = request.headers.get("x-forwarded-proto", "http")
+            host = request.headers.get("x-forwarded-host", request.headers.get("host", "localhost"))
+            base_url = f"{scheme}://{host}"
+            logger.warning(
+                "public_base_url not configured — deriving redirect from request "
+                "headers (%s). Set public_base_url in Settings for better security.",
+                base_url,
+            )
+        is_secure = base_url.startswith("https")
 
         redirect_response = RedirectResponse(
-            url=f"{scheme}://{host}/",
+            url=f"{base_url}/",
             status_code=302,
         )
         redirect_response.set_cookie(
             key=JWT_COOKIE_NAME,
             value=jwt_token,
             httponly=True,
-            secure=(scheme == "https"),
+            secure=is_secure,
             samesite="lax",
             max_age=JWT_COOKIE_MAX_AGE,
         )

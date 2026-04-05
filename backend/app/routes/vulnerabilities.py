@@ -4,7 +4,7 @@ import csv
 import io
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.dependencies.auth import require_admin
@@ -37,8 +37,8 @@ async def list_vulnerabilities(
     kev_only: bool = False,
     status: str | None = None,
     container_id: int | None = None,
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     vuln_repo: VulnerabilityRepository = Depends(get_vulnerability_repository),
 ):
     """List all vulnerabilities with filters and pagination."""

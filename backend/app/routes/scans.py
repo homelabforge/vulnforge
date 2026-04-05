@@ -6,13 +6,14 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies.auth import require_admin
 from app.models import Container, Scan, ScanJob
+from app.models.user import User
+from app.rate_limit import limiter
 from app.schemas import (
     CveDeltaResponse,
     ScanAbortResponse,
@@ -37,9 +38,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Create limiter instance
-limiter = Limiter(key_func=get_remote_address)
-
 
 def _format_sse(payload: dict, event: str = "scan-status") -> str:
     """Format a payload for Server-Sent Events."""
@@ -49,7 +47,10 @@ def _format_sse(payload: dict, event: str = "scan-status") -> str:
 @router.post("/scan", response_model=ScanTriggerResponse)
 @limiter.limit("10/minute")
 async def scan_containers(
-    scan_request: ScanRequest, request: Request, db: AsyncSession = Depends(get_db)
+    scan_request: ScanRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ):
     """Trigger a scan of containers using the scan queue.
 
@@ -83,7 +84,7 @@ async def scan_containers(
 async def get_scan_history(
     request: Request,
     container_id: int,
-    limit: int = 10,
+    limit: int = Query(10, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
     """Get scan history for a container."""
@@ -180,7 +181,12 @@ async def get_scanner_health(request: Request):
 
 @router.post("/{scan_id}/abort", response_model=ScanAbortResponse)
 @limiter.limit("20/minute")
-async def abort_scan(scan_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+async def abort_scan(
+    scan_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
     """
     Abort a running or queued scan.
 
@@ -220,7 +226,12 @@ async def abort_scan(scan_id: int, request: Request, db: AsyncSession = Depends(
 
 @router.post("/{scan_id}/retry", response_model=ScanRetryResponse)
 @limiter.limit("20/minute")
-async def retry_scan(scan_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+async def retry_scan(
+    scan_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
     """
     Retry a failed scan.
 

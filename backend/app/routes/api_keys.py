@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies.auth import require_admin
+from app.models.user import User
 from app.schemas.api_key import APIKeyCreate, APIKeyCreated, APIKeyList, APIKeyResponse
 from app.services.api_key_service import APIKeyService
 
@@ -18,6 +20,7 @@ router = APIRouter(prefix="/api/v1/api-keys", tags=["api-keys"])
 async def create_api_key(
     key_data: APIKeyCreate,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ):
     """
     Create a new API key.
@@ -59,6 +62,7 @@ async def create_api_key(
 async def list_api_keys(
     include_revoked: bool = False,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ):
     """
     List all API keys.
@@ -101,6 +105,7 @@ async def list_api_keys(
 async def get_api_key(
     key_id: int,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ):
     """
     Get details of a specific API key.
@@ -140,6 +145,7 @@ async def get_api_key(
 async def revoke_api_key(
     key_id: int,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ):
     """
     Revoke an API key (soft delete).

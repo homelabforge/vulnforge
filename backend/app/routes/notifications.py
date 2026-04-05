@@ -3,7 +3,7 @@
 import logging
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,11 +31,12 @@ router = APIRouter()
 
 @router.get("/history", response_model=list[NotificationLog])
 async def get_notification_history(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     notification_type: str | None = None,
     status: str | None = None,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ):
     """
     Get notification history with optional filtering.
@@ -66,6 +67,7 @@ async def get_notification_history(
 async def get_notification_by_id(
     notification_id: int,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ):
     """Get a specific notification by ID."""
     result = await db.execute(
@@ -83,6 +85,7 @@ async def get_notification_by_id(
 async def get_notifications_for_scan(
     scan_id: int,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ):
     """Get all notifications for a specific scan."""
     result = await db.execute(
@@ -96,7 +99,10 @@ async def get_notifications_for_scan(
 
 
 @router.get("/stats", response_model=NotificationStatsResponse)
-async def get_notification_stats(db: AsyncSession = Depends(get_db)):
+async def get_notification_stats(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
     """Get notification statistics."""
     # Total notifications
     total_result = await db.execute(select(NotificationLogModel))
@@ -137,6 +143,7 @@ async def get_notification_stats(db: AsyncSession = Depends(get_db)):
 async def get_notification_rules(
     enabled_only: bool = False,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ):
     """Get all notification rules."""
     query = select(NotificationRuleModel)
@@ -154,6 +161,7 @@ async def get_notification_rules(
 async def get_notification_rule(
     rule_id: int,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ):
     """Get a specific notification rule by ID."""
     result = await db.execute(
@@ -263,7 +271,10 @@ async def toggle_notification_rule(
 
 
 @router.post("/test", response_model=StatusMessageResponse)
-async def send_test_notification(db: AsyncSession = Depends(get_db)):
+async def send_test_notification(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
     """Send a test notification to verify ntfy configuration (legacy endpoint)."""
     from app.services.notifications.ntfy import NtfyNotificationService
     from app.services.settings_manager import SettingsManager
@@ -304,7 +315,10 @@ async def send_test_notification(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/test/ntfy", response_model=MessageResponse)
-async def test_ntfy_connection(db: AsyncSession = Depends(get_db)):
+async def test_ntfy_connection(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
     """Test ntfy server connection."""
     from app.services.settings_manager import SettingsManager
 
@@ -343,7 +357,10 @@ async def test_ntfy_connection(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/test/gotify", response_model=MessageResponse)
-async def test_gotify_connection(db: AsyncSession = Depends(get_db)):
+async def test_gotify_connection(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
     """Test Gotify server connection."""
     from app.services.settings_manager import SettingsManager
 
@@ -377,7 +394,10 @@ async def test_gotify_connection(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/test/pushover", response_model=MessageResponse)
-async def test_pushover_connection(db: AsyncSession = Depends(get_db)):
+async def test_pushover_connection(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
     """Test Pushover connection."""
     from app.services.settings_manager import SettingsManager
 
@@ -431,7 +451,10 @@ async def test_pushover_connection(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/test/slack", response_model=MessageResponse)
-async def test_slack_connection(db: AsyncSession = Depends(get_db)):
+async def test_slack_connection(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
     """Test Slack webhook connection."""
     from app.services.settings_manager import SettingsManager
 
@@ -470,7 +493,10 @@ async def test_slack_connection(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/test/discord", response_model=MessageResponse)
-async def test_discord_connection(db: AsyncSession = Depends(get_db)):
+async def test_discord_connection(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
     """Test Discord webhook connection."""
     from app.services.settings_manager import SettingsManager
 
@@ -509,7 +535,10 @@ async def test_discord_connection(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/test/telegram", response_model=MessageResponse)
-async def test_telegram_connection(db: AsyncSession = Depends(get_db)):
+async def test_telegram_connection(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
     """Test Telegram bot connection."""
     from app.services.settings_manager import SettingsManager
 
@@ -566,7 +595,10 @@ async def test_telegram_connection(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/test/email", response_model=MessageResponse)
-async def test_email_connection(db: AsyncSession = Depends(get_db)):
+async def test_email_connection(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
     """Test SMTP email connection."""
     from app.services.settings_manager import SettingsManager
 

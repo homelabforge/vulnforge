@@ -10,7 +10,7 @@ import io
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -593,7 +593,9 @@ async def unignore_image_finding(
 
 
 @router.get("/scans/history", response_model=list[ImageComplianceScanHistoryEntry])
-async def get_scan_history(limit: int = 10, db: AsyncSession = Depends(get_db)):
+async def get_scan_history(
+    limit: int = Query(10, ge=1, le=200), db: AsyncSession = Depends(get_db)
+):
     """
     Get image compliance scan history.
 

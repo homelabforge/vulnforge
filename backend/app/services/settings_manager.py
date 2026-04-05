@@ -125,6 +125,10 @@ class SettingsManager:
         # NOTE: Docker connection is now configured via DOCKER_HOST environment variable in compose
         # CORS settings
         "cors_origins": '["https://vulnforge.starett.net", "http://localhost:5173"]',  # JSON array
+        # Session management
+        "session_version": "1",
+        # Security settings
+        "public_base_url": "",
     }
 
     DEFAULT_CATEGORIES = {
@@ -199,6 +203,8 @@ class SettingsManager:
         "scanner_allow_stale_db": "scanner",
         "scanner_stale_db_warning_hours": "scanner",
         "cors_origins": "security",
+        "session_version": "security",
+        "public_base_url": "security",
     }
 
     @classmethod
@@ -329,6 +335,7 @@ class SettingsManager:
         "parallel_scans": ("positive_int", {"min_value": 1}),
         "keep_scan_history_days": ("positive_int", {"min_value": 1}),
         "notify_threshold_medium": ("positive_int", {"min_value": 1}),
+        "public_base_url": ("url", {"allowed_schemes": ["http", "https"], "allow_empty": True}),
     }
 
     async def set(

@@ -25,10 +25,15 @@ export interface TokenResponse {
 }
 
 export interface SetupRequest {
+  bootstrap_token: string;
   username: string;
   email: string;
   password: string;
   full_name?: string;
+}
+
+export interface CancelSetupRequest {
+  bootstrap_token: string;
 }
 
 export interface SetupResponse {

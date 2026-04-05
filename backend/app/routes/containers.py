@@ -2,10 +2,12 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies.auth import require_admin
+from app.models.user import User
 from app.repositories.container_repository import ContainerRepository
 from app.repositories.dependencies import get_container_repository
 from app.schemas import (
@@ -29,8 +31,8 @@ router = APIRouter()
 
 @router.get("/", response_model=ContainerList)
 async def list_containers(
-    limit: int | None = None,
-    offset: int = 0,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     container_repo: ContainerRepository = Depends(get_container_repository),
 ):
     """List all containers with optional pagination."""
@@ -159,6 +161,7 @@ async def update_container(
     container_update: ContainerUpdate,
     container_repo: ContainerRepository = Depends(get_container_repository),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ):
     """Update container fields (e.g., toggle is_my_project)."""
     container = await container_repo.get_by_id(container_id)
@@ -183,6 +186,7 @@ async def update_container(
 async def discover_containers(
     container_repo: ContainerRepository = Depends(get_container_repository),
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
 ):
     """Discover containers from Docker and update database."""
     docker_service = DockerService()

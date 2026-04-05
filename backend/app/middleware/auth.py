@@ -62,11 +62,6 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             request.state.user = User(username="anonymous", provider="none", is_admin=False)
             return await call_next(request)
 
-        # Exempt widget endpoints (public aggregate stats for Homepage)
-        if normalized_path_lower.startswith("/api/v1/widget/"):
-            request.state.user = User(username="anonymous", provider="none", is_admin=False)
-            return await call_next(request)
-
         # Allow unauthenticated access to frontend (non-API routes)
         # Only protect /api/* endpoints with authentication
         if not (normalized_path_lower.startswith("/api/") or normalized_path_lower == "/api"):
@@ -81,16 +76,34 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 payload = decode_token(jwt_token)
                 username = payload.get("username")
                 if username:
-                    # Successful JWT authentication
-                    user = User(
-                        username=username,
-                        email=payload.get("email"),
-                        is_admin=True,  # User auth admin is always admin
-                        provider="user_auth",
-                    )
-                    request.state.user = user
-                    logger.info(f"JWT auth successful: {username} for {normalized_path}")
-                    return await call_next(request)
+                    # Validate session version claim
+                    token_sv = payload.get("sv")
+                    sv_valid = False
+                    if token_sv is not None:
+                        from app.database import async_session_maker
+                        from app.services.user_auth import get_session_version
+
+                        async with async_session_maker() as sv_db:
+                            current_sv = await get_session_version(sv_db)
+                        sv_valid = token_sv == current_sv
+
+                    if sv_valid:
+                        # Successful JWT authentication
+                        user = User(
+                            username=username,
+                            email=payload.get("email"),
+                            is_admin=True,  # User auth admin is always admin
+                            provider="user_auth",
+                        )
+                        request.state.user = user
+                        logger.info(f"JWT auth successful: {username} for {normalized_path}")
+                        return await call_next(request)
+                    else:
+                        logger.warning(
+                            "JWT rejected: missing or stale session version for %s",
+                            normalized_path,
+                        )
+                        # Fall through to API key / auth-disabled check
             except Exception as e:
                 # JWT validation failed - fall through to API key check
                 logger.warning(f"JWT validation failed for {normalized_path}: {e}")

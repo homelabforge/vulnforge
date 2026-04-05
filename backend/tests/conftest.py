@@ -403,12 +403,15 @@ async def admin_user(db_session: AsyncSession):
     VulnForge uses JWT + API key authentication.
     Returns a mock user object with valid JWT token for testing.
     """
-    from app.services.user_auth import create_access_token
+    from app.services.user_auth import create_access_token, get_session_version
 
     # Create JWT token for testing (mock admin user)
     admin_username = "admin"
     admin_email = "admin@example.com"
-    admin_token = create_access_token({"username": admin_username, "email": admin_email})
+    sv = await get_session_version(db_session)
+    admin_token = create_access_token(
+        {"sub": "admin", "username": admin_username, "email": admin_email, "sv": sv}
+    )
 
     # Return a mock user object with token
     class MockAdminUser:

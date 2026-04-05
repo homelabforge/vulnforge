@@ -13,6 +13,7 @@ Key features:
 
 import logging
 import secrets
+import time as _time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -37,6 +38,10 @@ JWT_ALGORITHM = "HS256"
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 24 * 60  # 24 hours
 JWT_COOKIE_NAME = "vulnforge_token"
 JWT_COOKIE_MAX_AGE = 86400  # 24 hours in seconds
+
+# In-memory JWT denylist: maps jti -> exp timestamp
+# Entries are opportunistically cleaned when checked
+_TOKEN_DENYLIST: dict[str, float] = {}
 
 # Initialize Argon2 password hasher with recommended parameters
 # time_cost=2, memory_cost=102400 (100MB), parallelism=8
@@ -143,6 +148,66 @@ _SECRET_KEY = get_or_create_secret_key()
 
 
 # ============================================================================
+# Session Version & Token Denylist
+# ============================================================================
+
+
+async def get_session_version(db: AsyncSession) -> int:
+    """Read the current session version from settings.
+
+    Returns:
+        The session version as an integer (default 1).
+    """
+    settings_manager = SettingsManager(db)
+    raw = await settings_manager.get("session_version", default="1")
+    try:
+        return int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 1
+
+
+async def bump_session_version(db: AsyncSession) -> int:
+    """Increment the session version, invalidating all existing JWTs.
+
+    Returns:
+        The new session version.
+    """
+    current = await get_session_version(db)
+    new_version = current + 1
+    settings_manager = SettingsManager(db)
+    await settings_manager.set("session_version", str(new_version))
+    logger.info("Session version bumped from %d to %d", current, new_version)
+    return new_version
+
+
+def deny_token(jti: str, exp: float) -> None:
+    """Add a token JTI to the in-memory denylist.
+
+    Args:
+        jti: The JWT token identifier to deny.
+        exp: The token's expiry timestamp (used for cleanup).
+    """
+    _TOKEN_DENYLIST[jti] = exp
+
+
+def is_token_denied(jti: str) -> bool:
+    """Check whether a token JTI has been denied (logged out).
+
+    Opportunistically removes expired entries from the denylist.
+
+    Returns:
+        True if the token is denied.
+    """
+    now = _time.time()
+    # Opportunistic cleanup of expired entries
+    expired = [k for k, v in _TOKEN_DENYLIST.items() if v < now]
+    for k in expired:
+        del _TOKEN_DENYLIST[k]
+
+    return jti in _TOKEN_DENYLIST
+
+
+# ============================================================================
 # Password Operations
 # ============================================================================
 
@@ -181,6 +246,7 @@ def hash_password(password: str) -> str:
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
     to_encode = data.copy()
+    to_encode["jti"] = secrets.token_urlsafe(16)
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta
     else:
@@ -239,6 +305,12 @@ def decode_token(token: str) -> dict:
             if payload["exp"] < time.time():
                 logger.error("JWT token has expired")
                 raise credentials_exception
+
+        # Check if token has been explicitly denied (logout)
+        jti = payload.get("jti")
+        if jti and is_token_denied(jti):
+            logger.info("Token denied (logged out)")
+            raise credentials_exception
 
         return payload
     except JoseError as e:
@@ -391,6 +463,16 @@ async def get_current_user_admin(
     # Decode token
     payload = decode_token(token)
 
+    # Validate session version claim
+    token_sv = payload.get("sv")
+    if token_sv is None:
+        logger.info("Rejecting pre-upgrade JWT (no sv claim)")
+        raise credentials_exception
+    current_sv = await get_session_version(db)
+    if token_sv != current_sv:
+        logger.info("Token session version stale: %s vs %s", token_sv, current_sv)
+        raise credentials_exception
+
     # Validate token structure
     sub = payload.get("sub")
     username = payload.get("username")
@@ -472,6 +554,15 @@ async def optional_user_auth(
 # ============================================================================
 # Auth Mode Management
 # ============================================================================
+
+
+async def get_public_base_url(db: AsyncSession) -> str | None:
+    """Get canonical public base URL. Returns None if not configured."""
+    sm = SettingsManager(db)
+    val = await sm.get("public_base_url", default="")
+    if val and val.strip():
+        return val.strip().rstrip("/")
+    return None
 
 
 async def get_user_auth_mode(db: AsyncSession) -> str:

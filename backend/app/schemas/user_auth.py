@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 class SetupRequest(BaseModel):
     """Schema for initial admin account setup."""
 
+    bootstrap_token: str = Field(..., min_length=1, max_length=128)
     username: str = Field(..., min_length=3, max_length=100)
     email: EmailStr = Field(..., max_length=255)
     password: str = Field(..., min_length=8, max_length=100)
@@ -103,6 +104,12 @@ class ChangePasswordRequest(BaseModel):
         if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", v):
             raise ValueError("Password must contain at least one special character")
         return v
+
+
+class CancelSetupRequest(BaseModel):
+    """Schema for cancelling first-time setup."""
+
+    bootstrap_token: str = Field(..., min_length=1, max_length=128)
 
 
 class UserAuthStatusResponse(BaseModel):

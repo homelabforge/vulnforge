@@ -6,6 +6,7 @@ import type {
   SetupResponse,
   UpdateProfileRequest,
   ChangePasswordRequest,
+  CancelSetupRequest,
   UserAuthStatusResponse,
   MessageResponse,
 } from '../../types/auth';
@@ -36,9 +37,11 @@ export const userAuthApi = {
     return handleResponse(res);
   },
 
-  cancelSetup: async (): Promise<MessageResponse> => {
+  cancelSetup: async (data: CancelSetupRequest): Promise<MessageResponse> => {
     const res = await fetch(`${API_BASE}/user-auth/cancel-setup`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
     });
     return handleResponse(res);
   },
