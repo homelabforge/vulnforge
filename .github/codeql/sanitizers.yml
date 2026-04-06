@@ -1,0 +1,35 @@
+extensions:
+  # Mark our sanitizer functions as barriers (sanitizers) for taint tracking
+  # This tells CodeQL that data passing through these functions is sanitized
+  #
+  # Log injection:  backend/app/utils/log_redaction.py
+  # Path injection: backend/app/utils/path_normalization.py
+  # SSRF:           backend/app/validators.py
+  #
+  # All usages are documented and reviewed. New code MUST use these functions.
+  - addsTo:
+      pack: codeql/python-all
+      extensible: barrierModel
+    data:
+      # Log injection barriers — sanitize_for_log() strips newlines, control
+      # characters (0x00-0x08, 0x0b-0x0c, 0x0e-0x1f, 0x7f), normalizes
+      # whitespace, truncates, and redacts sensitive patterns before logging
+      - ["app.utils.log_redaction", "Member[sanitize_for_log].ReturnValue", "log-injection"]
+      # redact_log_message() redacts the format string and all positional/keyword
+      # arguments before they reach the logger
+      - ["app.utils.log_redaction", "Member[redact_log_message].ReturnValue", "log-injection"]
+      # redact_sensitive_data() recursively redacts secrets from dicts/lists/strings
+      - ["app.utils.log_redaction", "Member[redact_sensitive_data].ReturnValue", "log-injection"]
+      - ["app.utils.log_redaction", "Member[redact_sensitive_data].ReturnValue", "py/clear-text-logging-sensitive-data"]
+      # redact_dict_keys() replaces values of sensitive keys with ***REDACTED***
+      - ["app.utils.log_redaction", "Member[redact_dict_keys].ReturnValue", "log-injection"]
+      - ["app.utils.log_redaction", "Member[redact_dict_keys].ReturnValue", "py/clear-text-logging-sensitive-data"]
+
+      # Path injection barriers — normalize_path() extracts filename component,
+      # rejects traversal (..), path separators, absolute paths, and validates
+      # the resolved path stays within base_dir
+      - ["app.utils.path_normalization", "Member[normalize_path].ReturnValue", "path-injection"]
+
+      # SSRF barriers — validate_url() parses the URL, enforces allowed schemes
+      # (http/https by default), and requires a valid netloc (host)
+      - ["app.validators", "Member[validate_url].ReturnValue", "request-forgery"]

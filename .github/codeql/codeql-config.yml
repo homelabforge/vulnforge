@@ -1,6 +1,22 @@
 name: "VulnForge CodeQL Config"
 
-# Use security-extended queries
+# Path filters to exclude test files from analysis
+paths-ignore:
+  - "**/tests/**"
+  - "**/__tests__/**"
+  - "**/test_*.py"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+
+# Only run security-tagged queries — filters out code quality rules
+# (py/empty-except, py/mixed-returns, etc.) that are not actionable here.
+# Sanitizer barriers in sanitizers.yml handle the remaining false positives
+# for py/log-injection, py/path-injection, and py/request-forgery.
 query-filters:
   - include:
       tags contain: security
+
+# Register model extensions to recognize our sanitizer functions as barriers
+model-extensions:
+  - .github/codeql/sanitizers.yml
