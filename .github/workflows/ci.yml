@@ -71,7 +71,7 @@ jobs:
       - name: Run pytest with coverage
         run: |
           cd backend
-          timeout 10m pytest --cov=app --cov-report=term-missing --cov-report=xml -v
+          timeout 10m pytest tests/ -v --tb=short --cov=app --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
