@@ -61,7 +61,6 @@ jobs:
       - name: Run pyright type checking
         run: |
           cd backend
-          pip install pyright
           PYTHONPATH=. pyright
 
       - name: Check for missing require_admin in mutation routes (tripwire)
@@ -101,7 +100,7 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: '1.3.8'
+          bun-version: '1.3.11'
 
       - name: Install dependencies
         run: |
@@ -148,7 +147,7 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: '1.3.8'
+          bun-version: '1.3.11'
 
       - name: Install frontend dependencies
         run: |
@@ -208,7 +207,7 @@ jobs:
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version: '1.3.8'
+          bun-version: '1.3.11'
 
       - name: Install frontend dependencies
         run: |
