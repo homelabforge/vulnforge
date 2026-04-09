@@ -2,7 +2,7 @@
 name = "vulnforge"
 version = "4.6.0"
 description = "Docker vulnerability scanner and remediation dashboard powered by Trivy"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.135.3",
     "granian>=2.7.2",
@@ -83,7 +83,7 @@ skip_covered = true
 
 [tool.pyright]
 typeCheckingMode = "standard"
-pythonVersion = "3.13"
+pythonVersion = "3.14"
 include = ["app", "tests"]
 exclude = ["**/__pycache__", ".venv", "build"]
 reportMissingImports = true
