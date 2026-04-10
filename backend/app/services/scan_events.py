@@ -40,7 +40,7 @@ class ScanEventBroadcaster:
                 try:
                     queue.get_nowait()
                     queue.put_nowait(event)
-                except (asyncio.QueueEmpty, asyncio.QueueFull):
+                except asyncio.QueueEmpty, asyncio.QueueFull:
                     stalled.append(queue)
 
         if stalled:

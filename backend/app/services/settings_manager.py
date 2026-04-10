@@ -247,7 +247,7 @@ class SettingsManager:
             return default
         try:
             return int(value)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return default
 
     async def get_bool(self, key: str, default: bool | None = None) -> bool | None:
@@ -264,7 +264,7 @@ class SettingsManager:
             return default
         try:
             return json.loads(value)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return default
 
     async def get_many(self, keys: list[str]) -> dict[str, str | None]:
@@ -311,14 +311,14 @@ class SettingsManager:
             elif type_cls is int:
                 try:
                     result[key] = int(value)
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     result[key] = default
             elif type_cls is bool:
                 result[key] = str(value).lower() in ("true", "1", "yes", "on")
             elif type_cls is float:
                 try:
                     result[key] = float(value)
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     result[key] = default
             else:
                 result[key] = value

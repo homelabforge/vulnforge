@@ -32,7 +32,7 @@ class Secret(BaseModel):
     updated_at: datetime | None = None
 
     @model_validator(mode="after")
-    def ensure_redaction(self) -> "Secret":
+    def ensure_redaction(self) -> Secret:
         """Defensive redaction — ensure secret content is never exposed via API."""
         if self.match and self.match != REDACTED:
             self.match = REDACTED

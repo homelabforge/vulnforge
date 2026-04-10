@@ -208,7 +208,7 @@ def validate_positive_integer(
     """
     try:
         int_value = int(value)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         raise ValidationError(f"{name} must be an integer")
 
     if int_value < min_value:

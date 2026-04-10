@@ -367,7 +367,7 @@ class ScanQueue:
             logger.error(f"Failed to log scan failure activity: {e}", exc_info=True)
 
     @staticmethod
-    async def _link_scan_job(db, container_id: int, scan_id: int) -> "ScanJob | None":
+    async def _link_scan_job(db, container_id: int, scan_id: int) -> ScanJob | None:
         """Find the oldest queued ScanJob for this container and link it to the Scan.
 
         Retries once after 0.5s if the row is not found, to handle the rare case
@@ -421,7 +421,7 @@ class ScanQueue:
         db,
         job: QueuedScanJob,
         docker_service: DockerService,
-    ) -> tuple[Container, Scan, "ScanJob | None", dict[str, Any]]:
+    ) -> tuple[Container, Scan, ScanJob | None, dict[str, Any]]:
         """Stage 1: Load settings, container, create scan record, link ScanJob.
 
         Commits:
@@ -676,7 +676,7 @@ class ScanQueue:
         db,
         container: Container,
         scan: Scan,
-        scan_job_row: "ScanJob | None",
+        scan_job_row: ScanJob | None,
         duration: float,
         kev_count: int,
     ) -> dict:

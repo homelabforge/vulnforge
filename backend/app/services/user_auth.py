@@ -162,7 +162,7 @@ async def get_session_version(db: AsyncSession) -> int:
     raw = await settings_manager.get("session_version", default="1")
     try:
         return int(raw)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 1
 
 
@@ -221,7 +221,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         ph.verify(hashed_password, plain_password)
         return True
-    except (VerifyMismatchError, InvalidHashError):
+    except VerifyMismatchError, InvalidHashError:
         return False
 
 

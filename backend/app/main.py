@@ -306,7 +306,7 @@ try:
         if hasattr(app_settings, "cors_origins")
         else cors_origins_default
     )
-except (json.JSONDecodeError, AttributeError):
+except json.JSONDecodeError, AttributeError:
     cors_origins = cors_origins_default
 
 logger.info(f"CORS allowed origins: {cors_origins}")

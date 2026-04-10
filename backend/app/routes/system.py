@@ -216,6 +216,6 @@ def _compare_versions(current: str, latest: str) -> bool:
 
         # Compare tuples (Python does this lexicographically)
         return tuple(latest_parts) > tuple(current_parts)
-    except (ValueError, AttributeError):
+    except ValueError, AttributeError:
         # If parsing fails, assume no update
         return False

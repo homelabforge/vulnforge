@@ -241,7 +241,7 @@ class NotificationDispatcher:
             smtp_host = raw.get("email_smtp_host")
             try:
                 smtp_port = int(raw.get("email_smtp_port") or "587")
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 smtp_port = 587
             smtp_user = raw.get("email_smtp_user")
             smtp_password = raw.get("email_smtp_password")

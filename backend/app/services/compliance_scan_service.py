@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 async def perform_compliance_scan(
     docker_service: DockerService,
     trigger_type: str = "manual",
-    on_scan_created: "Callable[[int], None] | None" = None,
+    on_scan_created: Callable[[int], None] | None = None,
 ) -> int | None:
     """Execute a compliance scan using VulnForge native compliance checker.
 
