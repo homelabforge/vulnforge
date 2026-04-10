@@ -55,17 +55,17 @@ jobs:
       - name: Run ruff linter
         run: |
           cd backend
-          ruff check .
+          uv run ruff check .
 
       - name: Run ruff formatter check
         run: |
           cd backend
-          ruff format --check .
+          uv run ruff format --check .
 
       - name: Run pyright type checking
         run: |
           cd backend
-          PYTHONPATH=. pyright
+          PYTHONPATH=. uv run pyright
 
       - name: Check for missing require_admin in mutation routes (tripwire)
         run: |
@@ -91,7 +91,7 @@ jobs:
       - name: Run pytest with coverage
         run: |
           cd backend
-          timeout 10m pytest tests/ -v --tb=short --cov=app --cov-report=term-missing --cov-report=xml
+          timeout 10m uv run pytest tests/ -v --tb=short --cov=app --cov-report=term-missing --cov-report=xml
 
   test-frontend:
     name: Frontend Tests
