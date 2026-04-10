@@ -24,14 +24,19 @@ RUN test -d dist && test -f dist/index.html
 # Stage 2: Build backend
 FROM python:3.14.0-slim AS backend-builder
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /app
 
-# Upgrade pip to latest version and clean up old metadata
-RUN pip install --no-cache-dir --upgrade pip
+# Install dependencies from lockfile for reproducible builds
+COPY backend/pyproject.toml backend/uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system --no-cache -r pyproject.toml
 
-# Copy backend code and install from pyproject.toml
+# Copy backend code and install the project itself
 COPY backend ./
-RUN pip install --no-cache-dir .
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system --no-cache --no-deps .
 
 # Stage 3: Production image
 FROM python:3.14.0-slim
