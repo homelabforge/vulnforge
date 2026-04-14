@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dev Dependencies
+- **@typescript-eslint/eslint-plugin**: 8.58.0 → 8.58.2
+- **@typescript-eslint/parser**: 8.58.0 → 8.58.2
+- **@vitest/coverage-v8**: 4.1.2 → 4.1.4
+- **@vitest/ui**: 4.1.2 → 4.1.4
+- **autoprefixer**: 10.4.27 → 10.5.0
+- **globals**: 17.4.0 → 17.5.0
+- **jsdom**: 29.0.1 → 29.0.2
+- **postcss**: 8.5.8 → 8.5.9
+- **pyright**: 1.1.400 → 1.1.408
+- **pytest**: 9.0.2 → 9.0.3
+- **typescript-eslint**: 8.58.0 → 8.58.2
+- **vite**: 8.0.3 → 8.0.8
+- **vitest**: 4.1.2 → 4.1.4
+
+### App Dependencies
+- **@tanstack/react-query**: 5.96.2 → 5.99.0
+- **authlib**: 1.6.9 → 1.6.10
+- **cryptography**: 46.0.6 → 46.0.7
+- **lucide-react**: 1.7.0 → 1.8.0
+- **pydantic**: 2.12.5 → 2.13.0
+- **python-multipart**: 0.0.22 → 0.0.26
+- **react**: 19.2.4 → 19.2.5
+- **react-dom**: 19.2.4 → 19.2.5
+- **react-router-dom**: 7.14.0 → 7.14.1
+
+### Dockerfile Dependencies
+- **oven/bun**: 1.3.11-alpine → 1.3.12-alpine
+
+### HTTP Servers
+- **granian**: 2.7.2 → 2.7.3
+
 ## [4.6.0] - 2026-04-05
 
 ### Dev Dependencies
