@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.6.1] - 2026-04-13
+
 ### Dev Dependencies
 - **@typescript-eslint/eslint-plugin**: 8.58.0 → 8.58.2
 - **@typescript-eslint/parser**: 8.58.0 → 8.58.2
