@@ -2,9 +2,9 @@
 
 Container Security Insights for Your Homelab
 
-[![Docker Build](https://github.com/homelabforge/vulnforge/actions/workflows/docker-build.yml/badge.svg)](https://github.com/homelabforge/vulnforge/actions/workflows/docker-build.yml)
-[![CodeQL](https://github.com/homelabforge/vulnforge/actions/workflows/codeql.yml/badge.svg)](https://github.com/homelabforge/vulnforge/actions/workflows/codeql.yml)
 [![CI](https://github.com/homelabforge/vulnforge/actions/workflows/ci.yml/badge.svg)](https://github.com/homelabforge/vulnforge/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/homelabforge/vulnforge/actions/workflows/codeql.yml/badge.svg)](https://github.com/homelabforge/vulnforge/actions/workflows/codeql.yml)
+[![Publish](https://github.com/homelabforge/vulnforge/actions/workflows/publish.yml/badge.svg)](https://github.com/homelabforge/vulnforge/actions/workflows/publish.yml)
 
 [![Docker](https://img.shields.io/badge/Docker-Available-2496ED?logo=docker&logoColor=white)](https://github.com/homelabforge/vulnforge/pkgs/container/vulnforge)
 [![Python 3.14](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)](https://www.python.org)
