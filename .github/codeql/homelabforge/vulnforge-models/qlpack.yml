@@ -1,0 +1,21 @@
+# CodeQL data-extension pack with project-specific sanitizer barriers.
+#
+# Registered against codeql/python-all so the barrier rules in
+# sanitizers.yml are applied during taint analysis. The codeql-action's
+# packs: config key only accepts published packs, so registration is
+# done via two CLI flags injected through CODEQL_ACTION_EXTRA_OPTIONS
+# in .github/workflows/codeql.yml:
+#
+#   --additional-packs=<repo>/.github/codeql       (search path)
+#   --extension-packs=homelabforge/vulnforge-models (consume rows)
+#
+# Both flags are required. --additional-packs alone makes the pack
+# discoverable for query-pack lookups but does not load its data
+# extensions; --extension-packs is what tells CodeQL to consume them.
+name: homelabforge/vulnforge-models
+version: 0.0.1
+library: true
+extensionTargets:
+  codeql/python-all: '*'
+dataExtensions:
+  - sanitizers.yml
