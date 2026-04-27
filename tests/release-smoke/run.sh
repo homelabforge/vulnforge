@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # End-to-end release gate for VulnForge.
-# See tests/e2e/README.md for details.
+# See tests/release-smoke/README.md for details.
 
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 COMPOSE_FILE="$HERE/compose.yml"
-PROJECT="vulnforge-e2e"
-IMAGE="vulnforge:e2e"
+PROJECT="vulnforge-release-smoke"
+IMAGE="vulnforge:release-smoke"
 APP_PORT=8787
 
 dc() { docker compose -p "$PROJECT" -f "$COMPOSE_FILE" "$@"; }
