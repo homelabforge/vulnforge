@@ -5,7 +5,7 @@ description = "Docker vulnerability scanner and remediation dashboard powered by
 requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.135.3",
-    "granian>=2.7.3",
+    "granian>=2.7.4",
     "sqlalchemy>=2.0.49",
     "pydantic>=2.13.0",
     "pydantic-settings>=2.13.1",
@@ -22,7 +22,7 @@ dependencies = [
     "argon2-cffi>=25.1.0",
     "pyjwt>=2.12.1",
     "email-validator>=2.3.0",
-    "python-multipart>=0.0.26",
+    "python-multipart>=0.0.27",
     # Transitive dependency floors (security)
     "cryptography>=46.0.7",
     "requests>=2.33.1",
