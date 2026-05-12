@@ -15,6 +15,19 @@ interface ThemeProviderProps {
   children: ReactNode;
 }
 
+// Apply theme to DOM (module-scoped — no closure over component state).
+function applyTheme(newTheme: Theme): void {
+  const html = document.documentElement;
+
+  if (newTheme === 'light') {
+    html.classList.add('light');
+    html.classList.remove('dark');
+  } else {
+    html.classList.add('dark');
+    html.classList.remove('light');
+  }
+}
+
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<Theme>('light');
   const [isLoading, setIsLoading] = useState(true);
@@ -55,19 +68,6 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
     initializeTheme();
   }, []);
-
-  // Apply theme to DOM
-  const applyTheme = (newTheme: Theme) => {
-    const html = document.documentElement;
-
-    if (newTheme === 'light') {
-      html.classList.add('light');
-      html.classList.remove('dark');
-    } else {
-      html.classList.add('dark');
-      html.classList.remove('light');
-    }
-  };
 
   // Set theme with dual persistence
   const setTheme = async (newTheme: Theme) => {

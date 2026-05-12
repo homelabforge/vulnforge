@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Migrated `authlib.jose` → `joserfc` (JWT signing/verification, OIDC ID token validation)
+- Swapped `@vitejs/plugin-react-swc` → `@vitejs/plugin-react`
+- Fixed React-hook anti-patterns flagged by `eslint-plugin-react-hooks` 7.1.1 (Setup, ThemeContext, UserAuthenticationCard, useAutoSave)
+
+### App Dependencies
+- **@tanstack/react-query**: 5.99.0 → 5.100.10
+- **authlib**: removed
+- **cryptography**: 46.0.7 → 48.0.0
+- **fastapi**: 0.135.3 → 0.136.1
+- **joserfc**: added (>=1.6.5)
+- **lucide-react**: 1.8.0 → 1.14.0
+- **pydantic**: 2.13.0 → 2.13.4
+- **pydantic-settings**: 2.13.1 → 2.14.1
+- **python-multipart**: 0.0.27 → 0.0.28
+- **react**: 19.2.5 → 19.2.6
+- **react-dom**: 19.2.5 → 19.2.6
+- **react-router-dom**: 7.14.1 → 7.15.0
+- **requests**: 2.33.1 → 2.34.0
+- **tailwind-merge**: 3.5.0 → 3.6.0
+- **urllib3**: pinned floor >=2.7.0
+- **zod**: 4.3.6 → 4.4.3
+
+### Dev Dependencies
+- **@playwright/test**: 1.59.1 → 1.60.0
+- **@tailwindcss/vite**: 4.2.2 → 4.3.0
+- **@typescript-eslint/eslint-plugin**: 8.58.2 → 8.59.3
+- **@typescript-eslint/parser**: 8.58.2 → 8.59.3
+- **@vitejs/plugin-react**: added (^6.0.1)
+- **@vitejs/plugin-react-swc**: removed
+- **@vitest/coverage-v8**: 4.1.4 → 4.1.6
+- **@vitest/ui**: 4.1.4 → 4.1.6
+- **eslint**: 10.2.0 → 10.3.0
+- **eslint-plugin-react-hooks**: 7.0.1 → 7.1.1
+- **globals**: 17.5.0 → 17.6.0
+- **jsdom**: 29.0.2 → 29.1.1
+- **postcss**: 8.5.9 → 8.5.14
+- **pyright**: 1.1.408 → 1.1.409
+- **ruff**: 0.15.10 → 0.15.12
+- **tailwindcss**: 4.2.2 → 4.3.0
+- **typescript**: 6.0.2 → 6.0.3
+- **typescript-eslint**: 8.58.2 → 8.59.3
+- **vite**: 8.0.8 → 8.0.12
+- **vitest**: 4.1.4 → 4.1.6
+
+### Dockerfile Dependencies
+- **oven/bun**: 1.3.12-alpine → 1.3.13-alpine
+
 ## [4.6.1] - 2026-04-13
 
 ### Dev Dependencies

@@ -3,7 +3,7 @@
  * Replicates TideWatch design with modals for Edit Profile, Change Password, and OIDC config
  */
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Shield, User, Lock, X, Eye, EyeOff, Check, AlertCircle, RefreshCw } from "lucide-react";
 import { HelpTooltip } from "@/components/HelpTooltip";
 import { useAuth } from "@/hooks/useAuth";
@@ -45,21 +45,6 @@ export function UserAuthenticationCard() {
   const [testingOidc, setTestingOidc] = useState(false);
   const [savingOidc, setSavingOidc] = useState(false);
 
-  // Initialize profile form when modal opens
-  useEffect(() => {
-    if (editProfileModalOpen && user) {
-      setProfileEmail(user.email || "");
-      setProfileFullName(user.full_name || "");
-    }
-  }, [editProfileModalOpen, user]);
-
-  // Load OIDC settings when modal opens
-  useEffect(() => {
-    if (oidcConfigModalOpen) {
-      loadOidcSettings();
-    }
-  }, [oidcConfigModalOpen]);
-
   const loadOidcSettings = async () => {
     try {
       const settings = await settingsApi.getAll();
@@ -77,6 +62,17 @@ export function UserAuthenticationCard() {
       console.error("Failed to load OIDC settings:", error);
       toast.error("Failed to load OIDC settings");
     }
+  };
+
+  const openEditProfileModal = () => {
+    setProfileEmail(user?.email || "");
+    setProfileFullName(user?.full_name || "");
+    setEditProfileModalOpen(true);
+  };
+
+  const openOidcConfigModal = () => {
+    loadOidcSettings();
+    setOidcConfigModalOpen(true);
   };
 
   // Update profile handler
@@ -247,7 +243,7 @@ export function UserAuthenticationCard() {
             {/* Action Buttons - First Row */}
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => setEditProfileModalOpen(true)}
+                onClick={openEditProfileModal}
                 className="px-4 py-2 bg-vuln-bg hover:bg-vuln-surface-light text-vuln-text border border-vuln-border rounded-lg font-medium transition-colors text-sm"
               >
                 Edit Profile
@@ -265,7 +261,7 @@ export function UserAuthenticationCard() {
             {/* Action Buttons - Second Row */}
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => setOidcConfigModalOpen(true)}
+                onClick={openOidcConfigModal}
                 className="px-4 py-2 bg-vuln-bg hover:bg-vuln-surface-light text-vuln-text border border-vuln-border rounded-lg font-medium transition-colors text-sm flex items-center justify-center gap-2"
               >
                 <Shield className="w-4 h-4" />
@@ -295,7 +291,7 @@ export function UserAuthenticationCard() {
                 Enable Local Auth
               </button>
               <button
-                onClick={() => setOidcConfigModalOpen(true)}
+                onClick={openOidcConfigModal}
                 className="px-4 py-2 bg-vuln-bg hover:bg-vuln-surface-light text-vuln-text border border-vuln-border rounded-lg font-medium transition-colors text-sm flex items-center justify-center gap-2"
               >
                 <Shield className="w-4 h-4" />

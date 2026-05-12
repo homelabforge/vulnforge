@@ -16,7 +16,9 @@ export function useAutoSave(
   const lastPayloadRef = useRef<string | null>(null);
   // Keep onSave current to avoid stale closure inside the debounce timer.
   const onSaveRef = useRef(onSave);
-  onSaveRef.current = onSave;
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  });
 
   useEffect(() => {
     if (!enabled) return;

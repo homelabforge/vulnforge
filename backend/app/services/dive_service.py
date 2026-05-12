@@ -99,7 +99,12 @@ class DiveService:
                 duration = (get_now() - start_time).total_seconds()
 
                 if exit_code != 0:
-                    error_msg = output.decode("utf-8")[:500] if output else "Unknown error"
+                    # exec_run with stream=False returns bytes; coerce defensively in case
+                    # the docker SDK returns an iterator (newer typings widen the union).
+                    output_bytes = output if isinstance(output, bytes) else b"".join(output or [])
+                    error_msg = (
+                        output_bytes.decode("utf-8")[:500] if output_bytes else "Unknown error"
+                    )
                     raise DiveError(f"Dive analysis failed (exit {exit_code}): {error_msg}")
 
                 # Read JSON output from container

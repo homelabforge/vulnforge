@@ -12,6 +12,19 @@ import { toast } from 'sonner';
 import { userAuthApi } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 
+function PasswordRequirement({ met, text }: { met: boolean; text: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      {met ? (
+        <Check className="w-4 h-4 text-green-500" />
+      ) : (
+        <X className="w-4 h-4 text-critical" />
+      )}
+      <span className={met ? 'text-green-500' : 'text-vuln-text-muted'}>{text}</span>
+    </div>
+  );
+}
+
 export default function Setup() {
   const navigate = useNavigate();
   const { setupComplete, checkAuth } = useAuth();
@@ -152,18 +165,6 @@ export default function Setup() {
       setIsSubmitting(false);
     }
   };
-
-  // Password requirement component
-  const PasswordRequirement = ({ met, text }: { met: boolean; text: string }) => (
-    <div className="flex items-center gap-2 text-sm">
-      {met ? (
-        <Check className="w-4 h-4 text-green-500" />
-      ) : (
-        <X className="w-4 h-4 text-critical" />
-      )}
-      <span className={met ? 'text-green-500' : 'text-vuln-text-muted'}>{text}</span>
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-vuln-bg flex items-center justify-center p-4">

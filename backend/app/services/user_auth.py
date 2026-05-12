@@ -19,9 +19,11 @@ from pathlib import Path
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
-from authlib.jose import JoseError, jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from joserfc import jwt
+from joserfc.errors import JoseError
+from joserfc.jwk import OctKey
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -145,6 +147,7 @@ def get_or_create_secret_key(key_file: Path = JWT_SECRET_KEY_FILE) -> str:
 
 # Load secret key on module import
 _SECRET_KEY = get_or_create_secret_key()
+_SIGNING_KEY = OctKey.import_key(_SECRET_KEY)
 
 
 # ============================================================================
@@ -254,8 +257,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 
     to_encode.update({"exp": expire, "iat": datetime.now(UTC)})
     header = {"alg": JWT_ALGORITHM}
-    encoded_jwt = jwt.encode(header, to_encode, _SECRET_KEY)
-    return encoded_jwt.decode("utf-8") if isinstance(encoded_jwt, bytes) else encoded_jwt
+    return jwt.encode(header, to_encode, _SIGNING_KEY)
 
 
 def get_token_from_request(
@@ -296,13 +298,12 @@ def decode_token(token: str) -> dict:
     )
 
     try:
-        payload = jwt.decode(token, _SECRET_KEY)
+        decoded = jwt.decode(token, _SIGNING_KEY)
+        payload = decoded.claims
 
-        # Manually validate expiration (authlib doesn't do this automatically)
-        import time
-
+        # Manually validate expiration (joserfc only validates via JWTClaimsRegistry).
         if "exp" in payload:
-            if payload["exp"] < time.time():
+            if payload["exp"] < _time.time():
                 logger.error("JWT token has expired")
                 raise credentials_exception
 

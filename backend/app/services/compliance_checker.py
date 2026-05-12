@@ -456,9 +456,9 @@ class ComplianceChecker:
         """VF-C-005: Check if health check is configured."""
         config = attrs.get("Config", {})
         healthcheck = config.get("Healthcheck")
-        has_healthcheck = healthcheck is not None and healthcheck.get("Test")
+        has_healthcheck = bool(healthcheck and healthcheck.get("Test"))
 
-        if has_healthcheck:
+        if has_healthcheck and healthcheck:
             test_cmd = healthcheck.get("Test", [])
             actual = f"configured: {' '.join(test_cmd[:3])}..."
         else:
