@@ -71,11 +71,12 @@ dive-output/
 *.db-shm
 *.db-wal
 
-# Local compose files (use compose.example.yml as template)
-compose.yml
-compose.yaml
-compose.dev.yml
-compose.dev.yaml
+# Local compose files (use compose.example.yml as template).
+# Anchored to repo root so tests/release-smoke/compose.yml is NOT caught.
+/compose.yml
+/compose.yaml
+/compose.dev.yml
+/compose.dev.yaml
 
 # Local development Dockerfiles
 backend/Dockerfile.dev

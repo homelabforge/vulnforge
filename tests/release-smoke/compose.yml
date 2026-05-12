@@ -1,0 +1,53 @@
+# End-to-end test stack for VulnForge.
+# VulnForge ships SQLite-only (no asyncpg/psycopg in the image). Single
+# SQLite-backed instance from a freshly built image.
+#
+# A docker-socket-proxy sidecar is required because VulnForge talks to
+# Docker for image inspection / Trivy scanning. The proxy exposes a
+# read-only TCP endpoint so the unprivileged app user can connect.
+
+services:
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: vulnforge-release-smoke-docker-proxy
+    environment:
+      CONTAINERS: 1
+      IMAGES: 1
+      INFO: 1
+      PING: 1
+      VERSION: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  app:
+    image: vulnforge:release-smoke
+    container_name: vulnforge-release-smoke-app
+    depends_on:
+      - docker-proxy
+    environment:
+      DOCKER_HOST: tcp://docker-proxy:2375
+      # Fixed bootstrap token so smoke.py can authenticate /user-auth/setup
+      # without scraping container logs.
+      VULNFORGE_BOOTSTRAP_TOKEN: e2e-bootstrap-token
+      STRICT_MIGRATIONS: "false"
+    volumes:
+      - app-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8787/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  smoke:
+    image: python:3.14-slim
+    container_name: vulnforge-release-smoke-smoke
+    depends_on:
+      app:
+        condition: service_healthy
+    volumes:
+      - ./smoke.py:/smoke.py:ro
+    entrypoint: ["sh", "-c", "pip install -q httpx && python /smoke.py \"$$@\"", "--"]
+
+volumes:
+  app-data:
