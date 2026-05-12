@@ -2,7 +2,7 @@
 # Bun version pinned by .bun-version, passed as BUN_VERSION build-arg.
 # Global ARG visible only to FROM lines; redeclared per-stage where used in LABEL/RUN.
 
-ARG BUN_VERSION=1.3.12
+ARG BUN_VERSION=1.3.13
 
 # Stage 1: Build frontend
 FROM oven/bun:${BUN_VERSION}-alpine AS frontend-builder
