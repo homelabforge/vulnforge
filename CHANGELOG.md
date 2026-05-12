@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.6.2] - 2026-05-12
+
 ### Changed
 - Migrated `authlib.jose` → `joserfc` (JWT signing/verification, OIDC ID token validation)
 - Swapped `@vitejs/plugin-react-swc` → `@vitejs/plugin-react`
