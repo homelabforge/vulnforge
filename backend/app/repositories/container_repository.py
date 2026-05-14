@@ -371,6 +371,8 @@ class ContainerRepository:
                 Container.fixable_vulns,
                 Container.critical_count,
                 Container.high_count,
+                Container.medium_count,
+                Container.low_count,
             )
             .where(Container.total_vulns > 0)
             .order_by(Container.critical_count.desc(), Container.high_count.desc())
@@ -384,6 +386,8 @@ class ContainerRepository:
                 "fixable_vulns": row[2],
                 "critical_count": row[3],
                 "high_count": row[4],
+                "medium_count": row[5],
+                "low_count": row[6],
             }
             for row in result.fetchall()
         ]

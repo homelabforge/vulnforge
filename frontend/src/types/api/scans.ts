@@ -7,6 +7,8 @@ import type { components } from '../api.generated';
 
 // Generated alias
 export type WidgetSummary = components['schemas']['WidgetSummary'];
+export type WidgetTopContainers = components['schemas']['WidgetTopContainers'];
+export type ContainerVulnCount = components['schemas']['ContainerVulnCount'];
 
 // Hand-maintained: frontend-only types not in OpenAPI spec
 

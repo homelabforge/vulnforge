@@ -39,6 +39,8 @@ class ContainerVulnCount(BaseModel):
     fixable_vulns: int
     critical_count: int
     high_count: int
+    medium_count: int
+    low_count: int
 
 
 class WidgetTopContainers(BaseModel):

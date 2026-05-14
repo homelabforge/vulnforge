@@ -3299,6 +3299,10 @@ export interface components {
             fixable_vulns: number;
             /** High Count */
             high_count: number;
+            /** Low Count */
+            low_count: number;
+            /** Medium Count */
+            medium_count: number;
             /** Name */
             name: string;
             /** Total Vulns */

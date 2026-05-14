@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `Cache-Control: public, max-age=31536000, immutable` to Vite-hashed assets under `/assets`
 - Parallelized `AuthContext` bootstrap (`getStatus` and `getMe` via `Promise.allSettled`)
 - Added versioned service worker (`/sw.js?v=<APP_VERSION>`) and `/offline.html` fallback for PWA shell caching
+- Dashboard "Top 10 Vulnerable Containers" chart now uses `/api/v1/widget/top-containers` instead of full container list — eliminates a 77 kB JSON payload with up to 200 vulnerability rows per container
+
+### Changed
+- `WidgetTopContainers` schema now includes `medium_count` and `low_count`
 
 ### Fixed
 - `except json.JSONDecodeError, AttributeError:` in CORS-origin parsing only caught `JSONDecodeError` and shadowed the `AttributeError` builtin

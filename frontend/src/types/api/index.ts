@@ -12,6 +12,8 @@ export type {
   TrendVelocityMetric,
   ScanTrendsResponse,
   WidgetSummary,
+  WidgetTopContainers,
+  ContainerVulnCount,
 } from './scans';
 export type {
   ComplianceSummary,

@@ -1868,6 +1868,14 @@
             "title": "High Count",
             "type": "integer"
           },
+          "low_count": {
+            "title": "Low Count",
+            "type": "integer"
+          },
+          "medium_count": {
+            "title": "Medium Count",
+            "type": "integer"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -1882,7 +1890,9 @@
           "total_vulns",
           "fixable_vulns",
           "critical_count",
-          "high_count"
+          "high_count",
+          "medium_count",
+          "low_count"
         ],
         "title": "ContainerVulnCount",
         "type": "object"

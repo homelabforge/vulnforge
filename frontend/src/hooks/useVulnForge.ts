@@ -220,6 +220,19 @@ export function useWidgetSummary() {
   });
 }
 
+// Used by the Dashboard's "Top 10 Vulnerable Containers" chart. Previously
+// the chart called `useContainers()`, which downloads the full container list
+// including up to 200 vulnerability rows per container (~77 kB for ~50
+// containers). The widget endpoint hits only the denormalized count columns,
+// no joins against the vulnerabilities table.
+export function useWidgetTopContainers(limit = 10) {
+  return useQuery({
+    queryKey: ["widgetTopContainers", limit],
+    queryFn: () => widgetApi.getTopContainers(limit),
+    refetchInterval: 30000,
+  });
+}
+
 // Settings hooks
 export function useSettings() {
   return useQuery({
