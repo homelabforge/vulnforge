@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+- Rewrote `AuthenticationMiddleware` as pure ASGI so response bodies stream instead of buffering through `BaseHTTPMiddleware`'s asyncio queue
+- Added `Cache-Control: public, max-age=31536000, immutable` to Vite-hashed assets under `/assets`
+- Parallelized `AuthContext` bootstrap (`getStatus` and `getMe` via `Promise.allSettled`)
+- Added versioned service worker (`/sw.js?v=<APP_VERSION>`) and `/offline.html` fallback for PWA shell caching
+
+### Fixed
+- `except json.JSONDecodeError, AttributeError:` in CORS-origin parsing only caught `JSONDecodeError` and shadowed the `AttributeError` builtin
+
 ## [4.6.2] - 2026-05-12
 
 ### Changed

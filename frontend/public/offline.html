@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VulnForge — Offline</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family:
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      .wrap {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        text-align: center;
+      }
+      h1 {
+        font-size: 1.75rem;
+        margin: 0 0 0.5rem;
+        color: #f87171;
+      }
+      p {
+        max-width: 32rem;
+        line-height: 1.5;
+        color: #94a3b8;
+      }
+      button {
+        margin-top: 1.5rem;
+        background: #ef4444;
+        color: white;
+        border: 0;
+        padding: 0.625rem 1.25rem;
+        font-size: 1rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #dc2626;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>VulnForge is offline</h1>
+      <p>
+        Couldn't reach the server. Check the connection to the tunnel, or your
+        local network if you're on the same LAN. The page will retry when you
+        click below.
+      </p>
+      <button onclick="window.location.reload()">Retry</button>
+    </div>
+  </body>
+</html>

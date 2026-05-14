@@ -356,11 +356,39 @@ app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["
 # Mount static files for frontend (must be last - catches all remaining routes)
 static_dir = Path("/app/static")
 if static_dir.exists():
-    # Serve static assets
-    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
+    # Vite emits content-hashed filenames under /assets (e.g. main-abc123.js),
+    # which are immutable for the life of the build. `public, max-age=31536000,
+    # immutable` stops browsers and Cloudflare from revalidating these on every
+    # navigation — the source of most post-deploy reload latency.
+    class ImmutableStaticFiles(StaticFiles):
+        async def get_response(self, path, scope):
+            response = await super().get_response(path, scope)
+            if response.status_code == 200:
+                response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            return response
 
-    # Catch-all route for SPA - serves index.html for all non-API routes
+    app.mount(
+        "/assets",
+        ImmutableStaticFiles(directory=str(static_dir / "assets")),
+        name="assets",
+    )
+
     from fastapi.responses import FileResponse
+
+    # The SW script must not be long-cached (otherwise we can't ship updates);
+    # browsers also limit SW script caching to a max of 24h. The catch-all
+    # below would otherwise serve it without explicit cache headers.
+    @app.get("/sw.js", include_in_schema=False)
+    async def service_worker():
+        return FileResponse(
+            static_dir / "sw.js",
+            media_type="application/javascript",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    @app.get("/offline.html", include_in_schema=False)
+    async def offline_page():
+        return FileResponse(static_dir / "offline.html", media_type="text/html")
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str, request: Request):
