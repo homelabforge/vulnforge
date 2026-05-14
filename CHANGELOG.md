@@ -16,9 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `WidgetTopContainers` schema now includes `medium_count` and `low_count`
-
-### Fixed
-- `except json.JSONDecodeError, AttributeError:` in CORS-origin parsing only caught `JSONDecodeError` and shadowed the `AttributeError` builtin
+- Parenthesized the multi-exception `except` clause in CORS-origin parsing (`except json.JSONDecodeError, AttributeError:` → `except (json.JSONDecodeError, AttributeError):`). Both forms catch both exceptions in Python 3.14 (the grammar was relaxed to accept the un-parenthesized tuple), but the parenthesized form is the only one that parses under 3.12/3.13 and is what `ruff format` produces on a 3.12/3.13 target. No runtime behavior change.
 
 ## [4.6.2] - 2026-05-12
 
