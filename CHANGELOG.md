@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **python-multipart**: 0.0.28 → 0.0.29
 - **react-router-dom**: 7.15.0 → 7.15.1
 - **requests**: 2.34.0 → 2.34.2
+- **rich**: added (>=15.0.0) — powers optional `VULNFORGE_LOG_PRETTY` Rich log handler
 
 ### Dockerfile Dependencies
 - **oven/bun**: 1.3.13-alpine → 1.3.14-alpine
@@ -45,8 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Background compliance-scan task now catches and logs its own exceptions so it always completes cleanly, eliminating asyncio "Task exception was never retrieved" noise during test teardown
+- Granian access-log health-check filter is now regex-anchored on path and status: `/health-status` and failing healthchecks (status ≥ 400) are no longer silently swallowed by the substring match
 
 ### Changed
+- Added optional Rich-formatted logging mirroring tidewatch (`VULNFORGE_LOG_PRETTY=true` → compact `[HH:MM:SS] LEVEL message` shape, no logger-name column, no wrapping). Plain `%(asctime)s - %(name)s - %(levelname)s - %(message)s` remains the default for log aggregators
 - `WidgetTopContainers` schema now includes `medium_count` and `low_count`
 - Parenthesized the multi-exception `except` clause in CORS-origin parsing (`except json.JSONDecodeError, AttributeError:` → `except (json.JSONDecodeError, AttributeError):`). Both forms catch both exceptions in Python 3.14 (the grammar was relaxed to accept the un-parenthesized tuple), but the parenthesized form is the only one that parses under 3.12/3.13 and is what `ruff format` produces on a 3.12/3.13 target. No runtime behavior change.
 

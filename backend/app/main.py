@@ -19,6 +19,7 @@ This is intentional — VulnForge scans a homelab, not a fleet.
 import json
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from importlib.metadata import version as pkg_version
 from pathlib import Path
@@ -63,32 +64,105 @@ from app.services.settings_manager import SettingsManager
 from app.services.trivy_scanner import TrivyScanner
 from app.utils.log_redaction import sanitize_for_log
 
-# Configure logging
-logging.basicConfig(
-    level=getattr(logging, app_settings.log_level),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 
+def _configure_logging() -> None:
+    """Configure root logging.
+
+    When VULNFORGE_LOG_PRETTY is truthy, use Rich with a layout that matches
+    the tidewatch / myfinances pino-pretty look: time-only prefix (Docker adds
+    the date in its log driver), colored level, no logger-name column, no
+    wrapping. Otherwise fall back to the plain machine-friendly format
+    suitable for log aggregators.
+    """
+    level = app_settings.log_level
+    pretty = os.getenv("VULNFORGE_LOG_PRETTY", "false").lower() in ("true", "1", "yes")
+
+    handlers: list[logging.Handler]
+    fmt: str
+    if pretty:
+        try:
+            from rich.console import Console
+            from rich.logging import RichHandler
+
+            # Force a wide console so long log lines don't wrap to multiple
+            # rows. Docker's log capture reports the terminal width as 80
+            # which makes Rich fold messages aggressively.
+            console = Console(
+                width=240,
+                force_terminal=True,
+                no_color=False,
+                highlight=False,
+            )
+            handlers = [
+                RichHandler(
+                    console=console,
+                    rich_tracebacks=True,
+                    show_path=False,
+                    omit_repeated_times=False,
+                    markup=False,
+                    log_time_format="[%X]",
+                )
+            ]
+            # Rich already shows time + level columns; we deliberately drop
+            # the logger name so the output mirrors myfinances' compact
+            # `[HH:MM:SS] LEVEL: message` shape.
+            fmt = "%(message)s"
+        except ImportError:
+            handlers = [logging.StreamHandler()]
+            fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    else:
+        handlers = [logging.StreamHandler()]
+        fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+    logging.basicConfig(level=level, format=fmt, handlers=handlers, force=True)
+
+
+_configure_logging()
 logger = logging.getLogger(__name__)
 
 
-# Filter to exclude health check endpoints from access logs
-class EndpointFilter(logging.Filter):
-    """Filter to exclude specific endpoints from Granian access logs."""
+# Match a Granian access log line and capture the request path and status code.
+# Granian's default access format is similar to the Apache combined format:
+#   <client> [<date>] "<method> <path>[?query] HTTP/x" <status> <bytes>
+# Previous substring match was too loose ("/health" matched "/health-status"
+# too) and never inspected the status code, so failing healthchecks were also
+# silently dropped. We now require:
+#   - exact path match (anchored before ? or whitespace)
+#   - status in the canonical position after the closing quote
+_ACCESS_LOG_PATTERN = re.compile(
+    r'"(?:GET|HEAD|POST|PUT|DELETE|PATCH|OPTIONS)\s+'
+    r"(?P<path>[^\s?]+)"
+    r'(?:\?[^\s"]*)?\s+[^"]+"\s+'
+    r"(?P<status>\d{3})"
+)
 
-    def __init__(self, excluded_paths: list[str]) -> None:
+
+class HealthCheckLogFilter(logging.Filter):
+    """Suppress successful health-check access log lines.
+
+    Docker's healthcheck hits /health every few seconds; logging each line
+    buries everything else. Failures (status >= 400) still pass through so a
+    flapping liveness check is visible.
+    """
+
+    def __init__(self, paths: tuple[str, ...] = ("/health", "/healthz")) -> None:
         super().__init__()
-        self.excluded_paths = excluded_paths
+        self.paths = paths
 
     def filter(self, record: logging.LogRecord) -> bool:
-        """Return False if the log record is for an excluded endpoint."""
-        # Granian access logs have the path in the message
-        message = record.getMessage()
-        return not any(path in message for path in self.excluded_paths)
+        match = _ACCESS_LOG_PATTERN.search(record.getMessage())
+        if not match:
+            return True
+        if match.group("path") not in self.paths:
+            return True
+        try:
+            status = int(match.group("status"))
+        except ValueError:
+            return True
+        return status >= 400
 
 
-# Apply filter to granian access logger to exclude health checks
-logging.getLogger("granian.access").addFilter(EndpointFilter(["/health"]))
+logging.getLogger("granian.access").addFilter(HealthCheckLogFilter())
 
 # Global instances
 scheduler = None
