@@ -62,7 +62,12 @@ def _on_scan_created(scan_id: int) -> None:
 
 
 async def _run_compliance_scan(docker_service: DockerService, trigger_type: str) -> None:
-    """Wrapper that runs the service and updates route-level globals on completion."""
+    """Wrapper that runs the service and updates route-level globals on completion.
+
+    Exceptions are caught and logged here so the background task always finishes
+    cleanly. Otherwise the unhandled exception surfaces via asyncio's default
+    handler at GC time, which can hit closed log streams during test teardown.
+    """
     global _last_scan_id, _current_scan_id
 
     try:
@@ -71,6 +76,8 @@ async def _run_compliance_scan(docker_service: DockerService, trigger_type: str)
         )
         if scan_id is not None:
             _last_scan_id = scan_id
+    except Exception:
+        logger.exception("Compliance scan background task failed")
     finally:
         _current_scan_id = None
 

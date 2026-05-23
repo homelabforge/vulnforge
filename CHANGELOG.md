@@ -7,12 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Added npm `overrides` pinning `brace-expansion` to `^5.0.6` to resolve GHSA-jxxr-4gwj-5jf2 (moderate ReDoS). Affected only dev/build tooling (eslint, openapi-typescript, @typescript-eslint) via transitive `minimatch`; no runtime impact.
+
+### Dev Dependencies
+- **@types/react**: 19.2.14 → 19.2.15
+- **@typescript-eslint/eslint-plugin**: 8.59.3 → 8.59.4
+- **@typescript-eslint/parser**: 8.59.3 → 8.59.4
+- **@vitejs/plugin-react**: 6.0.1 → 6.0.2
+- **@vitest/coverage-v8**: 4.1.6 → 4.1.7
+- **@vitest/ui**: 4.1.6 → 4.1.7
+- **eslint**: 10.3.0 → 10.4.0
+- **postcss**: 8.5.14 → 8.5.15
+- **ruff**: 0.15.12 → 0.15.14
+- **typescript-eslint**: 8.59.3 → 8.59.4
+- **vite**: 8.0.12 → 8.0.14
+- **vitest**: 4.1.6 → 4.1.7
+
+### App Dependencies
+- **@tanstack/react-query**: 5.100.10 → 5.100.14
+- **joserfc**: 1.6.5 → 1.6.7
+- **lucide-react**: 1.14.0 → 1.16.0
+- **pyjwt**: 2.12.1 → 2.13.0
+- **python-multipart**: 0.0.28 → 0.0.29
+- **react-router-dom**: 7.15.0 → 7.15.1
+- **requests**: 2.34.0 → 2.34.2
+
+### Dockerfile Dependencies
+- **oven/bun**: 1.3.13-alpine → 1.3.14-alpine
+
 ### Performance
 - Rewrote `AuthenticationMiddleware` as pure ASGI so response bodies stream instead of buffering through `BaseHTTPMiddleware`'s asyncio queue
 - Added `Cache-Control: public, max-age=31536000, immutable` to Vite-hashed assets under `/assets`
 - Parallelized `AuthContext` bootstrap (`getStatus` and `getMe` via `Promise.allSettled`)
 - Added versioned service worker (`/sw.js?v=<APP_VERSION>`) and `/offline.html` fallback for PWA shell caching
 - Dashboard "Top 10 Vulnerable Containers" chart now uses `/api/v1/widget/top-containers` instead of full container list — eliminates a 77 kB JSON payload with up to 200 vulnerability rows per container
+
+### Fixed
+- Background compliance-scan task now catches and logs its own exceptions so it always completes cleanly, eliminating asyncio "Task exception was never retrieved" noise during test teardown
 
 ### Changed
 - `WidgetTopContainers` schema now includes `medium_count` and `low_count`

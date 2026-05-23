@@ -18,14 +18,14 @@ dependencies = [
     "slowapi>=0.1.9",
     "bcrypt>=5.0.0",
     "aiosmtplib>=5.1.0",
-    "joserfc>=1.6.5",
+    "joserfc>=1.6.7",
     "argon2-cffi>=25.1.0",
-    "pyjwt>=2.12.1",
+    "pyjwt>=2.13.0",
     "email-validator>=2.3.0",
-    "python-multipart>=0.0.28",
+    "python-multipart>=0.0.29",
     # Transitive dependency floors (security)
     "cryptography>=48.0.0",
-    "requests>=2.34.0",
+    "requests>=2.34.2",
     "urllib3>=2.7.0",
 ]
 
@@ -37,7 +37,7 @@ dev = [
     "pytest-xdist>=3.8.0",
     "pytest-timeout>=2.4.0",
     "pyright>=1.1.409",
-    "ruff>=0.15.12",
+    "ruff>=0.15.14",
 ]
 
 [build-system]
