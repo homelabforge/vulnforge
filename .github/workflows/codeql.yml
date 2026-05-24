@@ -20,3 +20,5 @@ permissions:
 jobs:
   codeql:
     uses: homelabforge/shared-workflows/.github/workflows/codeql.yml@v1.3.0
+    with:
+      python-extension-pack: homelabforge/vulnforge-models
