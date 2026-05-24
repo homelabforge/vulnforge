@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Dive analysis: socket-proxy read timeouts on `containers.get()` no longer fail the whole scan (wrap to `DiveError`).
+
+### Changed
+- Dive analysis runs detached with polling and enforces `dive_timeout` via `killall dive` (SIGTERM → SIGKILL after 2s) instead of blocking indefinitely.
+
 ### Security
 - Added npm `overrides` pinning `brace-expansion` to `^5.0.6` to resolve GHSA-jxxr-4gwj-5jf2 (moderate ReDoS). Affected only dev/build tooling (eslint, openapi-typescript, @typescript-eslint) via transitive `minimatch`; no runtime impact.
 

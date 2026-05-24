@@ -58,10 +58,6 @@ class DiveService:
         if timeout is None:
             timeout = settings.dive_timeout
 
-        # TODO: Implement timeout functionality for Dive analysis
-        # Currently timeout parameter is accepted but not enforced
-        _ = timeout  # Acknowledge parameter to suppress unused warning
-
         try:
             dive_container = self.docker_service.client.containers.get(settings.dive_container_name)
         except NotFound:
@@ -70,6 +66,11 @@ class DiveService:
                 "Please ensure the Dive container is running."
             )
         except DockerException as e:
+            raise DiveError(f"Failed to connect to Dive container: {e}")
+        except Exception as e:
+            # requests.exceptions.ReadTimeout and other network errors are not
+            # DockerException subclasses; wrap them so _run_dive_analysis keeps
+            # the scan non-fatal.
             raise DiveError(f"Failed to connect to Dive container: {e}")
 
         logger.info(f"Analyzing image efficiency: {image}")
@@ -91,21 +92,16 @@ class DiveService:
                     demux=False,
                 )
 
-                exit_code, output = await asyncio.to_thread(
-                    dive_container.exec_run,
-                    cmd,
-                    demux=False,
-                )
+                # Start dive detached so we can bound wall time. exec_run blocks
+                # in a thread until completion; asyncio.wait_for would only free
+                # the awaiter, leaving the dive process running and holding the
+                # socket-proxy connection. Detached exec + poll + killall lets us
+                # actually stop a runaway analysis.
+                exit_code = await self._run_dive_exec(dive_container, cmd, timeout, image)
                 duration = (get_now() - start_time).total_seconds()
 
                 if exit_code != 0:
-                    # exec_run with stream=False returns bytes; coerce defensively in case
-                    # the docker SDK returns an iterator (newer typings widen the union).
-                    output_bytes = output if isinstance(output, bytes) else b"".join(output or [])
-                    error_msg = (
-                        output_bytes.decode("utf-8")[:500] if output_bytes else "Unknown error"
-                    )
-                    raise DiveError(f"Dive analysis failed (exit {exit_code}): {error_msg}")
+                    raise DiveError(f"Dive analysis failed (exit {exit_code}) for {image}")
 
                 # Read JSON output from container
                 try:
@@ -159,3 +155,59 @@ class DiveService:
         )
 
         return result
+
+    async def _run_dive_exec(
+        self,
+        dive_container: Any,
+        cmd: list[str],
+        timeout: int,
+        image: str,
+    ) -> int:
+        """Run dive detached inside the dive container with a wall-clock timeout.
+
+        Returns the exec exit code. Raises DiveError on timeout after attempting
+        to kill the runaway dive process (SIGTERM, then SIGKILL after a grace
+        period). Caller must hold ``self._exec_lock`` — the killall is safe only
+        because that lock guarantees a single in-flight dive run.
+        """
+        api = self.docker_service.client.api
+        create = await asyncio.to_thread(api.exec_create, dive_container.id, cmd)
+        exec_id = create["Id"]
+        await asyncio.to_thread(api.exec_start, exec_id, detach=True)
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        poll_interval = 0.5
+
+        while True:
+            inspect = await asyncio.to_thread(api.exec_inspect, exec_id)
+            if not inspect.get("Running"):
+                exit_code = inspect.get("ExitCode")
+                return exit_code if exit_code is not None else -1
+            if loop.time() >= deadline:
+                await self._kill_dive_process(dive_container)
+                raise DiveError(f"Dive analysis timed out after {timeout}s for {image}")
+            await asyncio.sleep(poll_interval)
+
+    async def _kill_dive_process(self, dive_container: Any) -> None:
+        """SIGTERM the dive process, escalate to SIGKILL if it doesn't exit.
+
+        Best-effort. Errors are logged but not raised — the caller is already
+        on the timeout path and will surface its own DiveError.
+        """
+        try:
+            await asyncio.to_thread(dive_container.exec_run, ["killall", "dive"], demux=False)
+            await asyncio.sleep(2)
+            check = await asyncio.to_thread(
+                dive_container.exec_run, ["pgrep", "-x", "dive"], demux=False
+            )
+            # busybox pgrep: exit 0 = match found (still running)
+            still_running = isinstance(check, tuple) and check[0] == 0
+            if still_running:
+                await asyncio.to_thread(
+                    dive_container.exec_run,
+                    ["killall", "-9", "dive"],
+                    demux=False,
+                )
+        except Exception:
+            logger.warning("Failed to kill stuck dive process", exc_info=True)
