@@ -10,6 +10,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { settingsApi, userAuthApi } from "@/lib/api";
 
+// Canonical mask placeholder per plan §5.4(3). Backend GET returns "********"
+// when a secret is stored; on save we send "" so the backend preserves it.
+const MASKED_SECRET_PLACEHOLDER = "********";
+
 export function UserAuthenticationCard() {
   const { user, authMode } = useAuth();
 
@@ -47,17 +51,16 @@ export function UserAuthenticationCard() {
 
   const loadOidcSettings = async () => {
     try {
-      const settings = await settingsApi.getAll();
-      const settingsMap = new Map(settings.map((s: { key: string; value: string }) => [s.key, s.value]));
-
-      setOidcEnabled(settingsMap.get("user_auth_oidc_enabled") === "true");
-      setOidcProviderName(settingsMap.get("user_auth_oidc_provider_name") || "");
-      setOidcIssuerUrl(settingsMap.get("user_auth_oidc_issuer_url") || "");
-      setOidcClientId(settingsMap.get("user_auth_oidc_client_id") || "");
-      setOidcClientSecret(settingsMap.get("user_auth_oidc_client_secret") || "");
-      setOidcScopes(settingsMap.get("user_auth_oidc_scopes") || "openid profile email");
-      setOidcUsernameClaim(settingsMap.get("user_auth_oidc_username_claim") || "preferred_username");
-      setOidcEmailClaim(settingsMap.get("user_auth_oidc_email_claim") || "email");
+      // Use the dedicated admin endpoint: secret is returned masked per §5.4(3).
+      const config = await userAuthApi.getOidcAdminConfig();
+      setOidcEnabled(config.enabled);
+      setOidcProviderName(config.provider_name);
+      setOidcIssuerUrl(config.issuer_url);
+      setOidcClientId(config.client_id);
+      setOidcClientSecret(config.client_secret);
+      setOidcScopes(config.scopes);
+      setOidcUsernameClaim(config.username_claim);
+      setOidcEmailClaim(config.email_claim);
     } catch (error) {
       console.error("Failed to load OIDC settings:", error);
       toast.error("Failed to load OIDC settings");
@@ -135,16 +138,28 @@ export function UserAuthenticationCard() {
     }
   };
 
-  // Test OIDC connection handler
+  // Never re-submit the masked placeholder as a real secret value (§5.4(2)).
+  const buildSubmitSecret = (secret: string): string =>
+    secret === MASKED_SECRET_PLACEHOLDER ? "" : secret;
+
+  // Test OIDC connection handler. Consumes canonical {ok, error, detail, issuer, algorithms_supported}.
   const handleTestOidcConnection = async () => {
     try {
       setTestingOidc(true);
-      const result = await userAuthApi.testOidcConnection(oidcIssuerUrl, oidcClientId, oidcClientSecret);
+      const result = await userAuthApi.testOidcConnection(
+        oidcIssuerUrl,
+        oidcClientId,
+        buildSubmitSecret(oidcClientSecret),
+      );
 
-      if (result.success) {
-        toast.success("OIDC connection successful!");
+      if (result.ok) {
+        const algos = result.algorithms_supported?.length
+          ? ` (${result.algorithms_supported.join(", ")})`
+          : "";
+        toast.success(`OIDC connection successful — ${result.issuer ?? "provider reached"}${algos}`);
       } else {
-        toast.error(`OIDC connection failed: ${result.errors.join(", ")}`);
+        const detail = result.detail || result.error || "unknown error";
+        toast.error(`OIDC connection failed: ${detail}`);
       }
     } catch (error) {
       console.error("Failed to test OIDC:", error);
@@ -154,20 +169,19 @@ export function UserAuthenticationCard() {
     }
   };
 
-  // Save OIDC config handler
+  // Save OIDC config via the dedicated admin endpoint (enforces §5.4 contract).
   const handleSaveOidcConfig = async () => {
     try {
       setSavingOidc(true);
-
-      await settingsApi.bulkUpdate({
-        user_auth_oidc_enabled: oidcEnabled.toString(),
-        user_auth_oidc_provider_name: oidcProviderName,
-        user_auth_oidc_issuer_url: oidcIssuerUrl,
-        user_auth_oidc_client_id: oidcClientId,
-        user_auth_oidc_client_secret: oidcClientSecret,
-        user_auth_oidc_scopes: oidcScopes,
-        user_auth_oidc_username_claim: oidcUsernameClaim,
-        user_auth_oidc_email_claim: oidcEmailClaim,
+      await userAuthApi.putOidcAdminConfig({
+        enabled: oidcEnabled,
+        provider_name: oidcProviderName,
+        issuer_url: oidcIssuerUrl,
+        client_id: oidcClientId,
+        client_secret: buildSubmitSecret(oidcClientSecret),
+        scopes: oidcScopes,
+        username_claim: oidcUsernameClaim,
+        email_claim: oidcEmailClaim,
       });
 
       toast.success("OIDC configuration saved successfully");
@@ -578,16 +592,18 @@ export function UserAuthenticationCard() {
                   {/* Issuer URL */}
                   <div>
                     <label className="block text-sm font-medium text-vuln-text mb-2">
-                      Issuer / Discovery URL
+                      Issuer URL
                     </label>
                     <input
                       type="url"
                       value={oidcIssuerUrl}
                       onChange={(e) => setOidcIssuerUrl(e.target.value)}
-                      placeholder="https://auth.example.com/application/o/vulnforge/"
+                      placeholder="https://rauthy.example.com/auth/v1"
                       className="w-full px-3 py-2 bg-vuln-bg border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                     />
-                    <p className="text-xs text-vuln-text-muted mt-1">OIDC provider's issuer URL (/.well-known/openid-configuration will be appended)</p>
+                    <p className="text-xs text-vuln-text-muted mt-1">
+                      Base issuer URL — e.g. <code>https://rauthy.example.com/auth/v1</code>. The app appends <code>/.well-known/openid-configuration</code> itself; do not include it.
+                    </p>
                   </div>
 
                   {/* Client ID */}
@@ -614,7 +630,7 @@ export function UserAuthenticationCard() {
                         type={showOidcSecret ? 'text' : 'password'}
                         value={oidcClientSecret}
                         onChange={(e) => setOidcClientSecret(e.target.value)}
-                        placeholder="Enter client secret"
+                        placeholder="Leave blank to keep existing"
                         className="w-full px-3 py-2 pr-10 bg-vuln-bg border border-vuln-border rounded-lg text-vuln-text focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                       />
                       <button
@@ -625,6 +641,7 @@ export function UserAuthenticationCard() {
                         {showOidcSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
+                    <p className="text-xs text-vuln-text-muted mt-1">Leave blank to keep existing.</p>
                   </div>
 
                   {/* Scopes */}

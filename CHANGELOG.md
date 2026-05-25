@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.6.3] - 2026-05-25
+
+### Added
+- `GET /api/v1/user-auth/oidc/config/admin` returns the canonical admin OIDC config; `client_secret` is masked with the literal `"********"` placeholder when stored
+- `PUT /api/v1/user-auth/oidc/config/admin` writes the OIDC config atomically; empty `client_secret` preserves the stored value, trailing slashes on `issuer_url` are stripped
+
+### Changed
+- `POST /api/v1/user-auth/oidc/test` now returns the canonical `{ok, error, detail, issuer, algorithms_supported}` envelope per the homelab OIDC settings contract
+- User Authentication card: Issuer URL helper text corrected (the app appends `/.well-known/openid-configuration` itself); Client Secret shows "Leave blank to keep existing"; test result renders the canonical envelope
+- OIDC settings save now uses the dedicated admin endpoint so empty `client_secret` no longer clears the stored value via the generic `/settings/bulk` path
+
 ### Fixed
 - Dive analysis: socket-proxy read timeouts on `containers.get()` no longer fail the whole scan (wrap to `DiveError`).
 

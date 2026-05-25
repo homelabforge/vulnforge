@@ -97,10 +97,27 @@ class NotificationStatsResponse(BaseModel):
 
 
 class OidcTestResponse(BaseModel):
-    """Response from OIDC provider connectivity test."""
+    """OIDC provider connectivity test result (canonical envelope per plan §5.4(4))."""
 
-    success: bool
-    provider_reachable: bool
-    metadata_valid: bool
-    endpoints_found: bool
-    errors: list[str]
+    ok: bool
+    error: str | None = None
+    detail: str | None = None
+    issuer: str | None = None
+    algorithms_supported: list[str] | None = None
+
+
+class OidcAdminConfig(BaseModel):
+    """Full admin OIDC configuration (homelab canonical OIDC settings contract).
+
+    `client_secret` follows §5.4(3): admin GET returns "********" when stored,
+    "" otherwise. Admin PUT with empty string OR the placeholder preserves the value.
+    """
+
+    enabled: bool = False
+    provider_name: str = ""
+    issuer_url: str = ""
+    client_id: str = ""
+    client_secret: str = ""
+    scopes: str = "openid profile email"
+    username_claim: str = "preferred_username"
+    email_claim: str = "email"

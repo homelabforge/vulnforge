@@ -77,13 +77,17 @@ export const userAuthApi = {
     return handleResponse(res);
   },
 
-  // OIDC test connection
-  testOidcConnection: async (issuerUrl: string, clientId: string, clientSecret: string): Promise<{
-    success: boolean;
-    provider_reachable: boolean;
-    metadata_valid: boolean;
-    endpoints_found: boolean;
-    errors: string[];
+  // OIDC test connection — canonical envelope per plan §5.4(4).
+  testOidcConnection: async (
+    issuerUrl: string,
+    clientId: string,
+    clientSecret: string,
+  ): Promise<{
+    ok: boolean;
+    error?: string;
+    detail?: string;
+    issuer?: string;
+    algorithms_supported?: string[];
   }> => {
     const res = await fetch(`${API_BASE}/user-auth/oidc/test`, {
       method: "POST",
@@ -93,6 +97,42 @@ export const userAuthApi = {
         client_id: clientId,
         client_secret: clientSecret,
       }),
+    });
+    return handleResponse(res);
+  },
+
+  // OIDC admin config — masked secret per plan §5.4(3).
+  getOidcAdminConfig: async (): Promise<{
+    enabled: boolean;
+    provider_name: string;
+    issuer_url: string;
+    client_id: string;
+    client_secret: string;
+    scopes: string;
+    username_claim: string;
+    email_claim: string;
+  }> => {
+    const res = await fetch(`${API_BASE}/user-auth/oidc/config/admin`, {
+      credentials: "include",
+    });
+    return handleResponse(res);
+  },
+
+  putOidcAdminConfig: async (payload: {
+    enabled: boolean;
+    provider_name: string;
+    issuer_url: string;
+    client_id: string;
+    client_secret: string;
+    scopes: string;
+    username_claim: string;
+    email_claim: string;
+  }): Promise<{ message: string }> => {
+    const res = await fetch(`${API_BASE}/user-auth/oidc/config/admin`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
     });
     return handleResponse(res);
   },

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.rate_limit import limiter
 from app.schemas.common import ActionResponse
-from app.schemas.notification import OidcTestResponse
+from app.schemas.notification import OidcAdminConfig, OidcTestResponse
 from app.schemas.user_auth import (
     CancelSetupRequest,
     ChangePasswordRequest,
@@ -637,103 +637,156 @@ async def oidc_callback(
         )
 
 
+@router.get("/oidc/config/admin", response_model=OidcAdminConfig)
+async def get_oidc_admin_config(
+    admin: dict = Depends(require_user_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the admin OIDC configuration with canonical mask placeholder."""
+    if not admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    from app.services import oidc as oidc_service
+
+    config = await oidc_service.get_oidc_config(db)
+    return OidcAdminConfig(
+        enabled=(config.get("enabled") or "false").lower() == "true",
+        provider_name=config.get("provider_name") or "",
+        issuer_url=config.get("issuer_url") or "",
+        client_id=config.get("client_id") or "",
+        client_secret=oidc_service.display_mask_secret(config.get("client_secret") or ""),
+        scopes=config.get("scopes") or "openid profile email",
+        username_claim=config.get("username_claim") or "preferred_username",
+        email_claim=config.get("email_claim") or "email",
+    )
+
+
+@router.put("/oidc/config/admin")
+async def put_oidc_admin_config(
+    payload: OidcAdminConfig,
+    admin: dict = Depends(require_user_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Persist admin OIDC configuration, enforcing the §5.4 contract."""
+    if not admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    from app.services import oidc as oidc_service
+
+    # §5.4(2): preserve stored secret on empty / placeholder
+    client_secret = payload.client_secret
+    if not client_secret or oidc_service.is_masked_secret(client_secret):
+        stored = await oidc_service.get_oidc_config(db)
+        client_secret = stored.get("client_secret") or ""
+
+    # §5.4(1): normalize issuer URL
+    issuer_url = payload.issuer_url.strip().rstrip("/")
+
+    await oidc_service.write_oidc_config(
+        db,
+        {
+            "enabled": "true" if payload.enabled else "false",
+            "provider_name": payload.provider_name,
+            "issuer_url": issuer_url,
+            "client_id": payload.client_id,
+            "client_secret": client_secret,
+            "scopes": payload.scopes,
+            "username_claim": payload.username_claim,
+            "email_claim": payload.email_claim,
+        },
+    )
+
+    logger.info("OIDC admin configuration updated by user %s", sanitize_for_log(admin["username"]))
+    return {"message": "OIDC configuration updated successfully"}
+
+
+def _unreachable_result(detail: str) -> dict:
+    return {"ok": False, "error": "unreachable", "detail": detail}
+
+
 @router.post("/oidc/test", response_model=OidcTestResponse)
 async def test_oidc_connection(
     issuer_url: str = Body(...),
     client_id: str = Body(...),
     client_secret: str = Body(...),
     _current_user: str = Depends(require_user_auth),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Test OIDC configuration by fetching discovery document.
+    """Test OIDC configuration by fetching the discovery document.
 
-    Requires authentication. Tests connectivity to the OIDC provider
-    and validates that required endpoints are present.
+    Returns the canonical `{ok, error, detail, issuer, algorithms_supported}` envelope
+    per plan §5.4(4).
     """
     import httpx
 
     from app.services import oidc as oidc_service
 
-    try:
-        # Build discovery URL
-        discovery_url = issuer_url.rstrip("/") + "/.well-known/openid-configuration"
+    # §5.4(2): empty/placeholder secret falls back to the stored value so admins can test before saving.
+    if not client_secret or oidc_service.is_masked_secret(client_secret):
+        stored = await oidc_service.get_oidc_config(db)
+        client_secret = stored.get("client_secret", "")
 
-        # Check for SSRF
+    issuer_url_clean = issuer_url.strip().rstrip("/")
+
+    try:
+        discovery_url = issuer_url_clean + "/.well-known/openid-configuration"
+
         try:
             oidc_service.validate_oidc_url(discovery_url)
         except oidc_service.SSRFProtectionError as e:
             logger.warning("SSRF protection blocked OIDC test URL: %s", e)
             return {
-                "success": False,
-                "provider_reachable": False,
-                "metadata_valid": False,
-                "endpoints_found": False,
-                "errors": ["URL blocked by SSRF protection policy"],
+                "ok": False,
+                "error": "ssrf_blocked",
+                "detail": "URL blocked by SSRF protection policy",
             }
 
-        # Validate URL scheme and hostname before making request
         from urllib.parse import urlparse
 
         parsed = urlparse(discovery_url)
         if parsed.scheme not in ("http", "https"):
             return {
-                "success": False,
-                "provider_reachable": False,
-                "metadata_valid": False,
-                "endpoints_found": False,
-                "errors": ["Invalid URL scheme - only HTTP and HTTPS are allowed"],
+                "ok": False,
+                "error": "invalid_scheme",
+                "detail": "Invalid URL scheme — only HTTP and HTTPS are allowed",
             }
         if not parsed.hostname:
             return {
-                "success": False,
-                "provider_reachable": False,
-                "metadata_valid": False,
-                "endpoints_found": False,
-                "errors": ["Invalid URL - no hostname specified"],
+                "ok": False,
+                "error": "invalid_url",
+                "detail": "Invalid URL — no hostname specified",
             }
 
-        # Fetch discovery document
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 response = await client.get(discovery_url)
                 response.raise_for_status()
                 metadata = response.json()
             except httpx.TimeoutException:
-                return {
-                    "success": False,
-                    "provider_reachable": False,
-                    "metadata_valid": False,
-                    "endpoints_found": False,
-                    "errors": ["Connection timeout - provider not reachable"],
-                }
+                return _unreachable_result("Connection timeout — provider not reachable")
             except httpx.HTTPStatusError as e:
                 return {
-                    "success": False,
-                    "provider_reachable": True,
-                    "metadata_valid": False,
-                    "endpoints_found": False,
-                    "errors": [f"HTTP {e.response.status_code} error from provider"],
+                    "ok": False,
+                    "error": "invalid_metadata",
+                    "detail": f"HTTP {e.response.status_code} error from provider",
                 }
             except Exception as e:
                 logger.error("OIDC discovery connection error: %s", e)
-                return {
-                    "success": False,
-                    "provider_reachable": False,
-                    "metadata_valid": False,
-                    "endpoints_found": False,
-                    "errors": ["Failed to connect to OIDC provider"],
-                }
+                return _unreachable_result("Failed to connect to OIDC provider")
 
-        # Validate metadata structure
         if not isinstance(metadata, dict):
             return {
-                "success": False,
-                "provider_reachable": True,
-                "metadata_valid": False,
-                "endpoints_found": False,
-                "errors": ["Invalid metadata format (not a JSON object)"],
+                "ok": False,
+                "error": "invalid_metadata",
+                "detail": "Invalid metadata format (not a JSON object)",
             }
 
-        # Check for required endpoints
         required_endpoints = [
             "authorization_endpoint",
             "token_endpoint",
@@ -741,31 +794,23 @@ async def test_oidc_connection(
             "jwks_uri",
         ]
         missing = [ep for ep in required_endpoints if ep not in metadata]
-
         if missing:
             return {
-                "success": False,
-                "provider_reachable": True,
-                "metadata_valid": True,
-                "endpoints_found": False,
-                "errors": [f"Missing required endpoints: {', '.join(missing)}"],
+                "ok": False,
+                "error": "missing_endpoints",
+                "detail": f"Missing required endpoints: {', '.join(missing)}",
             }
 
-        # All checks passed
         return {
-            "success": True,
-            "provider_reachable": True,
-            "metadata_valid": True,
-            "endpoints_found": True,
-            "errors": [],
+            "ok": True,
+            "issuer": metadata.get("issuer") or issuer_url_clean,
+            "algorithms_supported": metadata.get("id_token_signing_alg_values_supported") or [],
         }
 
     except Exception as e:
         logger.error("OIDC test connection error: %s", sanitize_for_log(e), exc_info=True)
         return {
-            "success": False,
-            "provider_reachable": False,
-            "metadata_valid": False,
-            "endpoints_found": False,
-            "errors": ["An unexpected error occurred during OIDC connection test"],
+            "ok": False,
+            "error": "discovery_failed",
+            "detail": "An unexpected error occurred during OIDC connection test",
         }

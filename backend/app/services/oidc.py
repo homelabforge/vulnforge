@@ -95,6 +95,38 @@ def generate_state() -> str:
     return secrets.token_urlsafe(32)
 
 
+# Canonical placeholder per plan §5.4(3): admin GET returns this when a
+# client_secret is stored.
+MASKED_SECRET_PLACEHOLDER = "********"
+
+
+def display_mask_secret(secret: str) -> str:
+    """Return the canonical mask used in admin GET responses."""
+    return MASKED_SECRET_PLACEHOLDER if secret else ""
+
+
+def is_masked_secret(secret: str) -> bool:
+    """Detect whether a value is a recognized mask placeholder."""
+    if not secret:
+        return False
+    if secret == MASKED_SECRET_PLACEHOLDER:
+        return True
+    return secret.startswith("***") or "****...****" in secret
+
+
+async def write_oidc_config(db: AsyncSession, payload: dict[str, str]) -> None:
+    """Atomically persist OIDC settings.
+
+    Caller passes prefix-stripped keys (e.g. "issuer_url"); we restore the
+    `user_auth_oidc_` prefix used in the generic settings table.
+    """
+    from app.services.settings_manager import SettingsManager
+
+    settings_manager = SettingsManager(db)
+    for clean_key, value in payload.items():
+        await settings_manager.set(f"user_auth_oidc_{clean_key}", value)
+
+
 async def get_oidc_config(db: AsyncSession) -> dict[str, str]:
     """Get OIDC configuration from database settings.
 
