@@ -2207,6 +2207,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user-auth/oidc/config/admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Oidc Admin Config
+         * @description Return the admin OIDC configuration with canonical mask placeholder.
+         */
+        get: operations["get_oidc_admin_config_api_v1_user_auth_oidc_config_admin_get"];
+        /**
+         * Put Oidc Admin Config
+         * @description Persist admin OIDC configuration, enforcing the §5.4 contract.
+         */
+        put: operations["put_oidc_admin_config_api_v1_user_auth_oidc_config_admin_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user-auth/oidc/login": {
         parameters: {
             query?: never;
@@ -2240,10 +2264,10 @@ export interface paths {
         put?: never;
         /**
          * Test Oidc Connection
-         * @description Test OIDC configuration by fetching discovery document.
+         * @description Test OIDC configuration by fetching the discovery document.
          *
-         *     Requires authentication. Tests connectivity to the OIDC provider
-         *     and validates that required endpoints are present.
+         *     Returns the canonical `{ok, error, detail, issuer, algorithms_supported}` envelope
+         *     per plan §5.4(4).
          */
         post: operations["test_oidc_connection_api_v1_user_auth_oidc_test_post"];
         delete?: never;
@@ -3880,20 +3904,69 @@ export interface components {
             total_notifications: number;
         };
         /**
+         * OidcAdminConfig
+         * @description Full admin OIDC configuration (homelab canonical OIDC settings contract).
+         *
+         *     `client_secret` follows §5.4(3): admin GET returns "********" when stored,
+         *     "" otherwise. Admin PUT with empty string OR the placeholder preserves the value.
+         */
+        OidcAdminConfig: {
+            /**
+             * Client Id
+             * @default
+             */
+            client_id: string;
+            /**
+             * Client Secret
+             * @default
+             */
+            client_secret: string;
+            /**
+             * Email Claim
+             * @default email
+             */
+            email_claim: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Issuer Url
+             * @default
+             */
+            issuer_url: string;
+            /**
+             * Provider Name
+             * @default
+             */
+            provider_name: string;
+            /**
+             * Scopes
+             * @default openid profile email
+             */
+            scopes: string;
+            /**
+             * Username Claim
+             * @default preferred_username
+             */
+            username_claim: string;
+        };
+        /**
          * OidcTestResponse
-         * @description Response from OIDC provider connectivity test.
+         * @description OIDC provider connectivity test result (canonical envelope per plan §5.4(4)).
          */
         OidcTestResponse: {
-            /** Endpoints Found */
-            endpoints_found: boolean;
-            /** Errors */
-            errors: string[];
-            /** Metadata Valid */
-            metadata_valid: boolean;
-            /** Provider Reachable */
-            provider_reachable: boolean;
-            /** Success */
-            success: boolean;
+            /** Algorithms Supported */
+            algorithms_supported?: string[] | null;
+            /** Detail */
+            detail?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Issuer */
+            issuer?: string | null;
+            /** Ok */
+            ok: boolean;
         };
         /**
          * PaginatedVulnerabilities
@@ -7598,6 +7671,59 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_oidc_admin_config_api_v1_user_auth_oidc_config_admin_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OidcAdminConfig"];
+                };
+            };
+        };
+    };
+    put_oidc_admin_config_api_v1_user_auth_oidc_config_admin_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OidcAdminConfig"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -3587,39 +3587,110 @@
         "title": "NotificationStatsResponse",
         "type": "object"
       },
-      "OidcTestResponse": {
-        "description": "Response from OIDC provider connectivity test.",
+      "OidcAdminConfig": {
+        "description": "Full admin OIDC configuration (homelab canonical OIDC settings contract).\n\n`client_secret` follows \u00a75.4(3): admin GET returns \"********\" when stored,\n\"\" otherwise. Admin PUT with empty string OR the placeholder preserves the value.",
         "properties": {
-          "endpoints_found": {
-            "title": "Endpoints Found",
+          "client_id": {
+            "default": "",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_secret": {
+            "default": "",
+            "title": "Client Secret",
+            "type": "string"
+          },
+          "email_claim": {
+            "default": "email",
+            "title": "Email Claim",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
             "type": "boolean"
           },
-          "errors": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Errors",
-            "type": "array"
+          "issuer_url": {
+            "default": "",
+            "title": "Issuer Url",
+            "type": "string"
           },
-          "metadata_valid": {
-            "title": "Metadata Valid",
-            "type": "boolean"
+          "provider_name": {
+            "default": "",
+            "title": "Provider Name",
+            "type": "string"
           },
-          "provider_reachable": {
-            "title": "Provider Reachable",
-            "type": "boolean"
+          "scopes": {
+            "default": "openid profile email",
+            "title": "Scopes",
+            "type": "string"
           },
-          "success": {
-            "title": "Success",
+          "username_claim": {
+            "default": "preferred_username",
+            "title": "Username Claim",
+            "type": "string"
+          }
+        },
+        "title": "OidcAdminConfig",
+        "type": "object"
+      },
+      "OidcTestResponse": {
+        "description": "OIDC provider connectivity test result (canonical envelope per plan \u00a75.4(4)).",
+        "properties": {
+          "algorithms_supported": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Algorithms Supported"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "issuer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer"
+          },
+          "ok": {
+            "title": "Ok",
             "type": "boolean"
           }
         },
         "required": [
-          "success",
-          "provider_reachable",
-          "metadata_valid",
-          "endpoints_found",
-          "errors"
+          "ok"
         ],
         "title": "OidcTestResponse",
         "type": "object"
@@ -10020,6 +10091,78 @@
         ]
       }
     },
+    "/api/v1/user-auth/oidc/config/admin": {
+      "get": {
+        "description": "Return the admin OIDC configuration with canonical mask placeholder.",
+        "operationId": "get_oidc_admin_config_api_v1_user_auth_oidc_config_admin_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OidcAdminConfig"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Oidc Admin Config",
+        "tags": [
+          "User Authentication",
+          "User Authentication"
+        ]
+      },
+      "put": {
+        "description": "Persist admin OIDC configuration, enforcing the \u00a75.4 contract.",
+        "operationId": "put_oidc_admin_config_api_v1_user_auth_oidc_config_admin_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OidcAdminConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Oidc Admin Config",
+        "tags": [
+          "User Authentication",
+          "User Authentication"
+        ]
+      }
+    },
     "/api/v1/user-auth/oidc/login": {
       "get": {
         "description": "Initiate OIDC authentication flow (public endpoint).\n\nRedirects user to OIDC provider for authentication.",
@@ -10043,7 +10186,7 @@
     },
     "/api/v1/user-auth/oidc/test": {
       "post": {
-        "description": "Test OIDC configuration by fetching discovery document.\n\nRequires authentication. Tests connectivity to the OIDC provider\nand validates that required endpoints are present.",
+        "description": "Test OIDC configuration by fetching the discovery document.\n\nReturns the canonical `{ok, error, detail, issuer, algorithms_supported}` envelope\nper plan \u00a75.4(4).",
         "operationId": "test_oidc_connection_api_v1_user_auth_oidc_test_post",
         "requestBody": {
           "content": {
