@@ -1,9 +1,12 @@
 """OIDC service for OAuth2/OpenID Connect authentication."""
 
+import base64
+import hashlib
 import logging
 import secrets
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 from joserfc import jwt
@@ -17,6 +20,14 @@ from app.models.oidc_state import OIDCState
 from app.utils.log_redaction import sanitize_for_log
 
 logger = logging.getLogger(__name__)
+
+
+def generate_pkce_pair() -> tuple[str, str]:
+    """Generate a PKCE code_verifier and its S256 code_challenge (RFC 7636)."""
+    verifier = secrets.token_urlsafe(64)
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    return verifier, challenge
 
 
 class SSRFProtectionError(Exception):
@@ -172,6 +183,7 @@ async def store_oidc_state(
     state: str,
     redirect_uri: str,
     nonce: str,
+    code_verifier: str | None = None,
 ) -> None:
     """Store OIDC state in database for CSRF protection.
 
@@ -180,10 +192,12 @@ async def store_oidc_state(
         state: CSRF state token
         redirect_uri: OAuth callback URI
         nonce: Nonce for ID token validation
+        code_verifier: PKCE code_verifier to be sent in token exchange
     """
     oidc_state = OIDCState(
         state=state,
         nonce=nonce,
+        code_verifier=code_verifier,
         redirect_uri=redirect_uri,
         created_at=datetime.now(UTC),
         expires_at=OIDCState.get_expiry_time(minutes=10),
@@ -241,6 +255,7 @@ async def validate_and_consume_state(
     state_data = {
         "redirect_uri": oidc_state.redirect_uri,
         "nonce": oidc_state.nonce,
+        "code_verifier": oidc_state.code_verifier,
         "created_at": oidc_state.created_at,
     }
 
@@ -269,9 +284,10 @@ async def create_authorization_url(
     Returns:
         Tuple of (authorization_url, state)
     """
-    # Generate cryptographically secure state and nonce
+    # Generate cryptographically secure state, nonce, and PKCE pair (RFC 7636 S256)
     state = generate_state()
     nonce = secrets.token_urlsafe(32)
+    code_verifier, code_challenge = generate_pkce_pair()
 
     # Determine redirect URI
     redirect_uri = f"{base_url.rstrip('/')}/api/v1/user-auth/oidc/callback"
@@ -279,13 +295,11 @@ async def create_authorization_url(
     logger.info(f"OIDC redirect URI: {redirect_uri} (base_url: {base_url})")
 
     # Store state in database for validation in callback (CSRF protection)
-    await store_oidc_state(db, state, redirect_uri, nonce)
+    await store_oidc_state(db, state, redirect_uri, nonce, code_verifier=code_verifier)
 
     # Build authorization URL
     auth_endpoint = metadata.get("authorization_endpoint")
     scopes = config.get("scopes", "openid profile email")
-
-    from urllib.parse import urlencode
 
     params = {
         "client_id": config.get("client_id", ""),
@@ -294,6 +308,8 @@ async def create_authorization_url(
         "redirect_uri": redirect_uri,
         "state": state,
         "nonce": nonce,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
     }
 
     auth_url = f"{auth_endpoint}?{urlencode(params)}"
@@ -307,6 +323,7 @@ async def exchange_code_for_tokens(
     config: dict[str, str],
     metadata: dict[str, Any],
     redirect_uri: str,
+    code_verifier: str | None = None,
 ) -> dict[str, Any] | None:
     """Exchange authorization code for tokens.
 
@@ -315,6 +332,8 @@ async def exchange_code_for_tokens(
         config: OIDC configuration
         metadata: Provider metadata
         redirect_uri: Redirect URI used in authorization
+        code_verifier: PKCE code_verifier matching the code_challenge sent
+            in the authorization request
 
     Returns:
         Tokens dict with access_token, refresh_token, id_token, etc.
@@ -340,6 +359,8 @@ async def exchange_code_for_tokens(
         "client_id": config.get("client_id", ""),
         "client_secret": client_secret,
     }
+    if code_verifier:
+        data["code_verifier"] = code_verifier
 
     try:
         async with httpx.AsyncClient() as client:
@@ -413,8 +434,10 @@ async def verify_id_token(
         key_set = KeySet.import_key_set(jwks)
 
         # Decode (verifies signature) then validate iss/aud/nonce + default exp/nbf/iat.
+        # Explicit allowlist accepts EdDSA (Rauthy default) and RS256
+        # (Authentik/Keycloak/etc.) — rejects anything else.
         issuer = config.get("issuer_url") or metadata.get("issuer", "")
-        decoded = jwt.decode(id_token, key_set)
+        decoded = jwt.decode(id_token, key_set, algorithms=["EdDSA", "RS256"])
         claims_registry = JWTClaimsRegistry(
             iss={"essential": True, "value": issuer},
             aud={"essential": True, "value": config.get("client_id", "")},

@@ -501,9 +501,12 @@ async def oidc_callback(
                 detail="Cannot connect to OIDC provider",
             )
 
-        # EXCHANGE CODE FOR TOKENS
+        # EXCHANGE CODE FOR TOKENS (with PKCE verifier from stored state)
         redirect_uri = state_data["redirect_uri"]
-        tokens = await oidc_service.exchange_code_for_tokens(code, config, metadata, redirect_uri)
+        code_verifier = state_data.get("code_verifier")
+        tokens = await oidc_service.exchange_code_for_tokens(
+            code, config, metadata, redirect_uri, code_verifier=code_verifier
+        )
 
         if not tokens:
             raise HTTPException(

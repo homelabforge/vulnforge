@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 - Added npm `overrides` pinning `brace-expansion` to `^5.0.6` to resolve GHSA-jxxr-4gwj-5jf2 (moderate ReDoS). Affected only dev/build tooling (eslint, openapi-typescript, @typescript-eslint) via transitive `minimatch`; no runtime impact.
+- OIDC login flow now uses PKCE S256 (RFC 7636); `code_verifier` persisted on `oidc_states` and sent in the token exchange.
+- ID token verifier explicitly allowlists `EdDSA` and `RS256` algorithms.
 
 ### Dev Dependencies
 - **@types/react**: 19.2.14 → 19.2.15
