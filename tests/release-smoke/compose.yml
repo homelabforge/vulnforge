@@ -5,6 +5,12 @@
 # A docker-socket-proxy sidecar is required because VulnForge talks to
 # Docker for image inspection / Trivy scanning. The proxy exposes a
 # read-only TCP endpoint so the unprivileged app user can connect.
+#
+# Image tag is parameterized: run.sh builds and tests `vulnforge:release-smoke`
+# by default. Ad-hoc invocations can override with `VULNFORGE_E2E_IMAGE=...` to
+# test a pre-built image (e.g. a GHCR pull during a soak), but the default
+# MUST match the tag `run.sh` builds — otherwise the gate silently exercises
+# a stale image and lets bad releases through (see mygarage v2.27.1 fixup).
 
 services:
   docker-proxy:
@@ -20,7 +26,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   app:
-    image: vulnforge:release-smoke
+    image: ${VULNFORGE_E2E_IMAGE:-vulnforge:release-smoke}
     container_name: vulnforge-release-smoke-app
     depends_on:
       - docker-proxy
