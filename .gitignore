@@ -109,3 +109,6 @@ frontend/coverage/
 # Root-level npm artifacts (frontend uses Bun)
 /package.json
 /package-lock.json
+
+# Agent instruction files (local-only, not for the public repo)
+CLAUDE.md
