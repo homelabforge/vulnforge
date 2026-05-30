@@ -68,10 +68,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation requests (the HTML shell): network-first, cache fallback.
-  if (request.mode === 'navigate') {
+  // Navigation requests (the HTML shell): network-first with a 5s timeout and a
+  // cache fallback. We also catch non-navigate *document* requests
+  // (request.destination === 'document'): browser link-prefetch and Cloudflare
+  // Speculative Loading fetch SPA routes with mode !== 'navigate'. Without this
+  // they fell through to the static-asset branch below, whose deliberate
+  // `throw lastError` surfaced as an "Uncaught (in promise) Failed to fetch"
+  // whenever the speculative fetch was cancelled or hit a transient edge error.
+  if (request.mode === 'navigate' || request.destination === 'document') {
     event.respondWith(
-      fetch(request).catch(async () => {
+      Promise.race([
+        fetch(request),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Navigation timeout')), 5000)
+        ),
+      ]).catch(async () => {
         const cache = await caches.open(CACHE_NAME);
         return (await cache.match(OFFLINE_URL)) || Response.error();
       })
