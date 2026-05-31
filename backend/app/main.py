@@ -62,7 +62,26 @@ from app.services.scan_queue import get_scan_queue
 from app.services.scheduler import ScanScheduler
 from app.services.settings_manager import SettingsManager
 from app.services.trivy_scanner import TrivyScanner
-from app.utils.log_redaction import sanitize_for_log
+from app.utils.log_redaction import _redact_string, sanitize_for_log
+
+
+class RedactingLogFilter(logging.Filter):
+    """Process-wide log filter that redacts credential patterns from every record.
+
+    Redacts the *fully rendered* message (``msg % args``) so percent-format
+    exception arguments cannot reintroduce a secret after filtering. It must
+    never log or raise from inside ``filter`` — doing so would recurse or drop
+    records.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()  # renders msg % args
+            record.msg = _redact_string(msg)
+            record.args = ()  # args already consumed by getMessage()
+        except Exception:
+            pass  # never drop or raise from a log filter
+        return True
 
 
 def _configure_logging() -> None:
@@ -115,6 +134,12 @@ def _configure_logging() -> None:
         fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
     logging.basicConfig(level=level, format=fmt, handlers=handlers, force=True)
+
+    # Attach the process-wide redacting filter to every root handler so no log
+    # record (including %-formatted exception args) can leak a credential.
+    redacting_filter = RedactingLogFilter()
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(redacting_filter)
 
 
 _configure_logging()

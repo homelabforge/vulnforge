@@ -121,3 +121,6 @@ class OidcAdminConfig(BaseModel):
     scopes: str = "openid profile email"
     username_claim: str = "preferred_username"
     email_claim: str = "email"
+    # When true on PUT, clears the bound admin OIDC subject (re-arms TOFU). The
+    # GET response always serializes this as false; it is a write-only signal.
+    reset_subject: bool = False

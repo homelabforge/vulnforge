@@ -81,10 +81,12 @@ class SlackNotificationService(NotificationService):
             return False
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"[slack] HTTP error: {e}")
+            # Inert today (no raise_for_status above), but the webhook URL IS the
+            # credential — never log the raw exception. Status code only.
+            logger.error("[slack] HTTP error: %s", e.response.status_code)
             return False
-        except (httpx.ConnectError, httpx.TimeoutException) as e:
-            logger.error(f"[slack] Connection error: {e}")
+        except httpx.ConnectError, httpx.TimeoutException:
+            logger.error("[slack] Connection error: request failed")
             return False
         except (ValueError, KeyError) as e:
             logger.error(f"[slack] Invalid data: {e}")
@@ -103,5 +105,6 @@ class SlackNotificationService(NotificationService):
                 return True, "Test notification sent successfully"
             return False, "Failed to send test notification"
 
-        except Exception as e:
-            return False, f"Connection test failed: {str(e)}"
+        except Exception:
+            # Avoid str(e): the webhook URL is the credential.
+            return False, "Connection test failed"

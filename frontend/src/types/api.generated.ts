@@ -3942,6 +3942,11 @@ export interface components {
              */
             provider_name: string;
             /**
+             * Reset Subject
+             * @default false
+             */
+            reset_subject: boolean;
+            /**
              * Scopes
              * @default openid profile email
              */

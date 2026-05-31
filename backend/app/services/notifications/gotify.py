@@ -73,10 +73,12 @@ class GotifyNotificationService(NotificationService):
             return True
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"[gotify] HTTP error: {e}")
+            # Gotify carries its token in a header, not the URL, but keep parity
+            # with the other providers and avoid logging the raw exception.
+            logger.error("[gotify] HTTP error: %s", e.response.status_code)
             return False
-        except (httpx.ConnectError, httpx.TimeoutException) as e:
-            logger.error(f"[gotify] Connection error: {e}")
+        except httpx.ConnectError, httpx.TimeoutException:
+            logger.error("[gotify] Connection error: request failed")
             return False
         except (ValueError, KeyError) as e:
             logger.error(f"[gotify] Invalid data: {e}")
@@ -95,5 +97,5 @@ class GotifyNotificationService(NotificationService):
                 return True, "Test notification sent successfully"
             return False, "Failed to send test notification"
 
-        except Exception as e:
-            return False, f"Connection test failed: {str(e)}"
+        except Exception:
+            return False, "Connection test failed"

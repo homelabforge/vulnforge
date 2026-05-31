@@ -119,6 +119,37 @@ def _redact_string(text: str) -> str:
         flags=re.IGNORECASE,
     )
 
+    # Redact Telegram bot tokens embedded in the API URL path
+    # (https://api.telegram.org/bot<id>:<secret>/...). The credential is a path
+    # segment, so the query/JSON rules above never catch it.
+    text = re.sub(
+        r"/bot\d{4,15}:[A-Za-z0-9_\-]{20,64}",
+        "/bot***REDACTED***",
+        text,
+    )
+
+    # Redact Slack / Discord incoming-webhook URLs whose path *is* the secret.
+    text = re.sub(
+        r"https://hooks\.slack\.com/services/[A-Za-z0-9/_\-]{6,}",
+        "https://hooks.slack.com/services/***REDACTED***",
+        text,
+    )
+    text = re.sub(
+        r"https://(?:[a-z]+\.)?discord(?:app)?\.com/api/webhooks/[A-Za-z0-9/_\-]{6,}",
+        "https://discord.com/api/webhooks/***REDACTED***",
+        text,
+    )
+
+    # Generic fallback: a long opaque token as the first path segment of a URL
+    # (catches credential-in-path forms the specific rules above miss). Length-
+    # bounded to stay linear-time (no ReDoS); only the first path component is
+    # examined, so ordinary /api/... paths are unaffected.
+    text = re.sub(
+        r"(https?://[^/\s]+/)[A-Za-z0-9:_\-]{24,200}",
+        r"\1***REDACTED***",
+        text,
+    )
+
     return text
 
 

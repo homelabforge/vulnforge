@@ -1,5 +1,6 @@
 """User authentication API endpoints for VulnForge single-user auth."""
 
+import hmac
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -95,9 +96,9 @@ async def setup_admin_account(
             detail="Setup already complete. Admin account exists.",
         )
 
-    # Validate bootstrap token
+    # Validate bootstrap token (constant-time compare)
     expected_token = get_bootstrap_token()
-    if not expected_token or setup_data.bootstrap_token != expected_token:
+    if not expected_token or not hmac.compare_digest(setup_data.bootstrap_token, expected_token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid bootstrap token. Check container logs for the setup token.",
@@ -151,9 +152,9 @@ async def cancel_setup(
             status_code=403, detail="Cannot cancel setup after it has been completed"
         )
 
-    # Validate bootstrap token
+    # Validate bootstrap token (constant-time compare)
     expected_token = get_bootstrap_token()
-    if not expected_token or cancel_data.bootstrap_token != expected_token:
+    if not expected_token or not hmac.compare_digest(cancel_data.bootstrap_token, expected_token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid bootstrap token. Check container logs for the setup token.",
@@ -552,12 +553,35 @@ async def oidc_callback(
         if not email and userinfo:
             email = userinfo.get(email_claim)
 
-        # LINK OIDC TO ADMIN ACCOUNT
+        # LINK OIDC TO ADMIN ACCOUNT (trust-on-first-use bind, enforce thereafter)
         settings_manager = SettingsManager(db)
         oidc_sub = claims.get("sub")
         provider_name = config.get("provider_name", "OIDC Provider")
 
-        await settings_manager.set("user_auth_admin_oidc_subject", oidc_sub or "")
+        stored_sub = (
+            await settings_manager.get("user_auth_admin_oidc_subject", default="") or ""
+        ).strip()
+        incoming_sub = (oidc_sub or "").strip()
+
+        if not incoming_sub:
+            raise HTTPException(status_code=401, detail="OIDC token missing subject claim")
+
+        if stored_sub:
+            # Subsequent logins MUST match the bound admin subject.
+            if not hmac.compare_digest(stored_sub, incoming_sub):
+                logger.warning(
+                    "OIDC subject mismatch — rejecting admin login (expected bound admin, got %s)",
+                    sanitize_for_log(incoming_sub),
+                )
+                raise HTTPException(status_code=403, detail="OIDC subject is not the linked admin")
+        else:
+            # First link (TOFU): bind this subject as the admin.
+            await settings_manager.set("user_auth_admin_oidc_subject", incoming_sub)
+            logger.info(
+                "OIDC admin subject linked (first use): %s",
+                sanitize_for_log(incoming_sub),
+            )
+
         await settings_manager.set("user_auth_admin_oidc_provider", provider_name)
 
         # Update admin profile if we got username/email from OIDC
@@ -629,6 +653,10 @@ async def oidc_callback(
             status_code=400,
             detail="Invalid OIDC provider URL (SSRF protection)",
         )
+    except HTTPException:
+        # Preserve intended 401/403/502/503 raises (incl. subject-binding
+        # rejections) instead of masking them as a generic 500.
+        raise
     except Exception as e:
         logger.error("OIDC callback error: %s", sanitize_for_log(e), exc_info=True)
         raise HTTPException(
@@ -701,6 +729,16 @@ async def put_oidc_admin_config(
             "email_claim": payload.email_claim,
         },
     )
+
+    # §4 relink: an authenticated admin may clear the bound OIDC subject to
+    # re-arm trust-on-first-use for the next callback.
+    if payload.reset_subject:
+        settings_manager = SettingsManager(db)
+        await settings_manager.set("user_auth_admin_oidc_subject", "")
+        logger.info(
+            "OIDC admin subject link reset by user %s",
+            sanitize_for_log(admin["username"]),
+        )
 
     logger.info("OIDC admin configuration updated by user %s", sanitize_for_log(admin["username"]))
     return {"message": "OIDC configuration updated successfully"}

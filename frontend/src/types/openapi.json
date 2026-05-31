@@ -3620,6 +3620,11 @@
             "title": "Provider Name",
             "type": "string"
           },
+          "reset_subject": {
+            "default": false,
+            "title": "Reset Subject",
+            "type": "boolean"
+          },
           "scopes": {
             "default": "openid profile email",
             "title": "Scopes",

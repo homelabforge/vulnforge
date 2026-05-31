@@ -49,6 +49,11 @@ _TOKEN_DENYLIST: dict[str, float] = {}
 # time_cost=2, memory_cost=102400 (100MB), parallelism=8
 ph = PasswordHasher(time_cost=2, memory_cost=102400, parallelism=8)
 
+# Pre-computed dummy hash used to equalize verify timing on a username miss
+# (prevents a username-enumeration timing oracle). Computed once with the same
+# Argon2 parameters as real verification so the cost is indistinguishable.
+_DUMMY_PASSWORD_HASH = ph.hash("vulnforge-dummy-password")
+
 
 # ============================================================================
 # Secret Key Management
@@ -298,7 +303,7 @@ def decode_token(token: str) -> dict:
     )
 
     try:
-        decoded = jwt.decode(token, _SIGNING_KEY)
+        decoded = jwt.decode(token, _SIGNING_KEY, algorithms=[JWT_ALGORITHM])
         payload = decoded.claims
 
         # Manually validate expiration (joserfc only validates via JWTClaimsRegistry).
@@ -410,8 +415,13 @@ async def authenticate_user_admin(db: AsyncSession, username: str, password: str
     if not profile:
         return None
 
-    # Check username matches
+    # Check username matches. On a miss, still run an Argon2 verify against a
+    # dummy hash so response latency does not reveal whether the username exists.
     if profile["username"] != username:
+        try:
+            ph.verify(_DUMMY_PASSWORD_HASH, password)
+        except Exception:
+            pass
         return None
 
     # Get password hash

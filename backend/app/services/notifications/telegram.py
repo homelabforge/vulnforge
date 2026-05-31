@@ -83,10 +83,12 @@ class TelegramNotificationService(NotificationService):
             return False
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"[telegram] HTTP error: {e}")
+            # Never log the raw exception: its str() embeds the bot-token URL
+            # (https://api.telegram.org/bot<TOKEN>/sendMessage). Status code only.
+            logger.error("[telegram] HTTP error: %s", e.response.status_code)
             return False
-        except (httpx.ConnectError, httpx.TimeoutException) as e:
-            logger.error(f"[telegram] Connection error: {e}")
+        except httpx.ConnectError, httpx.TimeoutException:
+            logger.error("[telegram] Connection error: request failed")
             return False
         except (ValueError, KeyError) as e:
             logger.error(f"[telegram] Invalid data: {e}")
@@ -119,5 +121,6 @@ class TelegramNotificationService(NotificationService):
                 return True, f"Test notification sent via @{bot_name}"
             return False, "Bot is valid but failed to send test notification"
 
-        except Exception as e:
-            return False, f"Connection test failed: {str(e)}"
+        except Exception:
+            # Avoid str(e): a getMe/send failure can surface the bot-token URL.
+            return False, "Connection test failed"
