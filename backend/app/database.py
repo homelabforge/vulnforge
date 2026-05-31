@@ -105,7 +105,12 @@ async def init_db():
         await run_migrations(engine, migrations_dir)
     except Exception as e:
         logger.error(f"Migration error: {e}", exc_info=True)
-        # Don't fail startup - log error and continue
+        # Honor the documented contract (CLAUDE.md: "failure blocks startup").
+        # strict_migrations defaults True (config.py); test envs set it False
+        # (conftest sets STRICT_MIGRATIONS=false) so the suite is unaffected.
+        if settings.strict_migrations:
+            raise
+        logger.warning("strict_migrations is False — continuing despite migration failure")
 
     logger.info("Database initialized successfully")
 
