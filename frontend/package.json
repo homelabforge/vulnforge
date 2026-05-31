@@ -1,6 +1,6 @@
 {
   "name": "vulnforge-frontend",
-  "version": "4.6.4",
+  "version": "4.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

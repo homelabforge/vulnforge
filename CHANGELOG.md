@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.7.0] - 2026-05-31
+
 ### Security
 - OIDC callback binds the admin to the first authenticated subject (trust-on-first-use) and rejects mismatched or missing subjects, so an arbitrary identity-provider account can no longer be minted an admin session; authenticated admins can reset the link to re-arm binding
 - Sensitive settings (notification tokens, SMTP password, slack/discord webhook URLs, OIDC client secret, admin password hash) are masked in all settings API responses; saving the mask or an empty value preserves the stored secret
