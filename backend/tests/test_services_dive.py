@@ -124,16 +124,31 @@ class TestDiveService:
 
     @pytest.mark.asyncio
     async def test_analyze_nonexistent_image(self, mock_docker_service):
-        """Test analyzing non-existent image raises DiveError."""
+        """A non-existent image makes dive exit non-zero, which raises DiveError.
+
+        The dive container exists; ``dive nonexistent:latest`` fails, so the
+        detached exec reports a non-zero exit code. Mocks the real
+        detached-exec path (``containers.get`` + ``api.exec_*``) instead of the
+        removed ``containers.run()`` path, so it completes instantly rather than
+        waiting out the full ``dive_timeout`` (the old mock was never hit).
+        """
         from app.services.dive_service import DiveError, DiveService
 
-        # Mock Docker error
-        mock_docker_service.client.containers.run.side_effect = Exception("Image not found")
+        mock_container = MagicMock()
+        mock_container.id = "dive-container-id"
+        mock_container.exec_run.return_value = (0, b"")  # rm cleanup
+        mock_docker_service.client.containers.get.return_value = mock_container
+        mock_docker_service.client.api.exec_create.return_value = {"Id": "exec-id"}
+        mock_docker_service.client.api.exec_start.return_value = None
+        # Not running, non-zero exit -> dive could not analyze the image.
+        mock_docker_service.client.api.exec_inspect.return_value = {
+            "Running": False,
+            "ExitCode": 1,
+        }
 
         service = DiveService(mock_docker_service)
 
-        # Act/Assert
-        with pytest.raises(DiveError):
+        with pytest.raises(DiveError, match="exit 1"):
             await service.analyze_image("nonexistent:latest")
 
     @pytest.mark.asyncio
@@ -178,35 +193,61 @@ class TestDiveErrorHandling:
 
     @pytest.mark.asyncio
     async def test_dive_error_exception(self, mock_docker_service):
-        """Test that DiveError is raised on failures."""
+        """A DockerException mid-run is wrapped as DiveError.
+
+        Mocks the real detached-exec path: ``containers.get`` succeeds, then
+        ``api.exec_create`` raises a DockerException, which ``analyze_image``
+        wraps. (The old test mocked the removed ``containers.run()`` path, so it
+        never exercised this branch and instead waited out ``dive_timeout``.)
+        """
+        from docker.errors import DockerException
+
         from app.services.dive_service import DiveError, DiveService
 
-        # Mock container failure
         mock_container = MagicMock()
-        mock_container.wait.return_value = {"StatusCode": 1}
-        mock_docker_service.client.containers.run.return_value = mock_container
+        mock_container.id = "dive-container-id"
+        mock_container.exec_run.return_value = (0, b"")  # rm cleanup
+        mock_docker_service.client.containers.get.return_value = mock_container
+        mock_docker_service.client.api.exec_create.side_effect = DockerException("exec boom")
 
         service = DiveService(mock_docker_service)
 
-        with pytest.raises(DiveError):
+        with pytest.raises(DiveError, match="Docker error during Dive analysis"):
             await service.analyze_image("test:latest")
 
     @pytest.mark.asyncio
     async def test_dive_error_on_missing_export(self, mock_docker_service):
-        """Test that DiveError is raised when export file is missing."""
+        """A successful dive run whose archive has no extractable member raises.
+
+        Mocks the real detached-exec path: dive exits 0, ``get_archive`` returns
+        a stream, but tarfile yields no extractable member -> DiveError. (The old
+        test mocked the removed ``containers.run()`` path and patched
+        ``tarfile.open`` as a context manager, which the service no longer uses,
+        so it never reached this branch and waited out ``dive_timeout``.)
+        """
         from app.services.dive_service import DiveError, DiveService
 
         mock_container = MagicMock()
-        mock_container.wait.return_value = {"StatusCode": 0}
-        mock_docker_service.client.containers.run.return_value = mock_container
+        mock_container.id = "dive-container-id"
+        mock_container.exec_run.return_value = (0, b"")  # rm cleanup
+        mock_container.get_archive.return_value = ([b"tar-bytes"], {})
+        mock_docker_service.client.containers.get.return_value = mock_container
+        mock_docker_service.client.api.exec_create.return_value = {"Id": "exec-id"}
+        mock_docker_service.client.api.exec_start.return_value = None
+        mock_docker_service.client.api.exec_inspect.return_value = {
+            "Running": False,
+            "ExitCode": 0,
+        }
 
-        # Mock tarfile not finding the export file
+        # tarfile.open() is called directly (not as a context manager) in the
+        # service; return a tar whose single member has no extractable file.
         with patch("tarfile.open") as mock_tarfile:
             mock_tar = MagicMock()
+            mock_tar.getmembers.return_value = [MagicMock()]
             mock_tar.extractfile.return_value = None
-            mock_tarfile.return_value.__enter__.return_value = mock_tar
+            mock_tarfile.return_value = mock_tar
 
             service = DiveService(mock_docker_service)
 
-            with pytest.raises(DiveError):
+            with pytest.raises(DiveError, match="Failed to extract Dive JSON output"):
                 await service.analyze_image("test:latest")
