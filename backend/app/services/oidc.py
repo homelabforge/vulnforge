@@ -39,19 +39,30 @@ class SSRFProtectionError(Exception):
 def validate_oidc_url(url: str) -> None:
     """Validate OIDC URL against SSRF attacks (CWE-918).
 
-    Blocks:
-    - Private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
-    - Localhost (127.0.0.0/8, ::1)
-    - Link-local addresses (169.254.0.0/16)
-    - Metadata endpoints (169.254.169.254)
+    Resolves the hostname across ALL address families (A + AAAA) and rejects the
+    URL if ANY resolved address is non-public — so an AAAA-only / IPv6 host can't
+    slip past an IPv4-only check.
+
+    Blocks (v4 and v6):
+    - Private ranges (10/8, 172.16/12, 192.168/16, IPv6 ULA fc00::/7)
+    - Loopback (127.0.0.0/8, ::1)
+    - Link-local (169.254.0.0/16, fe80::/10) incl. the 169.254.169.254 metadata IP
+    - Reserved, unspecified (0.0.0.0, ::), and multicast ranges
+
+    Residual (accepted, §10/D4): DNS-rebinding TOCTOU between this check and the
+    actual fetch is not closed by pinning the validated IP into the transport.
+    The issuer URL is admin-only (set via authenticated PUT /oidc/config/admin),
+    so this is an accepted residual for a single-admin homelab.
 
     Args:
         url: URL to validate
 
     Raises:
-        SSRFProtectionError: If URL targets private/internal resources
+        SSRFProtectionError: If URL targets private/internal resources.
+        ValueError: If the URL is empty or has no hostname.
     """
     import ipaddress
+    import socket
     from urllib.parse import urlparse
 
     if not url:
@@ -67,27 +78,39 @@ def validate_oidc_url(url: str) -> None:
     if parsed.scheme not in ("http", "https"):
         raise SSRFProtectionError(f"Unsupported scheme: {parsed.scheme}")
 
-    # Try to resolve hostname to IP
-    import socket
-
+    # Resolve across every address family. A genuine resolution failure is
+    # fail-open (the HTTP fetch will fail anyway); a resolved-but-unparseable
+    # address is treated as hostile and rejected (it must not slip through).
     try:
-        ip_str = socket.gethostbyname(hostname)
-        ip = ipaddress.ip_address(ip_str)
+        addrinfos = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        return
 
-        # Block private/local addresses
-        if ip.is_private or ip.is_loopback or ip.is_link_local:
+    for info in addrinfos:
+        ip_str = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError as exc:
+            logger.warning("SSRF check: unparseable resolved address %r", ip_str)
+            raise SSRFProtectionError(f"Unresolvable/invalid address for host: {hostname}") from exc
+
+        # Normalize IPv4-mapped IPv6 (::ffff:a.b.c.d) so v4 ranges are checked.
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
+            ip = ip.ipv4_mapped
+
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_unspecified
+            or ip.is_multicast
+        ):
             raise SSRFProtectionError(f"Private/local IP blocked: {ip}")
 
-        # Specifically block cloud metadata endpoints
+        # Explicit cloud metadata endpoint guard (also covered by is_link_local).
         if str(ip) == "169.254.169.254":
             raise SSRFProtectionError("Cloud metadata endpoint blocked")
-
-    except socket.gaierror:
-        # Hostname couldn't be resolved - allow (will fail at HTTP layer)
-        pass
-    except ValueError:
-        # Invalid IP - allow (might be valid hostname)
-        pass
 
 
 def generate_state() -> str:

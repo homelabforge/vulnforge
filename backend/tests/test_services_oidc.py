@@ -50,17 +50,33 @@ class TestSanitizeForLog:
 class TestValidateOidcUrl:
     """Test validate_oidc_url SSRF protection."""
 
-    @patch("socket.gethostbyname", return_value="8.8.8.8")
-    def test_validate_oidc_url_valid_https(self, mock_dns):
+    @staticmethod
+    def _gai(*ips: str):
+        """Build a socket.getaddrinfo-style return for the given IP strings."""
+        infos = []
+        for ip in ips:
+            family = socket.AF_INET6 if ":" in ip else socket.AF_INET
+            sockaddr = (ip, 0, 0, 0) if family == socket.AF_INET6 else (ip, 0)
+            infos.append((family, socket.SOCK_STREAM, 6, "", sockaddr))
+        return infos
+
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_valid_https(self, mock_gai):
         """No exception for a public HTTPS URL."""
-        # Should not raise
+        mock_gai.return_value = self._gai("8.8.8.8")
         validate_oidc_url("https://auth.example.com/.well-known/openid-configuration")
 
-    @patch("socket.gethostbyname", return_value="8.8.8.8")
-    def test_validate_oidc_url_valid_http(self, mock_dns):
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_valid_http(self, mock_gai):
         """No exception for a public HTTP URL."""
-        # HTTP is allowed (scheme check passes for http/https)
+        mock_gai.return_value = self._gai("8.8.8.8")
         validate_oidc_url("http://auth.example.com/callback")
+
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_valid_ipv6_public(self, mock_gai):
+        """A public IPv6 address (e.g. Google DNS) is allowed."""
+        mock_gai.return_value = self._gai("2001:4860:4860::8888")
+        validate_oidc_url("https://auth.example.com/oidc")
 
     def test_validate_oidc_url_empty(self):
         """Raises ValueError for empty URL."""
@@ -72,31 +88,76 @@ class TestValidateOidcUrl:
         with pytest.raises(ValueError, match="no hostname"):
             validate_oidc_url("https://")
 
-    @patch("socket.gethostbyname", return_value="192.168.1.1")
-    def test_validate_oidc_url_private_ip(self, mock_dns):
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_private_ip(self, mock_gai):
         """Raises SSRFProtectionError for private IP 192.168.x.x."""
+        mock_gai.return_value = self._gai("192.168.1.1")
         with pytest.raises(SSRFProtectionError, match="Private/local IP blocked"):
             validate_oidc_url("https://internal.corp.local/oidc")
 
-    @patch("socket.gethostbyname", return_value="127.0.0.1")
-    def test_validate_oidc_url_localhost(self, mock_dns):
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_localhost(self, mock_gai):
         """Raises SSRFProtectionError for loopback address 127.0.0.1."""
+        mock_gai.return_value = self._gai("127.0.0.1")
         with pytest.raises(SSRFProtectionError, match="Private/local IP blocked"):
             validate_oidc_url("https://localhost/oidc")
+
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_ipv6_loopback(self, mock_gai):
+        """Raises SSRFProtectionError for an AAAA-only host resolving to ::1."""
+        mock_gai.return_value = self._gai("::1")
+        with pytest.raises(SSRFProtectionError, match="Private/local IP blocked"):
+            validate_oidc_url("https://ipv6.internal/oidc")
+
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_ipv6_ula(self, mock_gai):
+        """Raises SSRFProtectionError for an IPv6 ULA (fc00::/7) host."""
+        mock_gai.return_value = self._gai("fd00::1")
+        with pytest.raises(SSRFProtectionError, match="Private/local IP blocked"):
+            validate_oidc_url("https://ula.internal/oidc")
+
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_unspecified(self, mock_gai):
+        """Raises SSRFProtectionError for the unspecified address 0.0.0.0."""
+        mock_gai.return_value = self._gai("0.0.0.0")
+        with pytest.raises(SSRFProtectionError, match="Private/local IP blocked"):
+            validate_oidc_url("https://zero.internal/oidc")
+
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_reserved(self, mock_gai):
+        """Raises SSRFProtectionError for a reserved range (240.0.0.0/4)."""
+        mock_gai.return_value = self._gai("240.0.0.1")
+        with pytest.raises(SSRFProtectionError, match="Private/local IP blocked"):
+            validate_oidc_url("https://reserved.internal/oidc")
+
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_metadata_endpoint(self, mock_gai):
+        """Raises SSRFProtectionError for the cloud metadata IP 169.254.169.254."""
+        mock_gai.return_value = self._gai("169.254.169.254")
+        with pytest.raises(SSRFProtectionError):
+            validate_oidc_url("https://metadata.internal/oidc")
+
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_mixed_families_blocks_any_private(self, mock_gai):
+        """A host resolving to one public + one private address is rejected."""
+        mock_gai.return_value = self._gai("8.8.8.8", "10.0.0.5")
+        with pytest.raises(SSRFProtectionError, match="Private/local IP blocked"):
+            validate_oidc_url("https://dual.example.com/oidc")
 
     def test_validate_oidc_url_ftp_scheme(self):
         """Raises SSRFProtectionError for non-HTTP scheme (ftp)."""
         with pytest.raises(SSRFProtectionError, match="Unsupported scheme"):
             validate_oidc_url("ftp://files.example.com/data")
 
-    @patch("socket.gethostbyname", return_value="10.0.0.5")
-    def test_validate_oidc_url_private_10_network(self, mock_dns):
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_private_10_network(self, mock_gai):
         """Raises SSRFProtectionError for 10.x.x.x private range."""
+        mock_gai.return_value = self._gai("10.0.0.5")
         with pytest.raises(SSRFProtectionError, match="Private/local IP blocked"):
             validate_oidc_url("https://internal.example.com/oidc")
 
-    @patch("socket.gethostbyname", side_effect=socket.gaierror("Name resolution failed"))
-    def test_validate_oidc_url_unresolvable_passes(self, mock_dns):
+    @patch("socket.getaddrinfo", side_effect=socket.gaierror("Name resolution failed"))
+    def test_validate_oidc_url_unresolvable_passes(self, mock_gai):
         """Unresolvable hostnames are allowed (will fail at HTTP layer)."""
         # Should not raise -- DNS failure is a pass-through
         validate_oidc_url("https://nonexistent.example.com/oidc")
