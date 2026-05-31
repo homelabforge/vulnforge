@@ -13,9 +13,36 @@ from app.models.user import User
 from app.schemas import Setting as SettingSchema
 from app.schemas import SettingUpdate
 from app.schemas.setting import SettingUpdateResponse
+from app.services.oidc import display_mask_secret, is_masked_secret
 from app.services.settings_manager import SettingsManager
 
 router = APIRouter()
+
+
+def _is_sensitive(setting: Setting) -> bool:
+    """A setting is sensitive if its DB flag is set OR its key classifies as one.
+
+    Classification-driven (plan §6): masking holds even if migration 012 never
+    backfilled the column, because ``_is_sensitive_key`` now covers ``webhook``.
+    """
+    return bool(setting.is_sensitive) or SettingsManager._is_sensitive_key(setting.key)
+
+
+def _serialize(setting: Setting) -> SettingSchema:
+    """Serialize a setting, masking the value when it is sensitive."""
+    schema = SettingSchema.model_validate(setting)
+    if _is_sensitive(setting):
+        schema.value = display_mask_secret(schema.value)
+    return schema
+
+
+def _should_preserve(setting: Setting, incoming_value: str) -> bool:
+    """True when a sensitive setting receives an empty/masked value.
+
+    Mirrors the OIDC client-secret contract: an empty string or the mask
+    placeholder means "keep the stored secret" rather than overwrite it.
+    """
+    return _is_sensitive(setting) and (not incoming_value or is_masked_secret(incoming_value))
 
 
 class BulkSettingsUpdate(BaseModel):
@@ -37,7 +64,7 @@ async def list_settings(db: AsyncSession = Depends(get_db), user: User = Depends
     """List all settings. Requires admin privileges."""
     result = await db.execute(select(Setting))
     settings = result.scalars().all()
-    return [SettingSchema.model_validate(s) for s in settings]
+    return [_serialize(s) for s in settings]
 
 
 @router.get("/{key}", response_model=SettingSchema)
@@ -51,7 +78,7 @@ async def get_setting(
     if not setting:
         raise HTTPException(status_code=404, detail="Setting not found")
 
-    return SettingSchema.model_validate(setting)
+    return _serialize(setting)
 
 
 @router.put("/{key}", response_model=SettingUpdateResponse)
@@ -68,16 +95,24 @@ async def update_setting(
     """
     settings_manager = SettingsManager(db)
 
-    # Use SettingsManager.set() which includes validation
-    setting = await settings_manager.set(key, update.value)
+    # Preserve-on-placeholder: an empty/masked value for a sensitive setting must
+    # not overwrite the stored secret (plan §6 / D2 — keeps the masked frontend
+    # round-trip from clearing credentials).
+    existing = await db.execute(select(Setting).where(Setting.key == key))
+    cur = existing.scalar_one_or_none()
+    if cur is not None and _should_preserve(cur, update.value):
+        setting = cur
+    else:
+        # Use SettingsManager.set() which includes validation
+        setting = await settings_manager.set(key, update.value)
 
-    # Timezone is an in-process runtime value — mutate app_settings directly.
-    # This works because VulnForge runs as a single Granian worker (see main.py).
-    if key == "timezone":
-        app_settings.timezone = update.value
+        # Timezone is an in-process runtime value — mutate app_settings directly.
+        # This works because VulnForge runs as a single Granian worker (see main.py).
+        if key == "timezone":
+            app_settings.timezone = update.value
 
     return SettingUpdateResponse(
-        setting=SettingSchema.model_validate(setting),
+        setting=_serialize(setting),
         restart_required=key in SettingsManager.BOOT_SETTINGS,
     )
 
@@ -98,15 +133,20 @@ async def bulk_update_settings(
     results: list[SettingUpdateResponse] = []
 
     for key, value in bulk_update.settings.items():
-        setting = await settings_manager.set(key, value)
+        existing = await db.execute(select(Setting).where(Setting.key == key))
+        cur = existing.scalar_one_or_none()
+        if cur is not None and _should_preserve(cur, value):
+            setting = cur
+        else:
+            setting = await settings_manager.set(key, value)
 
-        # Timezone is an in-process runtime value (single-worker pattern)
-        if key == "timezone":
-            app_settings.timezone = value
+            # Timezone is an in-process runtime value (single-worker pattern)
+            if key == "timezone":
+                app_settings.timezone = value
 
         results.append(
             SettingUpdateResponse(
-                setting=SettingSchema.model_validate(setting),
+                setting=_serialize(setting),
                 restart_required=key in SettingsManager.BOOT_SETTINGS,
             )
         )

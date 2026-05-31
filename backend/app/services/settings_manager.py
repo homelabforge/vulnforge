@@ -413,7 +413,15 @@ class SettingsManager:
     @staticmethod
     def _is_sensitive_key(key: str) -> bool:
         """Determine if a key should be marked as sensitive."""
-        sensitive_keywords = ["token", "password", "secret", "key", "apikey", "api_key"]
+        sensitive_keywords = [
+            "token",
+            "password",
+            "secret",
+            "key",
+            "apikey",
+            "api_key",
+            "webhook",
+        ]
         key_lower = key.lower()
         return any(keyword in key_lower for keyword in sensitive_keywords)
 

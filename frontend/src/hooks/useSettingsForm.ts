@@ -9,6 +9,18 @@
 import { useCallback, useState } from "react";
 import { useAutoSave } from "./useAutoSave";
 
+/**
+ * Canonical mask placeholder the backend returns for sensitive settings
+ * (matches oidc.MASKED_SECRET_PLACEHOLDER). When a sensitive field still holds
+ * the mask (or a mask-prefixed value) at save time, we send "" so the backend
+ * preserves the stored secret instead of overwriting it with the mask.
+ */
+const MASKED_SECRET_PLACEHOLDER = "********";
+
+function isMaskedSecret(value: string): boolean {
+  return value === MASKED_SECRET_PLACEHOLDER || value.startsWith("***");
+}
+
 /** Field definition for a setting. */
 export interface SettingsFieldDef {
   /** Settings key (e.g., "ntfy_enabled") */
@@ -23,6 +35,12 @@ export interface SettingsFieldDef {
    * Defaults to "truthy" if omitted.
    */
   boolDefault?: "truthy" | "falsy";
+  /**
+   * Mark a string field as a secret. The backend returns "********" for these;
+   * an unchanged mask is serialized as "" so the stored secret is preserved
+   * (plan §6 / D2). The user clears the field and types a new value to change it.
+   */
+  sensitive?: boolean;
 }
 
 type ValuesRecord = Record<string, string | boolean>;
@@ -69,7 +87,13 @@ function serializeToPayload(
   const payload: Record<string, string> = {};
   for (const field of fields) {
     const val = values[field.key];
-    payload[field.key] = typeof val === "boolean" ? val.toString() : (val as string);
+    let str = typeof val === "boolean" ? val.toString() : (val as string);
+    // Unchanged sensitive field still holds the backend mask → send "" so the
+    // backend keeps the stored secret rather than overwriting it with "********".
+    if (field.sensitive && typeof val === "string" && isMaskedSecret(str)) {
+      str = "";
+    }
+    payload[field.key] = str;
   }
   return payload;
 }

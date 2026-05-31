@@ -134,4 +134,46 @@ describe("useSettingsForm", () => {
     expect(typeof payload.enabled).toBe("string");
     expect(payload.enabled).toBe("false");
   });
+
+  describe("sensitive fields (C3 masked-preserve)", () => {
+    const SECRET_FIELDS: SettingsFieldDef[] = [
+      { key: "name", type: "string", defaultValue: "" },
+      { key: "secret", type: "string", defaultValue: "", sensitive: true },
+    ];
+
+    it("serializes an unchanged mask to '' so the backend preserves the secret", () => {
+      const onSave = vi.fn();
+      // Backend hands the form the mask placeholder for a stored secret.
+      const { result } = renderHook(() =>
+        useSettingsForm({ name: "x", secret: "********" }, SECRET_FIELDS, onSave),
+      );
+
+      // Change a non-secret field to trigger a save without touching the secret.
+      act(() => {
+        result.current.setText("name", "y");
+      });
+      vi.advanceTimersByTime(800);
+
+      expect(onSave).toHaveBeenCalledOnce();
+      const payload = onSave.mock.calls[0][0];
+      expect(payload.name).toBe("y");
+      // The mask must NOT be sent back as a real value.
+      expect(payload.secret).toBe("");
+    });
+
+    it("serializes a real new secret value unchanged", () => {
+      const onSave = vi.fn();
+      const { result } = renderHook(() =>
+        useSettingsForm({ secret: "********" }, SECRET_FIELDS, onSave),
+      );
+
+      act(() => {
+        result.current.setText("secret", "brand-new-secret");
+      });
+      vi.advanceTimersByTime(800);
+
+      const payload = onSave.mock.calls[0][0];
+      expect(payload.secret).toBe("brand-new-secret");
+    });
+  });
 });
