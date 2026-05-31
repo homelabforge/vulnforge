@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- OIDC callback binds the admin to the first authenticated subject (trust-on-first-use) and rejects mismatched or missing subjects, so an arbitrary identity-provider account can no longer be minted an admin session; authenticated admins can reset the link to re-arm binding
+- Sensitive settings (notification tokens, SMTP password, slack/discord webhook URLs, OIDC client secret, admin password hash) are masked in all settings API responses; saving the mask or an empty value preserves the stored secret
+- Dockerfile `ENV`/`ARG` secret redaction in image-misconfiguration findings now covers space-separated and multi-assignment forms, not just `KEY=value`
+- Notification send errors (Telegram/Gotify/Slack/Discord) no longer log the credential-bearing request URL; added a process-wide log-redaction filter and credential-in-path patterns (Telegram bot tokens, Slack/Discord webhooks)
+- OIDC issuer SSRF validation resolves all address families (A + AAAA) and blocks private, loopback, link-local, reserved, unspecified, and multicast addresses
+- Login no longer leaks username existence via response timing (constant-cost Argon2 verify on unknown usernames)
+- Bootstrap setup-token comparison is now constant-time
+- Trivy image scans insert a `--` terminator before the image argument and the image-scan API validates the image reference, preventing argument/flag injection
+- JWT verification pins the `HS256` algorithm explicitly
+
 ### Fixed
+- A failed database migration now blocks startup when `strict_migrations` is enabled (previously all migration errors were silently swallowed, contradicting the documented contract)
 - Service worker routes document-destination requests (browser/Cloudflare speculative prefetch of SPA routes) through the navigation fallback with a 5s timeout, so a cancelled/transient prefetch no longer surfaces as an "Uncaught (in promise) Failed to fetch"
 
 ## [4.6.4] - 2026-05-27
