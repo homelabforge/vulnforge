@@ -173,6 +173,13 @@ async def trigger_image_scan(
     if not image_name or not image_name.strip():
         raise HTTPException(status_code=400, detail="Image name is required")
 
+    # Validate against a Docker reference grammar so a value like "--cache-dir=/x"
+    # cannot be smuggled into a downstream scanner argv (defense-in-depth with the
+    # "--" terminators in the Trivy command builders). ValidationError -> 400.
+    from app.validators import validate_image_reference
+
+    normalized_image = validate_image_reference(image_name)
+
     # Check if a scan (single or batch) is already in progress
     if _current_scan_task and not _current_scan_task.done():
         raise HTTPException(
@@ -183,7 +190,6 @@ async def trigger_image_scan(
     _completion_poll_count = 0
 
     docker_service = DockerService()
-    normalized_image = image_name.strip()
 
     _current_scan_task = asyncio.create_task(
         _run_single_image_scan_task(docker_service, normalized_image, "manual"),

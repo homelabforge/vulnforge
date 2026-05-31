@@ -313,3 +313,41 @@ def sanitize_string(value: str, max_length: int = 1000) -> str:
         raise ValidationError(f"Value exceeds maximum length of {max_length} characters")
 
     return sanitized
+
+
+_IMAGE_REFERENCE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]*$")
+
+
+def validate_image_reference(image: str) -> str:
+    """Validate a Docker image reference to prevent argv/flag injection.
+
+    Rejects a leading ``-`` (which a scanner CLI would otherwise parse as a
+    flag) and restricts the value to the Docker reference character set
+    (``name[:tag][@digest]``). This is a boundary guard, not a full grammar
+    parser; combined with the ``--`` argv terminators in the Trivy command
+    builders it stops a value like ``--cache-dir=/x`` from reaching a scanner
+    as an option.
+
+    Args:
+        image: Image reference to validate.
+
+    Returns:
+        The stripped, validated image reference.
+
+    Raises:
+        ValidationError: If the reference is empty or malformed.
+    """
+    if not image or not isinstance(image, str):
+        raise ValidationError("Image name must be a non-empty string")
+
+    candidate = image.strip()
+    if not candidate:
+        raise ValidationError("Image name must be a non-empty string")
+    if candidate.startswith("-"):
+        raise ValidationError("Image name cannot start with '-'")
+    if len(candidate) > 512:
+        raise ValidationError("Image name is too long (max 512 characters)")
+    if not _IMAGE_REFERENCE_RE.match(candidate):
+        raise ValidationError("Image name contains invalid characters")
+
+    return candidate

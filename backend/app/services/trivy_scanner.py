@@ -172,7 +172,7 @@ class TrivyScanner:
                     logger.info("Trivy database not initialized; performing full update")
                     local_skip = False
 
-            cmd.append(image)
+            cmd.extend(["--", image])
 
             last_exit_code, last_output = await self._exec_trivy_command(
                 container,

@@ -13,11 +13,33 @@ from app.services.trivy_scanner import TrivyScanner
 from app.utils.log_redaction import sanitize_for_log
 from app.utils.timezone import get_now
 
-# Matches Dockerfile ENV/ARG lines that assign values to sensitive-looking variable names
-_SENSITIVE_ASSIGNMENT = re.compile(
-    r"(?:ENV|ARG)\s+\w*(?:PASSWORD|SECRET|TOKEN|KEY|CREDENTIAL|API_KEY)\w*\s*=",
-    re.IGNORECASE,
-)
+# Sensitive variable-name tokens, matched against ENV/ARG variable NAMES only.
+_SENSITIVE_TOKEN = re.compile(r"(?:PASSWORD|SECRET|TOKEN|CREDENTIAL|API_?KEY|KEY)", re.IGNORECASE)
+
+
+def _redact_dockerfile_line(content: str) -> str:
+    """Redact an ENV/ARG Dockerfile line whose variable name looks sensitive.
+
+    Handles every Docker form — ``KEY=value``, ``KEY value`` (space form), and
+    multi-assignment ``KEY=v1 KEY2=v2`` — by examining only the variable
+    *names*, so a benign value or comment that merely mentions ``KEY`` is not
+    over-redacted. Non ENV/ARG lines are returned unchanged.
+    """
+    stripped = content.lstrip()
+    head = stripped[:4].upper()
+    if not (
+        head.startswith("ENV ")
+        or head.startswith("ARG ")
+        or head.startswith("ENV\t")
+        or head.startswith("ARG\t")
+    ):
+        return content
+    body = stripped[3:].strip()
+    names = [tok.split("=", 1)[0] for tok in re.split(r"\s+", body) if tok]
+    if any(_SENSITIVE_TOKEN.search(name) for name in names):
+        return "***REDACTED***"
+    return content
+
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +100,7 @@ class TrivyMisconfigService:
                     "--format",
                     "json",
                     "--quiet",
+                    "--",
                     image,
                 ]
             else:
@@ -89,6 +112,7 @@ class TrivyMisconfigService:
                     "--format",
                     "json",
                     "--quiet",
+                    "--",
                     image,
                 ]
 
@@ -190,10 +214,8 @@ class TrivyMisconfigService:
                     for line in code_lines:
                         line_num = line.get("Number", "?")
                         content = line.get("Content", "")
-                        if _SENSITIVE_ASSIGNMENT.search(content):
-                            snippet_lines.append(f"Line {line_num}: ***REDACTED***")
-                        else:
-                            snippet_lines.append(f"Line {line_num}: {content}")
+                        redacted = _redact_dockerfile_line(content)
+                        snippet_lines.append(f"Line {line_num}: {redacted}")
                     code_snippet = "\n".join(snippet_lines)
 
                 findings.append(
