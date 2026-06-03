@@ -5,7 +5,7 @@ description = "Docker vulnerability scanner and remediation dashboard powered by
 requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.136.3",
-    "granian>=2.7.4",
+    "granian>=2.7.5",
     "sqlalchemy>=2.0.50",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
@@ -17,12 +17,12 @@ dependencies = [
     "croniter>=6.2.2",
     "slowapi>=0.1.9",
     "bcrypt>=5.0.0",
-    "aiosmtplib>=5.1.0",
-    "joserfc>=1.6.8",
+    "aiosmtplib>=5.1.1",
+    "joserfc>=1.7.0",
     "argon2-cffi>=25.1.0",
     "pyjwt>=2.13.0",
     "email-validator>=2.3.0",
-    "python-multipart>=0.0.29",
+    "python-multipart>=0.0.30",
     "rich>=15.0.0",
     # Transitive dependency floors (security)
     "cryptography>=48.0.0",
@@ -37,8 +37,8 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-xdist>=3.8.0",
     "pytest-timeout>=2.4.0",
-    "pyright>=1.1.409",
-    "ruff>=0.15.14",
+    "pyright>=1.1.410",
+    "ruff>=0.15.15",
 ]
 
 [build-system]
