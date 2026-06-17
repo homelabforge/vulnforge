@@ -22,7 +22,7 @@ dependencies = [
     "argon2-cffi>=25.1.0",
     "pyjwt>=2.13.0",
     "email-validator>=2.3.0",
-    "python-multipart>=0.0.30",
+    "python-multipart>=0.0.31",
     "rich>=15.0.0",
     # Transitive dependency floors (security)
     "cryptography>=48.0.0",
