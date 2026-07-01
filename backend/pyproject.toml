@@ -4,25 +4,25 @@ version = "4.7.0"
 description = "Docker vulnerability scanner and remediation dashboard powered by Trivy"
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi>=0.136.3",
-    "granian>=2.7.5",
-    "sqlalchemy>=2.0.50",
+    "fastapi>=0.139.0",
+    "granian>=2.7.8",
+    "sqlalchemy>=2.0.51",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
     "docker>=7.1.0",
     "httpx>=0.28.1",
-    "apscheduler>=3.11.2",
+    "apscheduler>=3.11.3",
     "python-dotenv>=1.2.2",
     "aiosqlite>=0.22.1",
     "croniter>=6.2.2",
-    "slowapi>=0.1.9",
+    "slowapi>=0.1.10",
     "bcrypt>=5.0.0",
-    "aiosmtplib>=5.1.1",
-    "joserfc>=1.7.0",
+    "aiosmtplib>=5.1.2",
+    "joserfc>=1.7.2",
     "argon2-cffi>=25.1.0",
     "pyjwt>=2.13.0",
     "email-validator>=2.3.0",
-    "python-multipart>=0.0.31",
+    "python-multipart>=0.0.32",
     "rich>=15.0.0",
     # Transitive dependency floors (security)
     "cryptography>=48.0.1",
@@ -32,13 +32,13 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=9.0.3",
+    "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-xdist>=3.8.0",
     "pytest-timeout>=2.4.0",
-    "pyright>=1.1.410",
-    "ruff>=0.15.15",
+    "pyright>=1.1.411",
+    "ruff>=0.15.20",
 ]
 
 [build-system]
