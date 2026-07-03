@@ -150,6 +150,34 @@ class TestValidateOidcUrl:
             validate_oidc_url("ftp://files.example.com/data")
 
     @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_trusted_host_bypasses_private(self, mock_gai):
+        """An allowlisted issuer host is accepted despite resolving to a private IP."""
+        mock_gai.return_value = self._gai("10.10.1.11")
+        validate_oidc_url("https://id.starett.net/auth/v1/", trusted_hosts={"id.starett.net"})
+
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_trusted_cidr_bypasses_private(self, mock_gai):
+        """An issuer resolving into a trusted CIDR is accepted."""
+        mock_gai.return_value = self._gai("10.10.1.11")
+        validate_oidc_url("https://id.starett.net/auth/v1/", trusted_hosts={"10.0.0.0/8"})
+
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_untrusted_private_still_blocked(self, mock_gai):
+        """A private issuer not in the allowlist stays blocked."""
+        mock_gai.return_value = self._gai("10.10.1.11")
+        with pytest.raises(SSRFProtectionError, match="Private/local IP blocked"):
+            validate_oidc_url(
+                "https://id.starett.net/auth/v1/", trusted_hosts={"other.example.com"}
+            )
+
+    @patch("socket.getaddrinfo")
+    def test_validate_oidc_url_trusted_from_env(self, mock_gai, monkeypatch):
+        """Trusted hosts default to the VULNFORGE_TRUSTED_HOSTS env var."""
+        monkeypatch.setenv("VULNFORGE_TRUSTED_HOSTS", "id.starett.net")
+        mock_gai.return_value = self._gai("10.10.1.11")
+        validate_oidc_url("https://id.starett.net/auth/v1/")
+
+    @patch("socket.getaddrinfo")
     def test_validate_oidc_url_private_10_network(self, mock_gai):
         """Raises SSRFProtectionError for 10.x.x.x private range."""
         mock_gai.return_value = self._gai("10.0.0.5")

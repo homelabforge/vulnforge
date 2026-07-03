@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- OIDC: `VULNFORGE_TRUSTED_HOSTS` allow-lists a self-hosted issuer that resolves to a private/LAN IP (split-horizon DNS), relaxing the SSRF private-IP block for those hosts only.
+
 ## [4.7.0] - 2026-05-31
 
 ### Security

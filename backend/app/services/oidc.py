@@ -2,11 +2,14 @@
 
 import base64
 import hashlib
+import ipaddress
 import logging
+import os
 import secrets
+import socket
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from joserfc import jwt
@@ -36,7 +39,69 @@ class SSRFProtectionError(Exception):
     pass
 
 
-def validate_oidc_url(url: str) -> None:
+def _get_trusted_hosts() -> set[str]:
+    """Get trusted hosts from VULNFORGE_TRUSTED_HOSTS env var.
+
+    Returns:
+        Set of trusted hostnames, IPs, or CIDR ranges.
+    """
+    raw = os.environ.get("VULNFORGE_TRUSTED_HOSTS", "")
+    return {h.strip() for h in raw.split(",") if h.strip()} if raw else set()
+
+
+def _is_trusted(hostname: str, trusted_hosts: set[str]) -> bool:
+    """Check if a hostname matches any trusted host entry.
+
+    Supports exact hostname match, exact IP match, and CIDR range match.
+    Also resolves hostnames via DNS to check if resolved IPs match.
+
+    Args:
+        hostname: Hostname or IP to check.
+        trusted_hosts: Set of trusted hostnames, IPs, or CIDR strings.
+
+    Returns:
+        True if the hostname is trusted.
+    """
+    if not trusted_hosts:
+        return False
+
+    # Exact hostname/IP match
+    if hostname in trusted_hosts:
+        return True
+
+    # Check if hostname is an IP in a trusted CIDR
+    try:
+        ip = ipaddress.ip_address(hostname)
+        for trusted in trusted_hosts:
+            if "/" in trusted:
+                try:
+                    if ip in ipaddress.ip_network(trusted, strict=False):
+                        return True
+                except ValueError:
+                    continue
+    except ValueError:
+        pass
+
+    # DNS resolution — check if resolved IPs match trusted entries
+    try:
+        for _, _, _, _, addr in socket.getaddrinfo(hostname, None):
+            resolved_ip = ipaddress.ip_address(addr[0])
+            if str(resolved_ip) in trusted_hosts:
+                return True
+            for trusted in trusted_hosts:
+                if "/" in trusted:
+                    try:
+                        if resolved_ip in ipaddress.ip_network(trusted, strict=False):
+                            return True
+                    except ValueError:
+                        continue
+    except socket.gaierror, ValueError, OSError:
+        pass
+
+    return False
+
+
+def validate_oidc_url(url: str, trusted_hosts: set[str] | None = None) -> None:
     """Validate OIDC URL against SSRF attacks (CWE-918).
 
     Resolves the hostname across ALL address families (A + AAAA) and rejects the
@@ -49,6 +114,12 @@ def validate_oidc_url(url: str) -> None:
     - Link-local (169.254.0.0/16, fe80::/10) incl. the 169.254.169.254 metadata IP
     - Reserved, unspecified (0.0.0.0, ::), and multicast ranges
 
+    A self-hosted OIDC issuer (e.g. Rauthy behind split-horizon DNS) may resolve
+    to a private LAN IP. Such hosts can be allowlisted via the
+    VULNFORGE_TRUSTED_HOSTS env var (comma-separated hostnames, IPs, or CIDR
+    ranges), which relaxes the private-IP block for matching hosts only. The
+    issuer URL is admin-only, so this allowlist is not attacker-controllable.
+
     Residual (accepted, §10/D4): DNS-rebinding TOCTOU between this check and the
     actual fetch is not closed by pinning the validated IP into the transport.
     The issuer URL is admin-only (set via authenticated PUT /oidc/config/admin),
@@ -56,14 +127,12 @@ def validate_oidc_url(url: str) -> None:
 
     Args:
         url: URL to validate
+        trusted_hosts: Override for trusted hosts (defaults to env var)
 
     Raises:
         SSRFProtectionError: If URL targets private/internal resources.
         ValueError: If the URL is empty or has no hostname.
     """
-    import ipaddress
-    import socket
-    from urllib.parse import urlparse
 
     if not url:
         raise ValueError("URL cannot be empty")
@@ -77,6 +146,13 @@ def validate_oidc_url(url: str) -> None:
     # Block non-HTTP(S) schemes
     if parsed.scheme not in ("http", "https"):
         raise SSRFProtectionError(f"Unsupported scheme: {parsed.scheme}")
+
+    # Allowlisted issuer (e.g. self-hosted Rauthy on a private LAN IP): accept
+    # without the private-IP block. Scheme is still enforced above.
+    if trusted_hosts is None:
+        trusted_hosts = _get_trusted_hosts()
+    if _is_trusted(hostname, trusted_hosts):
+        return
 
     # Resolve across every address family. A genuine resolution failure is
     # fail-open (the HTTP fetch will fail anyway); a resolved-but-unparseable
